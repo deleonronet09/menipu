@@ -3,5 +3,5 @@
 virtualenv --no-site-packages CI_Venv
 source CI_Venv/bin/activate
 pip install -r development.pip
-pyflakes PY_Files/*
-python test.py
+pyflakes djangogirls/calculator.py
+python djangogirls/manage.py test djangogirls/tests/
