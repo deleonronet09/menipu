@@ -2,6 +2,10 @@ import calculator
 from django.test import TestCase
 
 class TestCalculator(TestCase):
+  def test_fail(self):
+    self.fail()
+    pass
+
   def test_Add(self):
     self.assertEqual(calculator.add(1,1),2)
   
