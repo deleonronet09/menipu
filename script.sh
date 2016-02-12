@@ -4,8 +4,8 @@ virtualenv --no-site-packages CI_Venv
 source CI_Venv/bin/activate
 pip install -r development.pip
 pyflakes djangogirls/tests/calculator.py
-git clone https://github.com/ctb/figleaf
+git clone -f https://github.com/ctb/figleaf
 mkdir figleaf-restrict
 cd figleaf-restrict
-python figleaf/bin/figleaf ../djangogirls/manage.py test ../djangogirls/tests
-python figleaf/bin/figleaf2html .figleaf
+python ../figleaf/bin/figleaf ../djangogirls/manage.py test ../djangogirls/tests
+python ../figleaf/bin/figleaf2html .figleaf
