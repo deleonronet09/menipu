@@ -2,7 +2,8 @@ import calculator
 import unittest
 
 class TestCalculator(unittest.TestCase):
-
+  def test_spam(self):
+    self.fail()
   def test_Add(self):
     self.assertEqual(calculator.add(1,1),2)
   
