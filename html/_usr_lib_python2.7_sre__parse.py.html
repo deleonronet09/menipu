@@ -1,0 +1,809 @@
+source file: <b>/usr/lib/python2.7/sre_parse.py</b><br>
+
+
+file stats: <b>652 lines, 368 executed: 56.4% covered</b>
+<pre>
+<font color="black">   1. #</font>
+<font color="black">   2. # Secret Labs' Regular Expression Engine</font>
+<font color="black">   3. #</font>
+<font color="black">   4. # convert re-style regular expression to sre pattern</font>
+<font color="black">   5. #</font>
+<font color="black">   6. # Copyright (c) 1998-2001 by Secret Labs AB.  All rights reserved.</font>
+<font color="black">   7. #</font>
+<font color="black">   8. # See the sre.py file for information on usage and redistribution.</font>
+<font color="black">   9. #</font>
+<font color="black">  10. </font>
+<font color="red">  11. &quot;&quot;&quot;Internal support module for sre&quot;&quot;&quot;</font>
+<font color="black">  12. </font>
+<font color="black">  13. # XXX: show string offset and offending character for all errors</font>
+<font color="black">  14. </font>
+<font color="red">  15. import sys</font>
+<font color="black">  16. </font>
+<font color="red">  17. from sre_constants import *</font>
+<font color="black">  18. </font>
+<font color="red">  19. SPECIAL_CHARS = &quot;.\\[{()*+?^$|&quot;</font>
+<font color="red">  20. REPEAT_CHARS = &quot;*+?{&quot;</font>
+<font color="black">  21. </font>
+<font color="red">  22. DIGITS = set(&quot;0123456789&quot;)</font>
+<font color="black">  23. </font>
+<font color="red">  24. OCTDIGITS = set(&quot;01234567&quot;)</font>
+<font color="red">  25. HEXDIGITS = set(&quot;0123456789abcdefABCDEF&quot;)</font>
+<font color="black">  26. </font>
+<font color="red">  27. WHITESPACE = set(&quot; \t\n\r\v\f&quot;)</font>
+<font color="black">  28. </font>
+<font color="red">  29. ESCAPES = {</font>
+<font color="red">  30.     r&quot;\a&quot;: (LITERAL, ord(&quot;\a&quot;)),</font>
+<font color="red">  31.     r&quot;\b&quot;: (LITERAL, ord(&quot;\b&quot;)),</font>
+<font color="red">  32.     r&quot;\f&quot;: (LITERAL, ord(&quot;\f&quot;)),</font>
+<font color="red">  33.     r&quot;\n&quot;: (LITERAL, ord(&quot;\n&quot;)),</font>
+<font color="red">  34.     r&quot;\r&quot;: (LITERAL, ord(&quot;\r&quot;)),</font>
+<font color="red">  35.     r&quot;\t&quot;: (LITERAL, ord(&quot;\t&quot;)),</font>
+<font color="red">  36.     r&quot;\v&quot;: (LITERAL, ord(&quot;\v&quot;)),</font>
+<font color="red">  37.     r&quot;\\&quot;: (LITERAL, ord(&quot;\\&quot;))</font>
+<font color="black">  38. }</font>
+<font color="black">  39. </font>
+<font color="red">  40. CATEGORIES = {</font>
+<font color="red">  41.     r&quot;\A&quot;: (AT, AT_BEGINNING_STRING), # start of string</font>
+<font color="red">  42.     r&quot;\b&quot;: (AT, AT_BOUNDARY),</font>
+<font color="red">  43.     r&quot;\B&quot;: (AT, AT_NON_BOUNDARY),</font>
+<font color="red">  44.     r&quot;\d&quot;: (IN, [(CATEGORY, CATEGORY_DIGIT)]),</font>
+<font color="red">  45.     r&quot;\D&quot;: (IN, [(CATEGORY, CATEGORY_NOT_DIGIT)]),</font>
+<font color="red">  46.     r&quot;\s&quot;: (IN, [(CATEGORY, CATEGORY_SPACE)]),</font>
+<font color="red">  47.     r&quot;\S&quot;: (IN, [(CATEGORY, CATEGORY_NOT_SPACE)]),</font>
+<font color="red">  48.     r&quot;\w&quot;: (IN, [(CATEGORY, CATEGORY_WORD)]),</font>
+<font color="red">  49.     r&quot;\W&quot;: (IN, [(CATEGORY, CATEGORY_NOT_WORD)]),</font>
+<font color="red">  50.     r&quot;\Z&quot;: (AT, AT_END_STRING), # end of string</font>
+<font color="black">  51. }</font>
+<font color="black">  52. </font>
+<font color="red">  53. FLAGS = {</font>
+<font color="black">  54.     # standard flags</font>
+<font color="red">  55.     &quot;i&quot;: SRE_FLAG_IGNORECASE,</font>
+<font color="red">  56.     &quot;L&quot;: SRE_FLAG_LOCALE,</font>
+<font color="red">  57.     &quot;m&quot;: SRE_FLAG_MULTILINE,</font>
+<font color="red">  58.     &quot;s&quot;: SRE_FLAG_DOTALL,</font>
+<font color="red">  59.     &quot;x&quot;: SRE_FLAG_VERBOSE,</font>
+<font color="black">  60.     # extensions</font>
+<font color="red">  61.     &quot;t&quot;: SRE_FLAG_TEMPLATE,</font>
+<font color="red">  62.     &quot;u&quot;: SRE_FLAG_UNICODE,</font>
+<font color="black">  63. }</font>
+<font color="black">  64. </font>
+<font color="red">  65. class Pattern:</font>
+<font color="black">  66.     # master pattern object.  keeps track of global attributes</font>
+<font color="red">  67.     def __init__(self):</font>
+<font color="green">  68.         self.flags = 0</font>
+<font color="green">  69.         self.open = []</font>
+<font color="green">  70.         self.groups = 1</font>
+<font color="green">  71.         self.groupdict = {}</font>
+<font color="red">  72.     def opengroup(self, name=None):</font>
+<font color="green">  73.         gid = self.groups</font>
+<font color="green">  74.         self.groups = gid + 1</font>
+<font color="green">  75.         if name is not None:</font>
+<font color="green">  76.             ogid = self.groupdict.get(name, None)</font>
+<font color="green">  77.             if ogid is not None:</font>
+<font color="red">  78.                 raise error, (&quot;redefinition of group name %s as group %d; &quot;</font>
+<font color="red">  79.                               &quot;was group %d&quot; % (repr(name), gid,  ogid))</font>
+<font color="green">  80.             self.groupdict[name] = gid</font>
+<font color="green">  81.         self.open.append(gid)</font>
+<font color="green">  82.         return gid</font>
+<font color="red">  83.     def closegroup(self, gid):</font>
+<font color="green">  84.         self.open.remove(gid)</font>
+<font color="red">  85.     def checkgroup(self, gid):</font>
+<font color="red">  86.         return gid &lt; self.groups and gid not in self.open</font>
+<font color="black">  87. </font>
+<font color="red">  88. class SubPattern:</font>
+<font color="black">  89.     # a subpattern, in intermediate form</font>
+<font color="red">  90.     def __init__(self, pattern, data=None):</font>
+<font color="green">  91.         self.pattern = pattern</font>
+<font color="green">  92.         if data is None:</font>
+<font color="green">  93.             data = []</font>
+<font color="green">  94.         self.data = data</font>
+<font color="green">  95.         self.width = None</font>
+<font color="red">  96.     def dump(self, level=0):</font>
+<font color="red">  97.         nl = 1</font>
+<font color="red">  98.         seqtypes = type(()), type([])</font>
+<font color="red">  99.         for op, av in self.data:</font>
+<font color="red"> 100.             print level*&quot;  &quot; + op,; nl = 0</font>
+<font color="red"> 101.             if op == &quot;in&quot;:</font>
+<font color="black"> 102.                 # member sublanguage</font>
+<font color="red"> 103.                 print; nl = 1</font>
+<font color="red"> 104.                 for op, a in av:</font>
+<font color="red"> 105.                     print (level+1)*&quot;  &quot; + op, a</font>
+<font color="red"> 106.             elif op == &quot;branch&quot;:</font>
+<font color="red"> 107.                 print; nl = 1</font>
+<font color="red"> 108.                 i = 0</font>
+<font color="red"> 109.                 for a in av[1]:</font>
+<font color="red"> 110.                     if i &gt; 0:</font>
+<font color="red"> 111.                         print level*&quot;  &quot; + &quot;or&quot;</font>
+<font color="red"> 112.                     a.dump(level+1); nl = 1</font>
+<font color="red"> 113.                     i = i + 1</font>
+<font color="red"> 114.             elif type(av) in seqtypes:</font>
+<font color="red"> 115.                 for a in av:</font>
+<font color="red"> 116.                     if isinstance(a, SubPattern):</font>
+<font color="red"> 117.                         if not nl: print</font>
+<font color="red"> 118.                         a.dump(level+1); nl = 1</font>
+<font color="black"> 119.                     else:</font>
+<font color="red"> 120.                         print a, ; nl = 0</font>
+<font color="black"> 121.             else:</font>
+<font color="red"> 122.                 print av, ; nl = 0</font>
+<font color="red"> 123.             if not nl: print</font>
+<font color="red"> 124.     def __repr__(self):</font>
+<font color="red"> 125.         return repr(self.data)</font>
+<font color="red"> 126.     def __len__(self):</font>
+<font color="green"> 127.         return len(self.data)</font>
+<font color="red"> 128.     def __delitem__(self, index):</font>
+<font color="green"> 129.         del self.data[index]</font>
+<font color="red"> 130.     def __getitem__(self, index):</font>
+<font color="green"> 131.         if isinstance(index, slice):</font>
+<font color="green"> 132.             return SubPattern(self.pattern, self.data[index])</font>
+<font color="green"> 133.         return self.data[index]</font>
+<font color="red"> 134.     def __setitem__(self, index, code):</font>
+<font color="green"> 135.         self.data[index] = code</font>
+<font color="red"> 136.     def insert(self, index, code):</font>
+<font color="red"> 137.         self.data.insert(index, code)</font>
+<font color="red"> 138.     def append(self, code):</font>
+<font color="green"> 139.         self.data.append(code)</font>
+<font color="red"> 140.     def getwidth(self):</font>
+<font color="black"> 141.         # determine the width (min, max) for this subpattern</font>
+<font color="green"> 142.         if self.width:</font>
+<font color="green"> 143.             return self.width</font>
+<font color="green"> 144.         lo = hi = 0</font>
+<font color="green"> 145.         UNITCODES = (ANY, RANGE, IN, LITERAL, NOT_LITERAL, CATEGORY)</font>
+<font color="green"> 146.         REPEATCODES = (MIN_REPEAT, MAX_REPEAT)</font>
+<font color="green"> 147.         for op, av in self.data:</font>
+<font color="green"> 148.             if op is BRANCH:</font>
+<font color="green"> 149.                 i = MAXREPEAT - 1</font>
+<font color="green"> 150.                 j = 0</font>
+<font color="green"> 151.                 for av in av[1]:</font>
+<font color="green"> 152.                     l, h = av.getwidth()</font>
+<font color="green"> 153.                     i = min(i, l)</font>
+<font color="green"> 154.                     j = max(j, h)</font>
+<font color="green"> 155.                 lo = lo + i</font>
+<font color="green"> 156.                 hi = hi + j</font>
+<font color="green"> 157.             elif op is CALL:</font>
+<font color="red"> 158.                 i, j = av.getwidth()</font>
+<font color="red"> 159.                 lo = lo + i</font>
+<font color="red"> 160.                 hi = hi + j</font>
+<font color="green"> 161.             elif op is SUBPATTERN:</font>
+<font color="green"> 162.                 i, j = av[1].getwidth()</font>
+<font color="green"> 163.                 lo = lo + i</font>
+<font color="green"> 164.                 hi = hi + j</font>
+<font color="green"> 165.             elif op in REPEATCODES:</font>
+<font color="green"> 166.                 i, j = av[2].getwidth()</font>
+<font color="green"> 167.                 lo = lo + i * av[0]</font>
+<font color="green"> 168.                 hi = hi + j * av[1]</font>
+<font color="green"> 169.             elif op in UNITCODES:</font>
+<font color="green"> 170.                 lo = lo + 1</font>
+<font color="green"> 171.                 hi = hi + 1</font>
+<font color="green"> 172.             elif op == SUCCESS:</font>
+<font color="red"> 173.                 break</font>
+<font color="green"> 174.         self.width = min(lo, MAXREPEAT - 1), min(hi, MAXREPEAT)</font>
+<font color="green"> 175.         return self.width</font>
+<font color="black"> 176. </font>
+<font color="red"> 177. class Tokenizer:</font>
+<font color="red"> 178.     def __init__(self, string):</font>
+<font color="green"> 179.         self.string = string</font>
+<font color="green"> 180.         self.index = 0</font>
+<font color="green"> 181.         self.__next()</font>
+<font color="red"> 182.     def __next(self):</font>
+<font color="green"> 183.         if self.index &gt;= len(self.string):</font>
+<font color="green"> 184.             self.next = None</font>
+<font color="green"> 185.             return</font>
+<font color="green"> 186.         char = self.string[self.index]</font>
+<font color="green"> 187.         if char[0] == &quot;\\&quot;:</font>
+<font color="green"> 188.             try:</font>
+<font color="green"> 189.                 c = self.string[self.index + 1]</font>
+<font color="red"> 190.             except IndexError:</font>
+<font color="red"> 191.                 raise error, &quot;bogus escape (end of line)&quot;</font>
+<font color="green"> 192.             char = char + c</font>
+<font color="green"> 193.         self.index = self.index + len(char)</font>
+<font color="green"> 194.         self.next = char</font>
+<font color="red"> 195.     def match(self, char, skip=1):</font>
+<font color="green"> 196.         if char == self.next:</font>
+<font color="green"> 197.             if skip:</font>
+<font color="green"> 198.                 self.__next()</font>
+<font color="green"> 199.             return 1</font>
+<font color="green"> 200.         return 0</font>
+<font color="red"> 201.     def get(self):</font>
+<font color="green"> 202.         this = self.next</font>
+<font color="green"> 203.         self.__next()</font>
+<font color="green"> 204.         return this</font>
+<font color="red"> 205.     def tell(self):</font>
+<font color="green"> 206.         return self.index, self.next</font>
+<font color="red"> 207.     def seek(self, index):</font>
+<font color="red"> 208.         self.index, self.next = index</font>
+<font color="black"> 209. </font>
+<font color="red"> 210. def isident(char):</font>
+<font color="green"> 211.     return &quot;a&quot; &lt;= char &lt;= &quot;z&quot; or &quot;A&quot; &lt;= char &lt;= &quot;Z&quot; or char == &quot;_&quot;</font>
+<font color="black"> 212. </font>
+<font color="red"> 213. def isdigit(char):</font>
+<font color="red"> 214.     return &quot;0&quot; &lt;= char &lt;= &quot;9&quot;</font>
+<font color="black"> 215. </font>
+<font color="red"> 216. def isname(name):</font>
+<font color="black"> 217.     # check that group name is a valid string</font>
+<font color="green"> 218.     if not isident(name[0]):</font>
+<font color="red"> 219.         return False</font>
+<font color="green"> 220.     for char in name[1:]:</font>
+<font color="green"> 221.         if not isident(char) and not isdigit(char):</font>
+<font color="red"> 222.             return False</font>
+<font color="green"> 223.     return True</font>
+<font color="black"> 224. </font>
+<font color="red"> 225. def _class_escape(source, escape):</font>
+<font color="black"> 226.     # handle escape code inside character class</font>
+<font color="green"> 227.     code = ESCAPES.get(escape)</font>
+<font color="green"> 228.     if code:</font>
+<font color="green"> 229.         return code</font>
+<font color="green"> 230.     code = CATEGORIES.get(escape)</font>
+<font color="green"> 231.     if code and code[0] == IN:</font>
+<font color="green"> 232.         return code</font>
+<font color="green"> 233.     try:</font>
+<font color="green"> 234.         c = escape[1:2]</font>
+<font color="green"> 235.         if c == &quot;x&quot;:</font>
+<font color="black"> 236.             # hexadecimal escape (exactly two digits)</font>
+<font color="green"> 237.             while source.next in HEXDIGITS and len(escape) &lt; 4:</font>
+<font color="green"> 238.                 escape = escape + source.get()</font>
+<font color="green"> 239.             escape = escape[2:]</font>
+<font color="green"> 240.             if len(escape) != 2:</font>
+<font color="red"> 241.                 raise error, &quot;bogus escape: %s&quot; % repr(&quot;\\&quot; + escape)</font>
+<font color="green"> 242.             return LITERAL, int(escape, 16) &amp; 0xff</font>
+<font color="green"> 243.         elif c in OCTDIGITS:</font>
+<font color="black"> 244.             # octal escape (up to three digits)</font>
+<font color="green"> 245.             while source.next in OCTDIGITS and len(escape) &lt; 4:</font>
+<font color="green"> 246.                 escape = escape + source.get()</font>
+<font color="green"> 247.             escape = escape[1:]</font>
+<font color="green"> 248.             return LITERAL, int(escape, 8) &amp; 0xff</font>
+<font color="green"> 249.         elif c in DIGITS:</font>
+<font color="red"> 250.             raise error, &quot;bogus escape: %s&quot; % repr(escape)</font>
+<font color="green"> 251.         if len(escape) == 2:</font>
+<font color="green"> 252.             return LITERAL, ord(escape[1])</font>
+<font color="red"> 253.     except ValueError:</font>
+<font color="red"> 254.         pass</font>
+<font color="red"> 255.     raise error, &quot;bogus escape: %s&quot; % repr(escape)</font>
+<font color="black"> 256. </font>
+<font color="red"> 257. def _escape(source, escape, state):</font>
+<font color="black"> 258.     # handle escape code in expression</font>
+<font color="green"> 259.     code = CATEGORIES.get(escape)</font>
+<font color="green"> 260.     if code:</font>
+<font color="green"> 261.         return code</font>
+<font color="green"> 262.     code = ESCAPES.get(escape)</font>
+<font color="green"> 263.     if code:</font>
+<font color="green"> 264.         return code</font>
+<font color="green"> 265.     try:</font>
+<font color="green"> 266.         c = escape[1:2]</font>
+<font color="green"> 267.         if c == &quot;x&quot;:</font>
+<font color="black"> 268.             # hexadecimal escape</font>
+<font color="red"> 269.             while source.next in HEXDIGITS and len(escape) &lt; 4:</font>
+<font color="red"> 270.                 escape = escape + source.get()</font>
+<font color="red"> 271.             if len(escape) != 4:</font>
+<font color="red"> 272.                 raise ValueError</font>
+<font color="red"> 273.             return LITERAL, int(escape[2:], 16) &amp; 0xff</font>
+<font color="green"> 274.         elif c == &quot;0&quot;:</font>
+<font color="black"> 275.             # octal escape</font>
+<font color="red"> 276.             while source.next in OCTDIGITS and len(escape) &lt; 4:</font>
+<font color="red"> 277.                 escape = escape + source.get()</font>
+<font color="red"> 278.             return LITERAL, int(escape[1:], 8) &amp; 0xff</font>
+<font color="green"> 279.         elif c in DIGITS:</font>
+<font color="black"> 280.             # octal escape *or* decimal group reference (sigh)</font>
+<font color="red"> 281.             if source.next in DIGITS:</font>
+<font color="red"> 282.                 escape = escape + source.get()</font>
+<font color="red"> 283.                 if (escape[1] in OCTDIGITS and escape[2] in OCTDIGITS and</font>
+<font color="red"> 284.                     source.next in OCTDIGITS):</font>
+<font color="black"> 285.                     # got three octal digits; this is an octal escape</font>
+<font color="red"> 286.                     escape = escape + source.get()</font>
+<font color="red"> 287.                     return LITERAL, int(escape[1:], 8) &amp; 0xff</font>
+<font color="black"> 288.             # not an octal escape, so this is a group reference</font>
+<font color="red"> 289.             group = int(escape[1:])</font>
+<font color="red"> 290.             if group &lt; state.groups:</font>
+<font color="red"> 291.                 if not state.checkgroup(group):</font>
+<font color="red"> 292.                     raise error, &quot;cannot refer to open group&quot;</font>
+<font color="red"> 293.                 return GROUPREF, group</font>
+<font color="red"> 294.             raise ValueError</font>
+<font color="green"> 295.         if len(escape) == 2:</font>
+<font color="green"> 296.             return LITERAL, ord(escape[1])</font>
+<font color="red"> 297.     except ValueError:</font>
+<font color="red"> 298.         pass</font>
+<font color="red"> 299.     raise error, &quot;bogus escape: %s&quot; % repr(escape)</font>
+<font color="black"> 300. </font>
+<font color="red"> 301. def _parse_sub(source, state, nested=1):</font>
+<font color="black"> 302.     # parse an alternation: a|b|c</font>
+<font color="black"> 303. </font>
+<font color="green"> 304.     items = []</font>
+<font color="green"> 305.     itemsappend = items.append</font>
+<font color="green"> 306.     sourcematch = source.match</font>
+<font color="green"> 307.     while 1:</font>
+<font color="green"> 308.         itemsappend(_parse(source, state))</font>
+<font color="green"> 309.         if sourcematch(&quot;|&quot;):</font>
+<font color="green"> 310.             continue</font>
+<font color="green"> 311.         if not nested:</font>
+<font color="green"> 312.             break</font>
+<font color="green"> 313.         if not source.next or sourcematch(&quot;)&quot;, 0):</font>
+<font color="green"> 314.             break</font>
+<font color="black"> 315.         else:</font>
+<font color="red"> 316.             raise error, &quot;pattern not properly closed&quot;</font>
+<font color="black"> 317. </font>
+<font color="green"> 318.     if len(items) == 1:</font>
+<font color="green"> 319.         return items[0]</font>
+<font color="black"> 320. </font>
+<font color="green"> 321.     subpattern = SubPattern(state)</font>
+<font color="green"> 322.     subpatternappend = subpattern.append</font>
+<font color="black"> 323. </font>
+<font color="black"> 324.     # check if all items share a common prefix</font>
+<font color="green"> 325.     while 1:</font>
+<font color="green"> 326.         prefix = None</font>
+<font color="green"> 327.         for item in items:</font>
+<font color="green"> 328.             if not item:</font>
+<font color="green"> 329.                 break</font>
+<font color="green"> 330.             if prefix is None:</font>
+<font color="green"> 331.                 prefix = item[0]</font>
+<font color="green"> 332.             elif item[0] != prefix:</font>
+<font color="green"> 333.                 break</font>
+<font color="black"> 334.         else:</font>
+<font color="black"> 335.             # all subitems start with a common &quot;prefix&quot;.</font>
+<font color="black"> 336.             # move it out of the branch</font>
+<font color="green"> 337.             for item in items:</font>
+<font color="green"> 338.                 del item[0]</font>
+<font color="green"> 339.             subpatternappend(prefix)</font>
+<font color="green"> 340.             continue # check next one</font>
+<font color="green"> 341.         break</font>
+<font color="black"> 342. </font>
+<font color="black"> 343.     # check if the branch can be replaced by a character set</font>
+<font color="green"> 344.     for item in items:</font>
+<font color="green"> 345.         if len(item) != 1 or item[0][0] != LITERAL:</font>
+<font color="green"> 346.             break</font>
+<font color="black"> 347.     else:</font>
+<font color="black"> 348.         # we can store this as a character set instead of a</font>
+<font color="black"> 349.         # branch (the compiler may optimize this even more)</font>
+<font color="red"> 350.         set = []</font>
+<font color="red"> 351.         setappend = set.append</font>
+<font color="red"> 352.         for item in items:</font>
+<font color="red"> 353.             setappend(item[0])</font>
+<font color="red"> 354.         subpatternappend((IN, set))</font>
+<font color="red"> 355.         return subpattern</font>
+<font color="black"> 356. </font>
+<font color="green"> 357.     subpattern.append((BRANCH, (None, items)))</font>
+<font color="green"> 358.     return subpattern</font>
+<font color="black"> 359. </font>
+<font color="red"> 360. def _parse_sub_cond(source, state, condgroup):</font>
+<font color="red"> 361.     item_yes = _parse(source, state)</font>
+<font color="red"> 362.     if source.match(&quot;|&quot;):</font>
+<font color="red"> 363.         item_no = _parse(source, state)</font>
+<font color="red"> 364.         if source.match(&quot;|&quot;):</font>
+<font color="red"> 365.             raise error, &quot;conditional backref with more than two branches&quot;</font>
+<font color="black"> 366.     else:</font>
+<font color="red"> 367.         item_no = None</font>
+<font color="red"> 368.     if source.next and not source.match(&quot;)&quot;, 0):</font>
+<font color="red"> 369.         raise error, &quot;pattern not properly closed&quot;</font>
+<font color="red"> 370.     subpattern = SubPattern(state)</font>
+<font color="red"> 371.     subpattern.append((GROUPREF_EXISTS, (condgroup, item_yes, item_no)))</font>
+<font color="red"> 372.     return subpattern</font>
+<font color="black"> 373. </font>
+<font color="red"> 374. _PATTERNENDERS = set(&quot;|)&quot;)</font>
+<font color="red"> 375. _ASSERTCHARS = set(&quot;=!&lt;&quot;)</font>
+<font color="red"> 376. _LOOKBEHINDASSERTCHARS = set(&quot;=!&quot;)</font>
+<font color="red"> 377. _REPEATCODES = set([MIN_REPEAT, MAX_REPEAT])</font>
+<font color="black"> 378. </font>
+<font color="red"> 379. def _parse(source, state):</font>
+<font color="black"> 380.     # parse a simple pattern</font>
+<font color="green"> 381.     subpattern = SubPattern(state)</font>
+<font color="black"> 382. </font>
+<font color="black"> 383.     # precompute constants into local variables</font>
+<font color="green"> 384.     subpatternappend = subpattern.append</font>
+<font color="green"> 385.     sourceget = source.get</font>
+<font color="green"> 386.     sourcematch = source.match</font>
+<font color="green"> 387.     _len = len</font>
+<font color="green"> 388.     PATTERNENDERS = _PATTERNENDERS</font>
+<font color="green"> 389.     ASSERTCHARS = _ASSERTCHARS</font>
+<font color="green"> 390.     LOOKBEHINDASSERTCHARS = _LOOKBEHINDASSERTCHARS</font>
+<font color="green"> 391.     REPEATCODES = _REPEATCODES</font>
+<font color="black"> 392. </font>
+<font color="green"> 393.     while 1:</font>
+<font color="black"> 394. </font>
+<font color="green"> 395.         if source.next in PATTERNENDERS:</font>
+<font color="green"> 396.             break # end of subpattern</font>
+<font color="green"> 397.         this = sourceget()</font>
+<font color="green"> 398.         if this is None:</font>
+<font color="green"> 399.             break # end of pattern</font>
+<font color="black"> 400. </font>
+<font color="green"> 401.         if state.flags &amp; SRE_FLAG_VERBOSE:</font>
+<font color="black"> 402.             # skip whitespace and comments</font>
+<font color="green"> 403.             if this in WHITESPACE:</font>
+<font color="green"> 404.                 continue</font>
+<font color="green"> 405.             if this == &quot;#&quot;:</font>
+<font color="green"> 406.                 while 1:</font>
+<font color="green"> 407.                     this = sourceget()</font>
+<font color="green"> 408.                     if this in (None, &quot;\n&quot;):</font>
+<font color="green"> 409.                         break</font>
+<font color="green"> 410.                 continue</font>
+<font color="black"> 411. </font>
+<font color="green"> 412.         if this and this[0] not in SPECIAL_CHARS:</font>
+<font color="green"> 413.             subpatternappend((LITERAL, ord(this)))</font>
+<font color="black"> 414. </font>
+<font color="green"> 415.         elif this == &quot;[&quot;:</font>
+<font color="black"> 416.             # character set</font>
+<font color="green"> 417.             set = []</font>
+<font color="green"> 418.             setappend = set.append</font>
+<font color="black"> 419. ##          if sourcematch(&quot;:&quot;):</font>
+<font color="black"> 420. ##              pass # handle character classes</font>
+<font color="green"> 421.             if sourcematch(&quot;^&quot;):</font>
+<font color="green"> 422.                 setappend((NEGATE, None))</font>
+<font color="black"> 423.             # check remaining characters</font>
+<font color="green"> 424.             start = set[:]</font>
+<font color="green"> 425.             while 1:</font>
+<font color="green"> 426.                 this = sourceget()</font>
+<font color="green"> 427.                 if this == &quot;]&quot; and set != start:</font>
+<font color="green"> 428.                     break</font>
+<font color="green"> 429.                 elif this and this[0] == &quot;\\&quot;:</font>
+<font color="green"> 430.                     code1 = _class_escape(source, this)</font>
+<font color="green"> 431.                 elif this:</font>
+<font color="green"> 432.                     code1 = LITERAL, ord(this)</font>
+<font color="black"> 433.                 else:</font>
+<font color="red"> 434.                     raise error, &quot;unexpected end of regular expression&quot;</font>
+<font color="green"> 435.                 if sourcematch(&quot;-&quot;):</font>
+<font color="black"> 436.                     # potential range</font>
+<font color="green"> 437.                     this = sourceget()</font>
+<font color="green"> 438.                     if this == &quot;]&quot;:</font>
+<font color="green"> 439.                         if code1[0] is IN:</font>
+<font color="green"> 440.                             code1 = code1[1][0]</font>
+<font color="green"> 441.                         setappend(code1)</font>
+<font color="green"> 442.                         setappend((LITERAL, ord(&quot;-&quot;)))</font>
+<font color="green"> 443.                         break</font>
+<font color="green"> 444.                     elif this:</font>
+<font color="green"> 445.                         if this[0] == &quot;\\&quot;:</font>
+<font color="green"> 446.                             code2 = _class_escape(source, this)</font>
+<font color="black"> 447.                         else:</font>
+<font color="green"> 448.                             code2 = LITERAL, ord(this)</font>
+<font color="green"> 449.                         if code1[0] != LITERAL or code2[0] != LITERAL:</font>
+<font color="red"> 450.                             raise error, &quot;bad character range&quot;</font>
+<font color="green"> 451.                         lo = code1[1]</font>
+<font color="green"> 452.                         hi = code2[1]</font>
+<font color="green"> 453.                         if hi &lt; lo:</font>
+<font color="red"> 454.                             raise error, &quot;bad character range&quot;</font>
+<font color="green"> 455.                         setappend((RANGE, (lo, hi)))</font>
+<font color="black"> 456.                     else:</font>
+<font color="red"> 457.                         raise error, &quot;unexpected end of regular expression&quot;</font>
+<font color="black"> 458.                 else:</font>
+<font color="green"> 459.                     if code1[0] is IN:</font>
+<font color="green"> 460.                         code1 = code1[1][0]</font>
+<font color="green"> 461.                     setappend(code1)</font>
+<font color="black"> 462. </font>
+<font color="black"> 463.             # XXX: &lt;fl&gt; should move set optimization to compiler!</font>
+<font color="green"> 464.             if _len(set)==1 and set[0][0] is LITERAL:</font>
+<font color="green"> 465.                 subpatternappend(set[0]) # optimization</font>
+<font color="green"> 466.             elif _len(set)==2 and set[0][0] is NEGATE and set[1][0] is LITERAL:</font>
+<font color="green"> 467.                 subpatternappend((NOT_LITERAL, set[1][1])) # optimization</font>
+<font color="black"> 468.             else:</font>
+<font color="black"> 469.                 # XXX: &lt;fl&gt; should add charmap optimization here</font>
+<font color="green"> 470.                 subpatternappend((IN, set))</font>
+<font color="black"> 471. </font>
+<font color="green"> 472.         elif this and this[0] in REPEAT_CHARS:</font>
+<font color="black"> 473.             # repeat previous item</font>
+<font color="green"> 474.             if this == &quot;?&quot;:</font>
+<font color="green"> 475.                 min, max = 0, 1</font>
+<font color="green"> 476.             elif this == &quot;*&quot;:</font>
+<font color="green"> 477.                 min, max = 0, MAXREPEAT</font>
+<font color="black"> 478. </font>
+<font color="green"> 479.             elif this == &quot;+&quot;:</font>
+<font color="green"> 480.                 min, max = 1, MAXREPEAT</font>
+<font color="green"> 481.             elif this == &quot;{&quot;:</font>
+<font color="green"> 482.                 if source.next == &quot;}&quot;:</font>
+<font color="red"> 483.                     subpatternappend((LITERAL, ord(this)))</font>
+<font color="red"> 484.                     continue</font>
+<font color="green"> 485.                 here = source.tell()</font>
+<font color="green"> 486.                 min, max = 0, MAXREPEAT</font>
+<font color="green"> 487.                 lo = hi = &quot;&quot;</font>
+<font color="green"> 488.                 while source.next in DIGITS:</font>
+<font color="green"> 489.                     lo = lo + source.get()</font>
+<font color="green"> 490.                 if sourcematch(&quot;,&quot;):</font>
+<font color="green"> 491.                     while source.next in DIGITS:</font>
+<font color="green"> 492.                         hi = hi + sourceget()</font>
+<font color="black"> 493.                 else:</font>
+<font color="green"> 494.                     hi = lo</font>
+<font color="green"> 495.                 if not sourcematch(&quot;}&quot;):</font>
+<font color="red"> 496.                     subpatternappend((LITERAL, ord(this)))</font>
+<font color="red"> 497.                     source.seek(here)</font>
+<font color="red"> 498.                     continue</font>
+<font color="green"> 499.                 if lo:</font>
+<font color="green"> 500.                     min = int(lo)</font>
+<font color="green"> 501.                     if min &gt;= MAXREPEAT:</font>
+<font color="red"> 502.                         raise OverflowError(&quot;the repetition number is too large&quot;)</font>
+<font color="green"> 503.                 if hi:</font>
+<font color="green"> 504.                     max = int(hi)</font>
+<font color="green"> 505.                     if max &gt;= MAXREPEAT:</font>
+<font color="red"> 506.                         raise OverflowError(&quot;the repetition number is too large&quot;)</font>
+<font color="green"> 507.                     if max &lt; min:</font>
+<font color="red"> 508.                         raise error(&quot;bad repeat interval&quot;)</font>
+<font color="black"> 509.             else:</font>
+<font color="red"> 510.                 raise error, &quot;not supported&quot;</font>
+<font color="black"> 511.             # figure out which item to repeat</font>
+<font color="green"> 512.             if subpattern:</font>
+<font color="green"> 513.                 item = subpattern[-1:]</font>
+<font color="black"> 514.             else:</font>
+<font color="red"> 515.                 item = None</font>
+<font color="green"> 516.             if not item or (_len(item) == 1 and item[0][0] == AT):</font>
+<font color="red"> 517.                 raise error, &quot;nothing to repeat&quot;</font>
+<font color="green"> 518.             if item[0][0] in REPEATCODES:</font>
+<font color="red"> 519.                 raise error, &quot;multiple repeat&quot;</font>
+<font color="green"> 520.             if sourcematch(&quot;?&quot;):</font>
+<font color="green"> 521.                 subpattern[-1] = (MIN_REPEAT, (min, max, item))</font>
+<font color="black"> 522.             else:</font>
+<font color="green"> 523.                 subpattern[-1] = (MAX_REPEAT, (min, max, item))</font>
+<font color="black"> 524. </font>
+<font color="green"> 525.         elif this == &quot;.&quot;:</font>
+<font color="green"> 526.             subpatternappend((ANY, None))</font>
+<font color="black"> 527. </font>
+<font color="green"> 528.         elif this == &quot;(&quot;:</font>
+<font color="green"> 529.             group = 1</font>
+<font color="green"> 530.             name = None</font>
+<font color="green"> 531.             condgroup = None</font>
+<font color="green"> 532.             if sourcematch(&quot;?&quot;):</font>
+<font color="green"> 533.                 group = 0</font>
+<font color="black"> 534.                 # options</font>
+<font color="green"> 535.                 if sourcematch(&quot;P&quot;):</font>
+<font color="black"> 536.                     # python extensions</font>
+<font color="green"> 537.                     if sourcematch(&quot;&lt;&quot;):</font>
+<font color="black"> 538.                         # named group: skip forward to end of name</font>
+<font color="green"> 539.                         name = &quot;&quot;</font>
+<font color="green"> 540.                         while 1:</font>
+<font color="green"> 541.                             char = sourceget()</font>
+<font color="green"> 542.                             if char is None:</font>
+<font color="red"> 543.                                 raise error, &quot;unterminated name&quot;</font>
+<font color="green"> 544.                             if char == &quot;&gt;&quot;:</font>
+<font color="green"> 545.                                 break</font>
+<font color="green"> 546.                             name = name + char</font>
+<font color="green"> 547.                         group = 1</font>
+<font color="green"> 548.                         if not name:</font>
+<font color="red"> 549.                             raise error(&quot;missing group name&quot;)</font>
+<font color="green"> 550.                         if not isname(name):</font>
+<font color="red"> 551.                             raise error(&quot;bad character in group name %r&quot; %</font>
+<font color="red"> 552.                                         name)</font>
+<font color="red"> 553.                     elif sourcematch(&quot;=&quot;):</font>
+<font color="black"> 554.                         # named backreference</font>
+<font color="red"> 555.                         name = &quot;&quot;</font>
+<font color="red"> 556.                         while 1:</font>
+<font color="red"> 557.                             char = sourceget()</font>
+<font color="red"> 558.                             if char is None:</font>
+<font color="red"> 559.                                 raise error, &quot;unterminated name&quot;</font>
+<font color="red"> 560.                             if char == &quot;)&quot;:</font>
+<font color="red"> 561.                                 break</font>
+<font color="red"> 562.                             name = name + char</font>
+<font color="red"> 563.                         if not name:</font>
+<font color="red"> 564.                             raise error(&quot;missing group name&quot;)</font>
+<font color="red"> 565.                         if not isname(name):</font>
+<font color="red"> 566.                             raise error(&quot;bad character in backref group name &quot;</font>
+<font color="red"> 567.                                         &quot;%r&quot; % name)</font>
+<font color="red"> 568.                         gid = state.groupdict.get(name)</font>
+<font color="red"> 569.                         if gid is None:</font>
+<font color="red"> 570.                             raise error, &quot;unknown group name&quot;</font>
+<font color="red"> 571.                         subpatternappend((GROUPREF, gid))</font>
+<font color="red"> 572.                         continue</font>
+<font color="black"> 573.                     else:</font>
+<font color="red"> 574.                         char = sourceget()</font>
+<font color="red"> 575.                         if char is None:</font>
+<font color="red"> 576.                             raise error, &quot;unexpected end of pattern&quot;</font>
+<font color="red"> 577.                         raise error, &quot;unknown specifier: ?P%s&quot; % char</font>
+<font color="green"> 578.                 elif sourcematch(&quot;:&quot;):</font>
+<font color="black"> 579.                     # non-capturing group</font>
+<font color="green"> 580.                     group = 2</font>
+<font color="green"> 581.                 elif sourcematch(&quot;#&quot;):</font>
+<font color="black"> 582.                     # comment</font>
+<font color="red"> 583.                     while 1:</font>
+<font color="red"> 584.                         if source.next is None or source.next == &quot;)&quot;:</font>
+<font color="red"> 585.                             break</font>
+<font color="red"> 586.                         sourceget()</font>
+<font color="red"> 587.                     if not sourcematch(&quot;)&quot;):</font>
+<font color="red"> 588.                         raise error, &quot;unbalanced parenthesis&quot;</font>
+<font color="red"> 589.                     continue</font>
+<font color="green"> 590.                 elif source.next in ASSERTCHARS:</font>
+<font color="black"> 591.                     # lookahead assertions</font>
+<font color="green"> 592.                     char = sourceget()</font>
+<font color="green"> 593.                     dir = 1</font>
+<font color="green"> 594.                     if char == &quot;&lt;&quot;:</font>
+<font color="green"> 595.                         if source.next not in LOOKBEHINDASSERTCHARS:</font>
+<font color="red"> 596.                             raise error, &quot;syntax error&quot;</font>
+<font color="green"> 597.                         dir = -1 # lookbehind</font>
+<font color="green"> 598.                         char = sourceget()</font>
+<font color="green"> 599.                     p = _parse_sub(source, state)</font>
+<font color="green"> 600.                     if not sourcematch(&quot;)&quot;):</font>
+<font color="red"> 601.                         raise error, &quot;unbalanced parenthesis&quot;</font>
+<font color="green"> 602.                     if char == &quot;=&quot;:</font>
+<font color="green"> 603.                         subpatternappend((ASSERT, (dir, p)))</font>
+<font color="black"> 604.                     else:</font>
+<font color="green"> 605.                         subpatternappend((ASSERT_NOT, (dir, p)))</font>
+<font color="green"> 606.                     continue</font>
+<font color="green"> 607.                 elif sourcematch(&quot;(&quot;):</font>
+<font color="black"> 608.                     # conditional backreference group</font>
+<font color="red"> 609.                     condname = &quot;&quot;</font>
+<font color="red"> 610.                     while 1:</font>
+<font color="red"> 611.                         char = sourceget()</font>
+<font color="red"> 612.                         if char is None:</font>
+<font color="red"> 613.                             raise error, &quot;unterminated name&quot;</font>
+<font color="red"> 614.                         if char == &quot;)&quot;:</font>
+<font color="red"> 615.                             break</font>
+<font color="red"> 616.                         condname = condname + char</font>
+<font color="red"> 617.                     group = 2</font>
+<font color="red"> 618.                     if not condname:</font>
+<font color="red"> 619.                         raise error(&quot;missing group name&quot;)</font>
+<font color="red"> 620.                     if isname(condname):</font>
+<font color="red"> 621.                         condgroup = state.groupdict.get(condname)</font>
+<font color="red"> 622.                         if condgroup is None:</font>
+<font color="red"> 623.                             raise error, &quot;unknown group name&quot;</font>
+<font color="black"> 624.                     else:</font>
+<font color="red"> 625.                         try:</font>
+<font color="red"> 626.                             condgroup = int(condname)</font>
+<font color="red"> 627.                         except ValueError:</font>
+<font color="red"> 628.                             raise error, &quot;bad character in group name&quot;</font>
+<font color="black"> 629.                 else:</font>
+<font color="black"> 630.                     # flags</font>
+<font color="green"> 631.                     if not source.next in FLAGS:</font>
+<font color="red"> 632.                         raise error, &quot;unexpected end of pattern&quot;</font>
+<font color="green"> 633.                     while source.next in FLAGS:</font>
+<font color="green"> 634.                         state.flags = state.flags | FLAGS[sourceget()]</font>
+<font color="green"> 635.             if group:</font>
+<font color="black"> 636.                 # parse group contents</font>
+<font color="green"> 637.                 if group == 2:</font>
+<font color="black"> 638.                     # anonymous group</font>
+<font color="green"> 639.                     group = None</font>
+<font color="black"> 640.                 else:</font>
+<font color="green"> 641.                     group = state.opengroup(name)</font>
+<font color="green"> 642.                 if condgroup:</font>
+<font color="red"> 643.                     p = _parse_sub_cond(source, state, condgroup)</font>
+<font color="black"> 644.                 else:</font>
+<font color="green"> 645.                     p = _parse_sub(source, state)</font>
+<font color="green"> 646.                 if not sourcematch(&quot;)&quot;):</font>
+<font color="red"> 647.                     raise error, &quot;unbalanced parenthesis&quot;</font>
+<font color="green"> 648.                 if group is not None:</font>
+<font color="green"> 649.                     state.closegroup(group)</font>
+<font color="green"> 650.                 subpatternappend((SUBPATTERN, (group, p)))</font>
+<font color="black"> 651.             else:</font>
+<font color="green"> 652.                 while 1:</font>
+<font color="green"> 653.                     char = sourceget()</font>
+<font color="green"> 654.                     if char is None:</font>
+<font color="red"> 655.                         raise error, &quot;unexpected end of pattern&quot;</font>
+<font color="green"> 656.                     if char == &quot;)&quot;:</font>
+<font color="green"> 657.                         break</font>
+<font color="red"> 658.                     raise error, &quot;unknown extension&quot;</font>
+<font color="black"> 659. </font>
+<font color="green"> 660.         elif this == &quot;^&quot;:</font>
+<font color="green"> 661.             subpatternappend((AT, AT_BEGINNING))</font>
+<font color="black"> 662. </font>
+<font color="green"> 663.         elif this == &quot;$&quot;:</font>
+<font color="green"> 664.             subpattern.append((AT, AT_END))</font>
+<font color="black"> 665. </font>
+<font color="green"> 666.         elif this and this[0] == &quot;\\&quot;:</font>
+<font color="green"> 667.             code = _escape(source, this, state)</font>
+<font color="green"> 668.             subpatternappend(code)</font>
+<font color="black"> 669. </font>
+<font color="black"> 670.         else:</font>
+<font color="red"> 671.             raise error, &quot;parser error&quot;</font>
+<font color="black"> 672. </font>
+<font color="green"> 673.     return subpattern</font>
+<font color="black"> 674. </font>
+<font color="red"> 675. def parse(str, flags=0, pattern=None):</font>
+<font color="black"> 676.     # parse 're' pattern into list of (opcode, argument) tuples</font>
+<font color="black"> 677. </font>
+<font color="green"> 678.     source = Tokenizer(str)</font>
+<font color="black"> 679. </font>
+<font color="green"> 680.     if pattern is None:</font>
+<font color="green"> 681.         pattern = Pattern()</font>
+<font color="green"> 682.     pattern.flags = flags</font>
+<font color="green"> 683.     pattern.str = str</font>
+<font color="black"> 684. </font>
+<font color="green"> 685.     p = _parse_sub(source, pattern, 0)</font>
+<font color="black"> 686. </font>
+<font color="green"> 687.     tail = source.get()</font>
+<font color="green"> 688.     if tail == &quot;)&quot;:</font>
+<font color="red"> 689.         raise error, &quot;unbalanced parenthesis&quot;</font>
+<font color="green"> 690.     elif tail:</font>
+<font color="red"> 691.         raise error, &quot;bogus characters at end of regular expression&quot;</font>
+<font color="black"> 692. </font>
+<font color="green"> 693.     if flags &amp; SRE_FLAG_DEBUG:</font>
+<font color="red"> 694.         p.dump()</font>
+<font color="black"> 695. </font>
+<font color="green"> 696.     if not (flags &amp; SRE_FLAG_VERBOSE) and p.pattern.flags &amp; SRE_FLAG_VERBOSE:</font>
+<font color="black"> 697.         # the VERBOSE flag was switched on inside the pattern.  to be</font>
+<font color="black"> 698.         # on the safe side, we'll parse the whole thing again...</font>
+<font color="green"> 699.         return parse(str, p.pattern.flags)</font>
+<font color="black"> 700. </font>
+<font color="green"> 701.     return p</font>
+<font color="black"> 702. </font>
+<font color="red"> 703. def parse_template(source, pattern):</font>
+<font color="black"> 704.     # parse 're' replacement string into list of literals and</font>
+<font color="black"> 705.     # group references</font>
+<font color="green"> 706.     s = Tokenizer(source)</font>
+<font color="green"> 707.     sget = s.get</font>
+<font color="green"> 708.     p = []</font>
+<font color="green"> 709.     a = p.append</font>
+<font color="green"> 710.     def literal(literal, p=p, pappend=a):</font>
+<font color="green"> 711.         if p and p[-1][0] is LITERAL:</font>
+<font color="red"> 712.             p[-1] = LITERAL, p[-1][1] + literal</font>
+<font color="black"> 713.         else:</font>
+<font color="green"> 714.             pappend((LITERAL, literal))</font>
+<font color="green"> 715.     sep = source[:0]</font>
+<font color="green"> 716.     if type(sep) is type(&quot;&quot;):</font>
+<font color="red"> 717.         makechar = chr</font>
+<font color="black"> 718.     else:</font>
+<font color="green"> 719.         makechar = unichr</font>
+<font color="green"> 720.     while 1:</font>
+<font color="green"> 721.         this = sget()</font>
+<font color="green"> 722.         if this is None:</font>
+<font color="green"> 723.             break # end of replacement string</font>
+<font color="green"> 724.         if this and this[0] == &quot;\\&quot;:</font>
+<font color="black"> 725.             # group</font>
+<font color="green"> 726.             c = this[1:2]</font>
+<font color="green"> 727.             if c == &quot;g&quot;:</font>
+<font color="red"> 728.                 name = &quot;&quot;</font>
+<font color="red"> 729.                 if s.match(&quot;&lt;&quot;):</font>
+<font color="red"> 730.                     while 1:</font>
+<font color="red"> 731.                         char = sget()</font>
+<font color="red"> 732.                         if char is None:</font>
+<font color="red"> 733.                             raise error, &quot;unterminated group name&quot;</font>
+<font color="red"> 734.                         if char == &quot;&gt;&quot;:</font>
+<font color="red"> 735.                             break</font>
+<font color="red"> 736.                         name = name + char</font>
+<font color="red"> 737.                 if not name:</font>
+<font color="red"> 738.                     raise error, &quot;missing group name&quot;</font>
+<font color="red"> 739.                 try:</font>
+<font color="red"> 740.                     index = int(name)</font>
+<font color="red"> 741.                     if index &lt; 0:</font>
+<font color="red"> 742.                         raise error, &quot;negative group number&quot;</font>
+<font color="red"> 743.                 except ValueError:</font>
+<font color="red"> 744.                     if not isname(name):</font>
+<font color="red"> 745.                         raise error, &quot;bad character in group name&quot;</font>
+<font color="red"> 746.                     try:</font>
+<font color="red"> 747.                         index = pattern.groupindex[name]</font>
+<font color="red"> 748.                     except KeyError:</font>
+<font color="red"> 749.                         raise IndexError, &quot;unknown group name&quot;</font>
+<font color="red"> 750.                 a((MARK, index))</font>
+<font color="green"> 751.             elif c == &quot;0&quot;:</font>
+<font color="red"> 752.                 if s.next in OCTDIGITS:</font>
+<font color="red"> 753.                     this = this + sget()</font>
+<font color="red"> 754.                     if s.next in OCTDIGITS:</font>
+<font color="red"> 755.                         this = this + sget()</font>
+<font color="red"> 756.                 literal(makechar(int(this[1:], 8) &amp; 0xff))</font>
+<font color="green"> 757.             elif c in DIGITS:</font>
+<font color="green"> 758.                 isoctal = False</font>
+<font color="green"> 759.                 if s.next in DIGITS:</font>
+<font color="red"> 760.                     this = this + sget()</font>
+<font color="red"> 761.                     if (c in OCTDIGITS and this[2] in OCTDIGITS and</font>
+<font color="red"> 762.                         s.next in OCTDIGITS):</font>
+<font color="red"> 763.                         this = this + sget()</font>
+<font color="red"> 764.                         isoctal = True</font>
+<font color="red"> 765.                         literal(makechar(int(this[1:], 8) &amp; 0xff))</font>
+<font color="green"> 766.                 if not isoctal:</font>
+<font color="green"> 767.                     a((MARK, int(this[1:])))</font>
+<font color="black"> 768.             else:</font>
+<font color="red"> 769.                 try:</font>
+<font color="red"> 770.                     this = makechar(ESCAPES[this][1])</font>
+<font color="red"> 771.                 except KeyError:</font>
+<font color="red"> 772.                     pass</font>
+<font color="red"> 773.                 literal(this)</font>
+<font color="black"> 774.         else:</font>
+<font color="green"> 775.             literal(this)</font>
+<font color="black"> 776.     # convert template to groups and literals lists</font>
+<font color="green"> 777.     i = 0</font>
+<font color="green"> 778.     groups = []</font>
+<font color="green"> 779.     groupsappend = groups.append</font>
+<font color="green"> 780.     literals = [None] * len(p)</font>
+<font color="green"> 781.     for c, s in p:</font>
+<font color="green"> 782.         if c is MARK:</font>
+<font color="green"> 783.             groupsappend((i, s))</font>
+<font color="black"> 784.             # literal[i] is already None</font>
+<font color="black"> 785.         else:</font>
+<font color="green"> 786.             literals[i] = s</font>
+<font color="green"> 787.         i = i + 1</font>
+<font color="green"> 788.     return groups, literals</font>
+<font color="black"> 789. </font>
+<font color="red"> 790. def expand_template(template, match):</font>
+<font color="green"> 791.     g = match.group</font>
+<font color="green"> 792.     sep = match.string[:0]</font>
+<font color="green"> 793.     groups, literals = template</font>
+<font color="green"> 794.     literals = literals[:]</font>
+<font color="green"> 795.     try:</font>
+<font color="green"> 796.         for index, group in groups:</font>
+<font color="green"> 797.             literals[index] = s = g(group)</font>
+<font color="green"> 798.             if s is None:</font>
+<font color="red"> 799.                 raise error, &quot;unmatched group&quot;</font>
+<font color="red"> 800.     except IndexError:</font>
+<font color="red"> 801.         raise error, &quot;invalid group reference&quot;</font>
+<font color="green"> 802.     return sep.join(literals)</font>
+</pre>
+

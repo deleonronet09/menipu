@@ -1,0 +1,912 @@
+source file: <b>/usr/lib/python2.7/random.py</b><br>
+
+
+file stats: <b>400 lines, 102 executed: 25.5% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Random variable generators.</font>
+<font color="black">   2. </font>
+<font color="black">   3.     integers</font>
+<font color="black">   4.     --------</font>
+<font color="black">   5.            uniform within range</font>
+<font color="black">   6. </font>
+<font color="black">   7.     sequences</font>
+<font color="black">   8.     ---------</font>
+<font color="black">   9.            pick random element</font>
+<font color="black">  10.            pick random sample</font>
+<font color="black">  11.            generate random permutation</font>
+<font color="black">  12. </font>
+<font color="black">  13.     distributions on the real line:</font>
+<font color="black">  14.     ------------------------------</font>
+<font color="black">  15.            uniform</font>
+<font color="black">  16.            triangular</font>
+<font color="black">  17.            normal (Gaussian)</font>
+<font color="black">  18.            lognormal</font>
+<font color="black">  19.            negative exponential</font>
+<font color="black">  20.            gamma</font>
+<font color="black">  21.            beta</font>
+<font color="black">  22.            pareto</font>
+<font color="black">  23.            Weibull</font>
+<font color="black">  24. </font>
+<font color="black">  25.     distributions on the circle (angles 0 to 2pi)</font>
+<font color="black">  26.     ---------------------------------------------</font>
+<font color="black">  27.            circular uniform</font>
+<font color="black">  28.            von Mises</font>
+<font color="black">  29. </font>
+<font color="black">  30. General notes on the underlying Mersenne Twister core generator:</font>
+<font color="black">  31. </font>
+<font color="black">  32. * The period is 2**19937-1.</font>
+<font color="black">  33. * It is one of the most extensively tested generators in existence.</font>
+<font color="black">  34. * Without a direct way to compute N steps forward, the semantics of</font>
+<font color="black">  35.   jumpahead(n) are weakened to simply jump to another distant state and rely</font>
+<font color="black">  36.   on the large period to avoid overlapping sequences.</font>
+<font color="black">  37. * The random() method is implemented in C, executes in a single Python step,</font>
+<font color="black">  38.   and is, therefore, threadsafe.</font>
+<font color="black">  39. </font>
+<font color="green">  40. &quot;&quot;&quot;</font>
+<font color="black">  41. </font>
+<font color="green">  42. from __future__ import division</font>
+<font color="green">  43. from warnings import warn as _warn</font>
+<font color="green">  44. from types import MethodType as _MethodType, BuiltinMethodType as _BuiltinMethodType</font>
+<font color="green">  45. from math import log as _log, exp as _exp, pi as _pi, e as _e, ceil as _ceil</font>
+<font color="green">  46. from math import sqrt as _sqrt, acos as _acos, cos as _cos, sin as _sin</font>
+<font color="green">  47. from os import urandom as _urandom</font>
+<font color="green">  48. from binascii import hexlify as _hexlify</font>
+<font color="green">  49. import hashlib as _hashlib</font>
+<font color="black">  50. </font>
+<font color="green">  51. __all__ = [&quot;Random&quot;,&quot;seed&quot;,&quot;random&quot;,&quot;uniform&quot;,&quot;randint&quot;,&quot;choice&quot;,&quot;sample&quot;,</font>
+<font color="green">  52.            &quot;randrange&quot;,&quot;shuffle&quot;,&quot;normalvariate&quot;,&quot;lognormvariate&quot;,</font>
+<font color="green">  53.            &quot;expovariate&quot;,&quot;vonmisesvariate&quot;,&quot;gammavariate&quot;,&quot;triangular&quot;,</font>
+<font color="green">  54.            &quot;gauss&quot;,&quot;betavariate&quot;,&quot;paretovariate&quot;,&quot;weibullvariate&quot;,</font>
+<font color="green">  55.            &quot;getstate&quot;,&quot;setstate&quot;,&quot;jumpahead&quot;, &quot;WichmannHill&quot;, &quot;getrandbits&quot;,</font>
+<font color="green">  56.            &quot;SystemRandom&quot;]</font>
+<font color="black">  57. </font>
+<font color="green">  58. NV_MAGICCONST = 4 * _exp(-0.5)/_sqrt(2.0)</font>
+<font color="green">  59. TWOPI = 2.0*_pi</font>
+<font color="green">  60. LOG4 = _log(4.0)</font>
+<font color="green">  61. SG_MAGICCONST = 1.0 + _log(4.5)</font>
+<font color="green">  62. BPF = 53        # Number of bits in a float</font>
+<font color="green">  63. RECIP_BPF = 2**-BPF</font>
+<font color="black">  64. </font>
+<font color="black">  65. </font>
+<font color="black">  66. # Translated by Guido van Rossum from C source provided by</font>
+<font color="black">  67. # Adrian Baddeley.  Adapted by Raymond Hettinger for use with</font>
+<font color="black">  68. # the Mersenne Twister  and os.urandom() core generators.</font>
+<font color="black">  69. </font>
+<font color="green">  70. import _random</font>
+<font color="black">  71. </font>
+<font color="green">  72. class Random(_random.Random):</font>
+<font color="black">  73.     &quot;&quot;&quot;Random number generator base class used by bound module functions.</font>
+<font color="black">  74. </font>
+<font color="black">  75.     Used to instantiate instances of Random to get generators that don't</font>
+<font color="black">  76.     share state.  Especially useful for multi-threaded programs, creating</font>
+<font color="black">  77.     a different instance of Random for each thread, and using the jumpahead()</font>
+<font color="black">  78.     method to ensure that the generated sequences seen by each thread don't</font>
+<font color="black">  79.     overlap.</font>
+<font color="black">  80. </font>
+<font color="black">  81.     Class Random can also be subclassed if you want to use a different basic</font>
+<font color="black">  82.     generator of your own devising: in that case, override the following</font>
+<font color="black">  83.     methods: random(), seed(), getstate(), setstate() and jumpahead().</font>
+<font color="black">  84.     Optionally, implement a getrandbits() method so that randrange() can cover</font>
+<font color="black">  85.     arbitrarily large ranges.</font>
+<font color="black">  86. </font>
+<font color="green">  87.     &quot;&quot;&quot;</font>
+<font color="black">  88. </font>
+<font color="green">  89.     VERSION = 3     # used by getstate/setstate</font>
+<font color="black">  90. </font>
+<font color="green">  91.     def __init__(self, x=None):</font>
+<font color="black">  92.         &quot;&quot;&quot;Initialize an instance.</font>
+<font color="black">  93. </font>
+<font color="black">  94.         Optional argument x controls seeding, as for Random.seed().</font>
+<font color="black">  95.         &quot;&quot;&quot;</font>
+<font color="black">  96. </font>
+<font color="green">  97.         self.seed(x)</font>
+<font color="green">  98.         self.gauss_next = None</font>
+<font color="black">  99. </font>
+<font color="green"> 100.     def seed(self, a=None):</font>
+<font color="black"> 101.         &quot;&quot;&quot;Initialize internal state from hashable object.</font>
+<font color="black"> 102. </font>
+<font color="black"> 103.         None or no argument seeds from current time or from an operating</font>
+<font color="black"> 104.         system specific randomness source if available.</font>
+<font color="black"> 105. </font>
+<font color="black"> 106.         If a is not None or an int or long, hash(a) is used instead.</font>
+<font color="black"> 107.         &quot;&quot;&quot;</font>
+<font color="black"> 108. </font>
+<font color="green"> 109.         if a is None:</font>
+<font color="green"> 110.             try:</font>
+<font color="green"> 111.                 a = long(_hexlify(_urandom(32)), 16)</font>
+<font color="red"> 112.             except NotImplementedError:</font>
+<font color="red"> 113.                 import time</font>
+<font color="red"> 114.                 a = long(time.time() * 256) # use fractional seconds</font>
+<font color="black"> 115. </font>
+<font color="green"> 116.         super(Random, self).seed(a)</font>
+<font color="green"> 117.         self.gauss_next = None</font>
+<font color="black"> 118. </font>
+<font color="green"> 119.     def getstate(self):</font>
+<font color="black"> 120.         &quot;&quot;&quot;Return internal state; can be passed to setstate() later.&quot;&quot;&quot;</font>
+<font color="red"> 121.         return self.VERSION, super(Random, self).getstate(), self.gauss_next</font>
+<font color="black"> 122. </font>
+<font color="green"> 123.     def setstate(self, state):</font>
+<font color="black"> 124.         &quot;&quot;&quot;Restore internal state from object returned by getstate().&quot;&quot;&quot;</font>
+<font color="red"> 125.         version = state[0]</font>
+<font color="red"> 126.         if version == 3:</font>
+<font color="red"> 127.             version, internalstate, self.gauss_next = state</font>
+<font color="red"> 128.             super(Random, self).setstate(internalstate)</font>
+<font color="red"> 129.         elif version == 2:</font>
+<font color="red"> 130.             version, internalstate, self.gauss_next = state</font>
+<font color="black"> 131.             # In version 2, the state was saved as signed ints, which causes</font>
+<font color="black"> 132.             #   inconsistencies between 32/64-bit systems. The state is</font>
+<font color="black"> 133.             #   really unsigned 32-bit ints, so we convert negative ints from</font>
+<font color="black"> 134.             #   version 2 to positive longs for version 3.</font>
+<font color="red"> 135.             try:</font>
+<font color="red"> 136.                 internalstate = tuple( long(x) % (2**32) for x in internalstate )</font>
+<font color="red"> 137.             except ValueError, e:</font>
+<font color="red"> 138.                 raise TypeError, e</font>
+<font color="red"> 139.             super(Random, self).setstate(internalstate)</font>
+<font color="black"> 140.         else:</font>
+<font color="red"> 141.             raise ValueError(&quot;state with version %s passed to &quot;</font>
+<font color="black"> 142.                              &quot;Random.setstate() of version %s&quot; %</font>
+<font color="red"> 143.                              (version, self.VERSION))</font>
+<font color="black"> 144. </font>
+<font color="green"> 145.     def jumpahead(self, n):</font>
+<font color="black"> 146.         &quot;&quot;&quot;Change the internal state to one that is likely far away</font>
+<font color="black"> 147.         from the current state.  This method will not be in Py3.x,</font>
+<font color="black"> 148.         so it is better to simply reseed.</font>
+<font color="black"> 149.         &quot;&quot;&quot;</font>
+<font color="black"> 150.         # The super.jumpahead() method uses shuffling to change state,</font>
+<font color="black"> 151.         # so it needs a large and &quot;interesting&quot; n to work with.  Here,</font>
+<font color="black"> 152.         # we use hashing to create a large n for the shuffle.</font>
+<font color="red"> 153.         s = repr(n) + repr(self.getstate())</font>
+<font color="red"> 154.         n = int(_hashlib.new('sha512', s).hexdigest(), 16)</font>
+<font color="red"> 155.         super(Random, self).jumpahead(n)</font>
+<font color="black"> 156. </font>
+<font color="black"> 157. ## ---- Methods below this point do not need to be overridden when</font>
+<font color="black"> 158. ## ---- subclassing for the purpose of using a different core generator.</font>
+<font color="black"> 159. </font>
+<font color="black"> 160. ## -------------------- pickle support  -------------------</font>
+<font color="black"> 161. </font>
+<font color="green"> 162.     def __getstate__(self): # for pickle</font>
+<font color="red"> 163.         return self.getstate()</font>
+<font color="black"> 164. </font>
+<font color="green"> 165.     def __setstate__(self, state):  # for pickle</font>
+<font color="red"> 166.         self.setstate(state)</font>
+<font color="black"> 167. </font>
+<font color="green"> 168.     def __reduce__(self):</font>
+<font color="red"> 169.         return self.__class__, (), self.getstate()</font>
+<font color="black"> 170. </font>
+<font color="black"> 171. ## -------------------- integer methods  -------------------</font>
+<font color="black"> 172. </font>
+<font color="green"> 173.     def randrange(self, start, stop=None, step=1, _int=int, _maxwidth=1L&lt;&lt;BPF):</font>
+<font color="black"> 174.         &quot;&quot;&quot;Choose a random item from range(start, stop[, step]).</font>
+<font color="black"> 175. </font>
+<font color="black"> 176.         This fixes the problem with randint() which includes the</font>
+<font color="black"> 177.         endpoint; in Python this is usually not what you want.</font>
+<font color="black"> 178. </font>
+<font color="black"> 179.         &quot;&quot;&quot;</font>
+<font color="black"> 180. </font>
+<font color="black"> 181.         # This code is a bit messy to make it fast for the</font>
+<font color="black"> 182.         # common case while still doing adequate error checking.</font>
+<font color="red"> 183.         istart = _int(start)</font>
+<font color="red"> 184.         if istart != start:</font>
+<font color="red"> 185.             raise ValueError, &quot;non-integer arg 1 for randrange()&quot;</font>
+<font color="red"> 186.         if stop is None:</font>
+<font color="red"> 187.             if istart &gt; 0:</font>
+<font color="red"> 188.                 if istart &gt;= _maxwidth:</font>
+<font color="red"> 189.                     return self._randbelow(istart)</font>
+<font color="red"> 190.                 return _int(self.random() * istart)</font>
+<font color="red"> 191.             raise ValueError, &quot;empty range for randrange()&quot;</font>
+<font color="black"> 192. </font>
+<font color="black"> 193.         # stop argument supplied.</font>
+<font color="red"> 194.         istop = _int(stop)</font>
+<font color="red"> 195.         if istop != stop:</font>
+<font color="red"> 196.             raise ValueError, &quot;non-integer stop for randrange()&quot;</font>
+<font color="red"> 197.         width = istop - istart</font>
+<font color="red"> 198.         if step == 1 and width &gt; 0:</font>
+<font color="black"> 199.             # Note that</font>
+<font color="black"> 200.             #     int(istart + self.random()*width)</font>
+<font color="black"> 201.             # instead would be incorrect.  For example, consider istart</font>
+<font color="black"> 202.             # = -2 and istop = 0.  Then the guts would be in</font>
+<font color="black"> 203.             # -2.0 to 0.0 exclusive on both ends (ignoring that random()</font>
+<font color="black"> 204.             # might return 0.0), and because int() truncates toward 0, the</font>
+<font color="black"> 205.             # final result would be -1 or 0 (instead of -2 or -1).</font>
+<font color="black"> 206.             #     istart + int(self.random()*width)</font>
+<font color="black"> 207.             # would also be incorrect, for a subtler reason:  the RHS</font>
+<font color="black"> 208.             # can return a long, and then randrange() would also return</font>
+<font color="black"> 209.             # a long, but we're supposed to return an int (for backward</font>
+<font color="black"> 210.             # compatibility).</font>
+<font color="black"> 211. </font>
+<font color="red"> 212.             if width &gt;= _maxwidth:</font>
+<font color="red"> 213.                 return _int(istart + self._randbelow(width))</font>
+<font color="red"> 214.             return _int(istart + _int(self.random()*width))</font>
+<font color="red"> 215.         if step == 1:</font>
+<font color="red"> 216.             raise ValueError, &quot;empty range for randrange() (%d,%d, %d)&quot; % (istart, istop, width)</font>
+<font color="black"> 217. </font>
+<font color="black"> 218.         # Non-unit step argument supplied.</font>
+<font color="red"> 219.         istep = _int(step)</font>
+<font color="red"> 220.         if istep != step:</font>
+<font color="red"> 221.             raise ValueError, &quot;non-integer step for randrange()&quot;</font>
+<font color="red"> 222.         if istep &gt; 0:</font>
+<font color="red"> 223.             n = (width + istep - 1) // istep</font>
+<font color="red"> 224.         elif istep &lt; 0:</font>
+<font color="red"> 225.             n = (width + istep + 1) // istep</font>
+<font color="black"> 226.         else:</font>
+<font color="red"> 227.             raise ValueError, &quot;zero step for randrange()&quot;</font>
+<font color="black"> 228. </font>
+<font color="red"> 229.         if n &lt;= 0:</font>
+<font color="red"> 230.             raise ValueError, &quot;empty range for randrange()&quot;</font>
+<font color="black"> 231. </font>
+<font color="red"> 232.         if n &gt;= _maxwidth:</font>
+<font color="red"> 233.             return istart + istep*self._randbelow(n)</font>
+<font color="red"> 234.         return istart + istep*_int(self.random() * n)</font>
+<font color="black"> 235. </font>
+<font color="green"> 236.     def randint(self, a, b):</font>
+<font color="black"> 237.         &quot;&quot;&quot;Return random integer in range [a, b], including both end points.</font>
+<font color="black"> 238.         &quot;&quot;&quot;</font>
+<font color="black"> 239. </font>
+<font color="red"> 240.         return self.randrange(a, b+1)</font>
+<font color="black"> 241. </font>
+<font color="green"> 242.     def _randbelow(self, n, _log=_log, _int=int, _maxwidth=1L&lt;&lt;BPF,</font>
+<font color="green"> 243.                    _Method=_MethodType, _BuiltinMethod=_BuiltinMethodType):</font>
+<font color="black"> 244.         &quot;&quot;&quot;Return a random int in the range [0,n)</font>
+<font color="black"> 245. </font>
+<font color="black"> 246.         Handles the case where n has more bits than returned</font>
+<font color="black"> 247.         by a single call to the underlying generator.</font>
+<font color="black"> 248.         &quot;&quot;&quot;</font>
+<font color="black"> 249. </font>
+<font color="red"> 250.         try:</font>
+<font color="red"> 251.             getrandbits = self.getrandbits</font>
+<font color="red"> 252.         except AttributeError:</font>
+<font color="red"> 253.             pass</font>
+<font color="black"> 254.         else:</font>
+<font color="black"> 255.             # Only call self.getrandbits if the original random() builtin method</font>
+<font color="black"> 256.             # has not been overridden or if a new getrandbits() was supplied.</font>
+<font color="black"> 257.             # This assures that the two methods correspond.</font>
+<font color="red"> 258.             if type(self.random) is _BuiltinMethod or type(getrandbits) is _Method:</font>
+<font color="red"> 259.                 k = _int(1.00001 + _log(n-1, 2.0))   # 2**k &gt; n-1 &gt; 2**(k-2)</font>
+<font color="red"> 260.                 r = getrandbits(k)</font>
+<font color="red"> 261.                 while r &gt;= n:</font>
+<font color="red"> 262.                     r = getrandbits(k)</font>
+<font color="red"> 263.                 return r</font>
+<font color="red"> 264.         if n &gt;= _maxwidth:</font>
+<font color="red"> 265.             _warn(&quot;Underlying random() generator does not supply \n&quot;</font>
+<font color="black"> 266.                 &quot;enough bits to choose from a population range this large&quot;)</font>
+<font color="red"> 267.         return _int(self.random() * n)</font>
+<font color="black"> 268. </font>
+<font color="black"> 269. ## -------------------- sequence methods  -------------------</font>
+<font color="black"> 270. </font>
+<font color="green"> 271.     def choice(self, seq):</font>
+<font color="black"> 272.         &quot;&quot;&quot;Choose a random element from a non-empty sequence.&quot;&quot;&quot;</font>
+<font color="red"> 273.         return seq[int(self.random() * len(seq))]  # raises IndexError if seq is empty</font>
+<font color="black"> 274. </font>
+<font color="green"> 275.     def shuffle(self, x, random=None):</font>
+<font color="black"> 276.         &quot;&quot;&quot;x, random=random.random -&gt; shuffle list x in place; return None.</font>
+<font color="black"> 277. </font>
+<font color="black"> 278.         Optional arg random is a 0-argument function returning a random</font>
+<font color="black"> 279.         float in [0.0, 1.0); by default, the standard random.random.</font>
+<font color="black"> 280. </font>
+<font color="black"> 281.         &quot;&quot;&quot;</font>
+<font color="black"> 282. </font>
+<font color="red"> 283.         if random is None:</font>
+<font color="red"> 284.             random = self.random</font>
+<font color="red"> 285.         _int = int</font>
+<font color="red"> 286.         for i in reversed(xrange(1, len(x))):</font>
+<font color="black"> 287.             # pick an element in x[:i+1] with which to exchange x[i]</font>
+<font color="red"> 288.             j = _int(random() * (i+1))</font>
+<font color="red"> 289.             x[i], x[j] = x[j], x[i]</font>
+<font color="black"> 290. </font>
+<font color="green"> 291.     def sample(self, population, k):</font>
+<font color="black"> 292.         &quot;&quot;&quot;Chooses k unique random elements from a population sequence.</font>
+<font color="black"> 293. </font>
+<font color="black"> 294.         Returns a new list containing elements from the population while</font>
+<font color="black"> 295.         leaving the original population unchanged.  The resulting list is</font>
+<font color="black"> 296.         in selection order so that all sub-slices will also be valid random</font>
+<font color="black"> 297.         samples.  This allows raffle winners (the sample) to be partitioned</font>
+<font color="black"> 298.         into grand prize and second place winners (the subslices).</font>
+<font color="black"> 299. </font>
+<font color="black"> 300.         Members of the population need not be hashable or unique.  If the</font>
+<font color="black"> 301.         population contains repeats, then each occurrence is a possible</font>
+<font color="black"> 302.         selection in the sample.</font>
+<font color="black"> 303. </font>
+<font color="black"> 304.         To choose a sample in a range of integers, use xrange as an argument.</font>
+<font color="black"> 305.         This is especially fast and space efficient for sampling from a</font>
+<font color="black"> 306.         large population:   sample(xrange(10000000), 60)</font>
+<font color="black"> 307.         &quot;&quot;&quot;</font>
+<font color="black"> 308. </font>
+<font color="black"> 309.         # Sampling without replacement entails tracking either potential</font>
+<font color="black"> 310.         # selections (the pool) in a list or previous selections in a set.</font>
+<font color="black"> 311. </font>
+<font color="black"> 312.         # When the number of selections is small compared to the</font>
+<font color="black"> 313.         # population, then tracking selections is efficient, requiring</font>
+<font color="black"> 314.         # only a small set and an occasional reselection.  For</font>
+<font color="black"> 315.         # a larger number of selections, the pool tracking method is</font>
+<font color="black"> 316.         # preferred since the list takes less space than the</font>
+<font color="black"> 317.         # set and it doesn't suffer from frequent reselections.</font>
+<font color="black"> 318. </font>
+<font color="red"> 319.         n = len(population)</font>
+<font color="red"> 320.         if not 0 &lt;= k &lt;= n:</font>
+<font color="red"> 321.             raise ValueError(&quot;sample larger than population&quot;)</font>
+<font color="red"> 322.         random = self.random</font>
+<font color="red"> 323.         _int = int</font>
+<font color="red"> 324.         result = [None] * k</font>
+<font color="red"> 325.         setsize = 21        # size of a small set minus size of an empty list</font>
+<font color="red"> 326.         if k &gt; 5:</font>
+<font color="red"> 327.             setsize += 4 ** _ceil(_log(k * 3, 4)) # table size for big sets</font>
+<font color="red"> 328.         if n &lt;= setsize or hasattr(population, &quot;keys&quot;):</font>
+<font color="black"> 329.             # An n-length list is smaller than a k-length set, or this is a</font>
+<font color="black"> 330.             # mapping type so the other algorithm wouldn't work.</font>
+<font color="red"> 331.             pool = list(population)</font>
+<font color="red"> 332.             for i in xrange(k):         # invariant:  non-selected at [0,n-i)</font>
+<font color="red"> 333.                 j = _int(random() * (n-i))</font>
+<font color="red"> 334.                 result[i] = pool[j]</font>
+<font color="red"> 335.                 pool[j] = pool[n-i-1]   # move non-selected item into vacancy</font>
+<font color="black"> 336.         else:</font>
+<font color="red"> 337.             try:</font>
+<font color="red"> 338.                 selected = set()</font>
+<font color="red"> 339.                 selected_add = selected.add</font>
+<font color="red"> 340.                 for i in xrange(k):</font>
+<font color="red"> 341.                     j = _int(random() * n)</font>
+<font color="red"> 342.                     while j in selected:</font>
+<font color="red"> 343.                         j = _int(random() * n)</font>
+<font color="red"> 344.                     selected_add(j)</font>
+<font color="red"> 345.                     result[i] = population[j]</font>
+<font color="red"> 346.             except (TypeError, KeyError):   # handle (at least) sets</font>
+<font color="red"> 347.                 if isinstance(population, list):</font>
+<font color="red"> 348.                     raise</font>
+<font color="red"> 349.                 return self.sample(tuple(population), k)</font>
+<font color="red"> 350.         return result</font>
+<font color="black"> 351. </font>
+<font color="black"> 352. ## -------------------- real-valued distributions  -------------------</font>
+<font color="black"> 353. </font>
+<font color="black"> 354. ## -------------------- uniform distribution -------------------</font>
+<font color="black"> 355. </font>
+<font color="green"> 356.     def uniform(self, a, b):</font>
+<font color="black"> 357.         &quot;Get a random number in the range [a, b) or [a, b] depending on rounding.&quot;</font>
+<font color="red"> 358.         return a + (b-a) * self.random()</font>
+<font color="black"> 359. </font>
+<font color="black"> 360. ## -------------------- triangular --------------------</font>
+<font color="black"> 361. </font>
+<font color="green"> 362.     def triangular(self, low=0.0, high=1.0, mode=None):</font>
+<font color="black"> 363.         &quot;&quot;&quot;Triangular distribution.</font>
+<font color="black"> 364. </font>
+<font color="black"> 365.         Continuous distribution bounded by given lower and upper limits,</font>
+<font color="black"> 366.         and having a given mode value in-between.</font>
+<font color="black"> 367. </font>
+<font color="black"> 368.         http://en.wikipedia.org/wiki/Triangular_distribution</font>
+<font color="black"> 369. </font>
+<font color="black"> 370.         &quot;&quot;&quot;</font>
+<font color="red"> 371.         u = self.random()</font>
+<font color="red"> 372.         c = 0.5 if mode is None else (mode - low) / (high - low)</font>
+<font color="red"> 373.         if u &gt; c:</font>
+<font color="red"> 374.             u = 1.0 - u</font>
+<font color="red"> 375.             c = 1.0 - c</font>
+<font color="red"> 376.             low, high = high, low</font>
+<font color="red"> 377.         return low + (high - low) * (u * c) ** 0.5</font>
+<font color="black"> 378. </font>
+<font color="black"> 379. ## -------------------- normal distribution --------------------</font>
+<font color="black"> 380. </font>
+<font color="green"> 381.     def normalvariate(self, mu, sigma):</font>
+<font color="black"> 382.         &quot;&quot;&quot;Normal distribution.</font>
+<font color="black"> 383. </font>
+<font color="black"> 384.         mu is the mean, and sigma is the standard deviation.</font>
+<font color="black"> 385. </font>
+<font color="black"> 386.         &quot;&quot;&quot;</font>
+<font color="black"> 387.         # mu = mean, sigma = standard deviation</font>
+<font color="black"> 388. </font>
+<font color="black"> 389.         # Uses Kinderman and Monahan method. Reference: Kinderman,</font>
+<font color="black"> 390.         # A.J. and Monahan, J.F., &quot;Computer generation of random</font>
+<font color="black"> 391.         # variables using the ratio of uniform deviates&quot;, ACM Trans</font>
+<font color="black"> 392.         # Math Software, 3, (1977), pp257-260.</font>
+<font color="black"> 393. </font>
+<font color="red"> 394.         random = self.random</font>
+<font color="red"> 395.         while 1:</font>
+<font color="red"> 396.             u1 = random()</font>
+<font color="red"> 397.             u2 = 1.0 - random()</font>
+<font color="red"> 398.             z = NV_MAGICCONST*(u1-0.5)/u2</font>
+<font color="red"> 399.             zz = z*z/4.0</font>
+<font color="red"> 400.             if zz &lt;= -_log(u2):</font>
+<font color="red"> 401.                 break</font>
+<font color="red"> 402.         return mu + z*sigma</font>
+<font color="black"> 403. </font>
+<font color="black"> 404. ## -------------------- lognormal distribution --------------------</font>
+<font color="black"> 405. </font>
+<font color="green"> 406.     def lognormvariate(self, mu, sigma):</font>
+<font color="black"> 407.         &quot;&quot;&quot;Log normal distribution.</font>
+<font color="black"> 408. </font>
+<font color="black"> 409.         If you take the natural logarithm of this distribution, you'll get a</font>
+<font color="black"> 410.         normal distribution with mean mu and standard deviation sigma.</font>
+<font color="black"> 411.         mu can have any value, and sigma must be greater than zero.</font>
+<font color="black"> 412. </font>
+<font color="black"> 413.         &quot;&quot;&quot;</font>
+<font color="red"> 414.         return _exp(self.normalvariate(mu, sigma))</font>
+<font color="black"> 415. </font>
+<font color="black"> 416. ## -------------------- exponential distribution --------------------</font>
+<font color="black"> 417. </font>
+<font color="green"> 418.     def expovariate(self, lambd):</font>
+<font color="black"> 419.         &quot;&quot;&quot;Exponential distribution.</font>
+<font color="black"> 420. </font>
+<font color="black"> 421.         lambd is 1.0 divided by the desired mean.  It should be</font>
+<font color="black"> 422.         nonzero.  (The parameter would be called &quot;lambda&quot;, but that is</font>
+<font color="black"> 423.         a reserved word in Python.)  Returned values range from 0 to</font>
+<font color="black"> 424.         positive infinity if lambd is positive, and from negative</font>
+<font color="black"> 425.         infinity to 0 if lambd is negative.</font>
+<font color="black"> 426. </font>
+<font color="black"> 427.         &quot;&quot;&quot;</font>
+<font color="black"> 428.         # lambd: rate lambd = 1/mean</font>
+<font color="black"> 429.         # ('lambda' is a Python reserved word)</font>
+<font color="black"> 430. </font>
+<font color="black"> 431.         # we use 1-random() instead of random() to preclude the</font>
+<font color="black"> 432.         # possibility of taking the log of zero.</font>
+<font color="red"> 433.         return -_log(1.0 - self.random())/lambd</font>
+<font color="black"> 434. </font>
+<font color="black"> 435. ## -------------------- von Mises distribution --------------------</font>
+<font color="black"> 436. </font>
+<font color="green"> 437.     def vonmisesvariate(self, mu, kappa):</font>
+<font color="black"> 438.         &quot;&quot;&quot;Circular data distribution.</font>
+<font color="black"> 439. </font>
+<font color="black"> 440.         mu is the mean angle, expressed in radians between 0 and 2*pi, and</font>
+<font color="black"> 441.         kappa is the concentration parameter, which must be greater than or</font>
+<font color="black"> 442.         equal to zero.  If kappa is equal to zero, this distribution reduces</font>
+<font color="black"> 443.         to a uniform random angle over the range 0 to 2*pi.</font>
+<font color="black"> 444. </font>
+<font color="black"> 445.         &quot;&quot;&quot;</font>
+<font color="black"> 446.         # mu:    mean angle (in radians between 0 and 2*pi)</font>
+<font color="black"> 447.         # kappa: concentration parameter kappa (&gt;= 0)</font>
+<font color="black"> 448.         # if kappa = 0 generate uniform random angle</font>
+<font color="black"> 449. </font>
+<font color="black"> 450.         # Based upon an algorithm published in: Fisher, N.I.,</font>
+<font color="black"> 451.         # &quot;Statistical Analysis of Circular Data&quot;, Cambridge</font>
+<font color="black"> 452.         # University Press, 1993.</font>
+<font color="black"> 453. </font>
+<font color="black"> 454.         # Thanks to Magnus Kessler for a correction to the</font>
+<font color="black"> 455.         # implementation of step 4.</font>
+<font color="black"> 456. </font>
+<font color="red"> 457.         random = self.random</font>
+<font color="red"> 458.         if kappa &lt;= 1e-6:</font>
+<font color="red"> 459.             return TWOPI * random()</font>
+<font color="black"> 460. </font>
+<font color="red"> 461.         s = 0.5 / kappa</font>
+<font color="red"> 462.         r = s + _sqrt(1.0 + s * s)</font>
+<font color="black"> 463. </font>
+<font color="red"> 464.         while 1:</font>
+<font color="red"> 465.             u1 = random()</font>
+<font color="red"> 466.             z = _cos(_pi * u1)</font>
+<font color="black"> 467. </font>
+<font color="red"> 468.             d = z / (r + z)</font>
+<font color="red"> 469.             u2 = random()</font>
+<font color="red"> 470.             if u2 &lt; 1.0 - d * d or u2 &lt;= (1.0 - d) * _exp(d):</font>
+<font color="red"> 471.                 break</font>
+<font color="black"> 472. </font>
+<font color="red"> 473.         q = 1.0 / r</font>
+<font color="red"> 474.         f = (q + z) / (1.0 + q * z)</font>
+<font color="red"> 475.         u3 = random()</font>
+<font color="red"> 476.         if u3 &gt; 0.5:</font>
+<font color="red"> 477.             theta = (mu + _acos(f)) % TWOPI</font>
+<font color="black"> 478.         else:</font>
+<font color="red"> 479.             theta = (mu - _acos(f)) % TWOPI</font>
+<font color="black"> 480. </font>
+<font color="red"> 481.         return theta</font>
+<font color="black"> 482. </font>
+<font color="black"> 483. ## -------------------- gamma distribution --------------------</font>
+<font color="black"> 484. </font>
+<font color="green"> 485.     def gammavariate(self, alpha, beta):</font>
+<font color="black"> 486.         &quot;&quot;&quot;Gamma distribution.  Not the gamma function!</font>
+<font color="black"> 487. </font>
+<font color="black"> 488.         Conditions on the parameters are alpha &gt; 0 and beta &gt; 0.</font>
+<font color="black"> 489. </font>
+<font color="black"> 490.         The probability distribution function is:</font>
+<font color="black"> 491. </font>
+<font color="black"> 492.                     x ** (alpha - 1) * math.exp(-x / beta)</font>
+<font color="black"> 493.           pdf(x) =  --------------------------------------</font>
+<font color="black"> 494.                       math.gamma(alpha) * beta ** alpha</font>
+<font color="black"> 495. </font>
+<font color="black"> 496.         &quot;&quot;&quot;</font>
+<font color="black"> 497. </font>
+<font color="black"> 498.         # alpha &gt; 0, beta &gt; 0, mean is alpha*beta, variance is alpha*beta**2</font>
+<font color="black"> 499. </font>
+<font color="black"> 500.         # Warning: a few older sources define the gamma distribution in terms</font>
+<font color="black"> 501.         # of alpha &gt; -1.0</font>
+<font color="red"> 502.         if alpha &lt;= 0.0 or beta &lt;= 0.0:</font>
+<font color="red"> 503.             raise ValueError, 'gammavariate: alpha and beta must be &gt; 0.0'</font>
+<font color="black"> 504. </font>
+<font color="red"> 505.         random = self.random</font>
+<font color="red"> 506.         if alpha &gt; 1.0:</font>
+<font color="black"> 507. </font>
+<font color="black"> 508.             # Uses R.C.H. Cheng, &quot;The generation of Gamma</font>
+<font color="black"> 509.             # variables with non-integral shape parameters&quot;,</font>
+<font color="black"> 510.             # Applied Statistics, (1977), 26, No. 1, p71-74</font>
+<font color="black"> 511. </font>
+<font color="red"> 512.             ainv = _sqrt(2.0 * alpha - 1.0)</font>
+<font color="red"> 513.             bbb = alpha - LOG4</font>
+<font color="red"> 514.             ccc = alpha + ainv</font>
+<font color="black"> 515. </font>
+<font color="red"> 516.             while 1:</font>
+<font color="red"> 517.                 u1 = random()</font>
+<font color="red"> 518.                 if not 1e-7 &lt; u1 &lt; .9999999:</font>
+<font color="red"> 519.                     continue</font>
+<font color="red"> 520.                 u2 = 1.0 - random()</font>
+<font color="red"> 521.                 v = _log(u1/(1.0-u1))/ainv</font>
+<font color="red"> 522.                 x = alpha*_exp(v)</font>
+<font color="red"> 523.                 z = u1*u1*u2</font>
+<font color="red"> 524.                 r = bbb+ccc*v-x</font>
+<font color="red"> 525.                 if r + SG_MAGICCONST - 4.5*z &gt;= 0.0 or r &gt;= _log(z):</font>
+<font color="red"> 526.                     return x * beta</font>
+<font color="black"> 527. </font>
+<font color="red"> 528.         elif alpha == 1.0:</font>
+<font color="black"> 529.             # expovariate(1)</font>
+<font color="red"> 530.             u = random()</font>
+<font color="red"> 531.             while u &lt;= 1e-7:</font>
+<font color="red"> 532.                 u = random()</font>
+<font color="red"> 533.             return -_log(u) * beta</font>
+<font color="black"> 534. </font>
+<font color="black"> 535.         else:   # alpha is between 0 and 1 (exclusive)</font>
+<font color="black"> 536. </font>
+<font color="black"> 537.             # Uses ALGORITHM GS of Statistical Computing - Kennedy &amp; Gentle</font>
+<font color="black"> 538. </font>
+<font color="red"> 539.             while 1:</font>
+<font color="red"> 540.                 u = random()</font>
+<font color="red"> 541.                 b = (_e + alpha)/_e</font>
+<font color="red"> 542.                 p = b*u</font>
+<font color="red"> 543.                 if p &lt;= 1.0:</font>
+<font color="red"> 544.                     x = p ** (1.0/alpha)</font>
+<font color="black"> 545.                 else:</font>
+<font color="red"> 546.                     x = -_log((b-p)/alpha)</font>
+<font color="red"> 547.                 u1 = random()</font>
+<font color="red"> 548.                 if p &gt; 1.0:</font>
+<font color="red"> 549.                     if u1 &lt;= x ** (alpha - 1.0):</font>
+<font color="red"> 550.                         break</font>
+<font color="red"> 551.                 elif u1 &lt;= _exp(-x):</font>
+<font color="red"> 552.                     break</font>
+<font color="red"> 553.             return x * beta</font>
+<font color="black"> 554. </font>
+<font color="black"> 555. ## -------------------- Gauss (faster alternative) --------------------</font>
+<font color="black"> 556. </font>
+<font color="green"> 557.     def gauss(self, mu, sigma):</font>
+<font color="black"> 558.         &quot;&quot;&quot;Gaussian distribution.</font>
+<font color="black"> 559. </font>
+<font color="black"> 560.         mu is the mean, and sigma is the standard deviation.  This is</font>
+<font color="black"> 561.         slightly faster than the normalvariate() function.</font>
+<font color="black"> 562. </font>
+<font color="black"> 563.         Not thread-safe without a lock around calls.</font>
+<font color="black"> 564. </font>
+<font color="black"> 565.         &quot;&quot;&quot;</font>
+<font color="black"> 566. </font>
+<font color="black"> 567.         # When x and y are two variables from [0, 1), uniformly</font>
+<font color="black"> 568.         # distributed, then</font>
+<font color="black"> 569.         #</font>
+<font color="black"> 570.         #    cos(2*pi*x)*sqrt(-2*log(1-y))</font>
+<font color="black"> 571.         #    sin(2*pi*x)*sqrt(-2*log(1-y))</font>
+<font color="black"> 572.         #</font>
+<font color="black"> 573.         # are two *independent* variables with normal distribution</font>
+<font color="black"> 574.         # (mu = 0, sigma = 1).</font>
+<font color="black"> 575.         # (Lambert Meertens)</font>
+<font color="black"> 576.         # (corrected version; bug discovered by Mike Miller, fixed by LM)</font>
+<font color="black"> 577. </font>
+<font color="black"> 578.         # Multithreading note: When two threads call this function</font>
+<font color="black"> 579.         # simultaneously, it is possible that they will receive the</font>
+<font color="black"> 580.         # same return value.  The window is very small though.  To</font>
+<font color="black"> 581.         # avoid this, you have to use a lock around all calls.  (I</font>
+<font color="black"> 582.         # didn't want to slow this down in the serial case by using a</font>
+<font color="black"> 583.         # lock here.)</font>
+<font color="black"> 584. </font>
+<font color="red"> 585.         random = self.random</font>
+<font color="red"> 586.         z = self.gauss_next</font>
+<font color="red"> 587.         self.gauss_next = None</font>
+<font color="red"> 588.         if z is None:</font>
+<font color="red"> 589.             x2pi = random() * TWOPI</font>
+<font color="red"> 590.             g2rad = _sqrt(-2.0 * _log(1.0 - random()))</font>
+<font color="red"> 591.             z = _cos(x2pi) * g2rad</font>
+<font color="red"> 592.             self.gauss_next = _sin(x2pi) * g2rad</font>
+<font color="black"> 593. </font>
+<font color="red"> 594.         return mu + z*sigma</font>
+<font color="black"> 595. </font>
+<font color="black"> 596. ## -------------------- beta --------------------</font>
+<font color="black"> 597. ## See</font>
+<font color="black"> 598. ## http://mail.python.org/pipermail/python-bugs-list/2001-January/003752.html</font>
+<font color="black"> 599. ## for Ivan Frohne's insightful analysis of why the original implementation:</font>
+<font color="black"> 600. ##</font>
+<font color="black"> 601. ##    def betavariate(self, alpha, beta):</font>
+<font color="black"> 602. ##        # Discrete Event Simulation in C, pp 87-88.</font>
+<font color="black"> 603. ##</font>
+<font color="black"> 604. ##        y = self.expovariate(alpha)</font>
+<font color="black"> 605. ##        z = self.expovariate(1.0/beta)</font>
+<font color="black"> 606. ##        return z/(y+z)</font>
+<font color="black"> 607. ##</font>
+<font color="black"> 608. ## was dead wrong, and how it probably got that way.</font>
+<font color="black"> 609. </font>
+<font color="green"> 610.     def betavariate(self, alpha, beta):</font>
+<font color="black"> 611.         &quot;&quot;&quot;Beta distribution.</font>
+<font color="black"> 612. </font>
+<font color="black"> 613.         Conditions on the parameters are alpha &gt; 0 and beta &gt; 0.</font>
+<font color="black"> 614.         Returned values range between 0 and 1.</font>
+<font color="black"> 615. </font>
+<font color="black"> 616.         &quot;&quot;&quot;</font>
+<font color="black"> 617. </font>
+<font color="black"> 618.         # This version due to Janne Sinkkonen, and matches all the std</font>
+<font color="black"> 619.         # texts (e.g., Knuth Vol 2 Ed 3 pg 134 &quot;the beta distribution&quot;).</font>
+<font color="red"> 620.         y = self.gammavariate(alpha, 1.)</font>
+<font color="red"> 621.         if y == 0:</font>
+<font color="red"> 622.             return 0.0</font>
+<font color="black"> 623.         else:</font>
+<font color="red"> 624.             return y / (y + self.gammavariate(beta, 1.))</font>
+<font color="black"> 625. </font>
+<font color="black"> 626. ## -------------------- Pareto --------------------</font>
+<font color="black"> 627. </font>
+<font color="green"> 628.     def paretovariate(self, alpha):</font>
+<font color="black"> 629.         &quot;&quot;&quot;Pareto distribution.  alpha is the shape parameter.&quot;&quot;&quot;</font>
+<font color="black"> 630.         # Jain, pg. 495</font>
+<font color="black"> 631. </font>
+<font color="red"> 632.         u = 1.0 - self.random()</font>
+<font color="red"> 633.         return 1.0 / pow(u, 1.0/alpha)</font>
+<font color="black"> 634. </font>
+<font color="black"> 635. ## -------------------- Weibull --------------------</font>
+<font color="black"> 636. </font>
+<font color="green"> 637.     def weibullvariate(self, alpha, beta):</font>
+<font color="black"> 638.         &quot;&quot;&quot;Weibull distribution.</font>
+<font color="black"> 639. </font>
+<font color="black"> 640.         alpha is the scale parameter and beta is the shape parameter.</font>
+<font color="black"> 641. </font>
+<font color="black"> 642.         &quot;&quot;&quot;</font>
+<font color="black"> 643.         # Jain, pg. 499; bug fix courtesy Bill Arms</font>
+<font color="black"> 644. </font>
+<font color="red"> 645.         u = 1.0 - self.random()</font>
+<font color="red"> 646.         return alpha * pow(-_log(u), 1.0/beta)</font>
+<font color="black"> 647. </font>
+<font color="black"> 648. ## -------------------- Wichmann-Hill -------------------</font>
+<font color="black"> 649. </font>
+<font color="green"> 650. class WichmannHill(Random):</font>
+<font color="black"> 651. </font>
+<font color="green"> 652.     VERSION = 1     # used by getstate/setstate</font>
+<font color="black"> 653. </font>
+<font color="green"> 654.     def seed(self, a=None):</font>
+<font color="black"> 655.         &quot;&quot;&quot;Initialize internal state from hashable object.</font>
+<font color="black"> 656. </font>
+<font color="black"> 657.         None or no argument seeds from current time or from an operating</font>
+<font color="black"> 658.         system specific randomness source if available.</font>
+<font color="black"> 659. </font>
+<font color="black"> 660.         If a is not None or an int or long, hash(a) is used instead.</font>
+<font color="black"> 661. </font>
+<font color="black"> 662.         If a is an int or long, a is used directly.  Distinct values between</font>
+<font color="black"> 663.         0 and 27814431486575L inclusive are guaranteed to yield distinct</font>
+<font color="black"> 664.         internal states (this guarantee is specific to the default</font>
+<font color="black"> 665.         Wichmann-Hill generator).</font>
+<font color="black"> 666.         &quot;&quot;&quot;</font>
+<font color="black"> 667. </font>
+<font color="red"> 668.         if a is None:</font>
+<font color="red"> 669.             try:</font>
+<font color="red"> 670.                 a = long(_hexlify(_urandom(16)), 16)</font>
+<font color="red"> 671.             except NotImplementedError:</font>
+<font color="red"> 672.                 import time</font>
+<font color="red"> 673.                 a = long(time.time() * 256) # use fractional seconds</font>
+<font color="black"> 674. </font>
+<font color="red"> 675.         if not isinstance(a, (int, long)):</font>
+<font color="red"> 676.             a = hash(a)</font>
+<font color="black"> 677. </font>
+<font color="red"> 678.         a, x = divmod(a, 30268)</font>
+<font color="red"> 679.         a, y = divmod(a, 30306)</font>
+<font color="red"> 680.         a, z = divmod(a, 30322)</font>
+<font color="red"> 681.         self._seed = int(x)+1, int(y)+1, int(z)+1</font>
+<font color="black"> 682. </font>
+<font color="red"> 683.         self.gauss_next = None</font>
+<font color="black"> 684. </font>
+<font color="green"> 685.     def random(self):</font>
+<font color="black"> 686.         &quot;&quot;&quot;Get the next random number in the range [0.0, 1.0).&quot;&quot;&quot;</font>
+<font color="black"> 687. </font>
+<font color="black"> 688.         # Wichman-Hill random number generator.</font>
+<font color="black"> 689.         #</font>
+<font color="black"> 690.         # Wichmann, B. A. &amp; Hill, I. D. (1982)</font>
+<font color="black"> 691.         # Algorithm AS 183:</font>
+<font color="black"> 692.         # An efficient and portable pseudo-random number generator</font>
+<font color="black"> 693.         # Applied Statistics 31 (1982) 188-190</font>
+<font color="black"> 694.         #</font>
+<font color="black"> 695.         # see also:</font>
+<font color="black"> 696.         #        Correction to Algorithm AS 183</font>
+<font color="black"> 697.         #        Applied Statistics 33 (1984) 123</font>
+<font color="black"> 698.         #</font>
+<font color="black"> 699.         #        McLeod, A. I. (1985)</font>
+<font color="black"> 700.         #        A remark on Algorithm AS 183</font>
+<font color="black"> 701.         #        Applied Statistics 34 (1985),198-200</font>
+<font color="black"> 702. </font>
+<font color="black"> 703.         # This part is thread-unsafe:</font>
+<font color="black"> 704.         # BEGIN CRITICAL SECTION</font>
+<font color="red"> 705.         x, y, z = self._seed</font>
+<font color="red"> 706.         x = (171 * x) % 30269</font>
+<font color="red"> 707.         y = (172 * y) % 30307</font>
+<font color="red"> 708.         z = (170 * z) % 30323</font>
+<font color="red"> 709.         self._seed = x, y, z</font>
+<font color="black"> 710.         # END CRITICAL SECTION</font>
+<font color="black"> 711. </font>
+<font color="black"> 712.         # Note:  on a platform using IEEE-754 double arithmetic, this can</font>
+<font color="black"> 713.         # never return 0.0 (asserted by Tim; proof too long for a comment).</font>
+<font color="red"> 714.         return (x/30269.0 + y/30307.0 + z/30323.0) % 1.0</font>
+<font color="black"> 715. </font>
+<font color="green"> 716.     def getstate(self):</font>
+<font color="black"> 717.         &quot;&quot;&quot;Return internal state; can be passed to setstate() later.&quot;&quot;&quot;</font>
+<font color="red"> 718.         return self.VERSION, self._seed, self.gauss_next</font>
+<font color="black"> 719. </font>
+<font color="green"> 720.     def setstate(self, state):</font>
+<font color="black"> 721.         &quot;&quot;&quot;Restore internal state from object returned by getstate().&quot;&quot;&quot;</font>
+<font color="red"> 722.         version = state[0]</font>
+<font color="red"> 723.         if version == 1:</font>
+<font color="red"> 724.             version, self._seed, self.gauss_next = state</font>
+<font color="black"> 725.         else:</font>
+<font color="red"> 726.             raise ValueError(&quot;state with version %s passed to &quot;</font>
+<font color="black"> 727.                              &quot;Random.setstate() of version %s&quot; %</font>
+<font color="red"> 728.                              (version, self.VERSION))</font>
+<font color="black"> 729. </font>
+<font color="green"> 730.     def jumpahead(self, n):</font>
+<font color="black"> 731.         &quot;&quot;&quot;Act as if n calls to random() were made, but quickly.</font>
+<font color="black"> 732. </font>
+<font color="black"> 733.         n is an int, greater than or equal to 0.</font>
+<font color="black"> 734. </font>
+<font color="black"> 735.         Example use:  If you have 2 threads and know that each will</font>
+<font color="black"> 736.         consume no more than a million random numbers, create two Random</font>
+<font color="black"> 737.         objects r1 and r2, then do</font>
+<font color="black"> 738.             r2.setstate(r1.getstate())</font>
+<font color="black"> 739.             r2.jumpahead(1000000)</font>
+<font color="black"> 740.         Then r1 and r2 will use guaranteed-disjoint segments of the full</font>
+<font color="black"> 741.         period.</font>
+<font color="black"> 742.         &quot;&quot;&quot;</font>
+<font color="black"> 743. </font>
+<font color="red"> 744.         if not n &gt;= 0:</font>
+<font color="red"> 745.             raise ValueError(&quot;n must be &gt;= 0&quot;)</font>
+<font color="red"> 746.         x, y, z = self._seed</font>
+<font color="red"> 747.         x = int(x * pow(171, n, 30269)) % 30269</font>
+<font color="red"> 748.         y = int(y * pow(172, n, 30307)) % 30307</font>
+<font color="red"> 749.         z = int(z * pow(170, n, 30323)) % 30323</font>
+<font color="red"> 750.         self._seed = x, y, z</font>
+<font color="black"> 751. </font>
+<font color="green"> 752.     def __whseed(self, x=0, y=0, z=0):</font>
+<font color="black"> 753.         &quot;&quot;&quot;Set the Wichmann-Hill seed from (x, y, z).</font>
+<font color="black"> 754. </font>
+<font color="black"> 755.         These must be integers in the range [0, 256).</font>
+<font color="black"> 756.         &quot;&quot;&quot;</font>
+<font color="black"> 757. </font>
+<font color="red"> 758.         if not type(x) == type(y) == type(z) == int:</font>
+<font color="red"> 759.             raise TypeError('seeds must be integers')</font>
+<font color="red"> 760.         if not (0 &lt;= x &lt; 256 and 0 &lt;= y &lt; 256 and 0 &lt;= z &lt; 256):</font>
+<font color="red"> 761.             raise ValueError('seeds must be in range(0, 256)')</font>
+<font color="red"> 762.         if 0 == x == y == z:</font>
+<font color="black"> 763.             # Initialize from current time</font>
+<font color="red"> 764.             import time</font>
+<font color="red"> 765.             t = long(time.time() * 256)</font>
+<font color="red"> 766.             t = int((t&amp;0xffffff) ^ (t&gt;&gt;24))</font>
+<font color="red"> 767.             t, x = divmod(t, 256)</font>
+<font color="red"> 768.             t, y = divmod(t, 256)</font>
+<font color="red"> 769.             t, z = divmod(t, 256)</font>
+<font color="black"> 770.         # Zero is a poor seed, so substitute 1</font>
+<font color="red"> 771.         self._seed = (x or 1, y or 1, z or 1)</font>
+<font color="black"> 772. </font>
+<font color="red"> 773.         self.gauss_next = None</font>
+<font color="black"> 774. </font>
+<font color="green"> 775.     def whseed(self, a=None):</font>
+<font color="black"> 776.         &quot;&quot;&quot;Seed from hashable object's hash code.</font>
+<font color="black"> 777. </font>
+<font color="black"> 778.         None or no argument seeds from current time.  It is not guaranteed</font>
+<font color="black"> 779.         that objects with distinct hash codes lead to distinct internal</font>
+<font color="black"> 780.         states.</font>
+<font color="black"> 781. </font>
+<font color="black"> 782.         This is obsolete, provided for compatibility with the seed routine</font>
+<font color="black"> 783.         used prior to Python 2.1.  Use the .seed() method instead.</font>
+<font color="black"> 784.         &quot;&quot;&quot;</font>
+<font color="black"> 785. </font>
+<font color="red"> 786.         if a is None:</font>
+<font color="red"> 787.             self.__whseed()</font>
+<font color="red"> 788.             return</font>
+<font color="red"> 789.         a = hash(a)</font>
+<font color="red"> 790.         a, x = divmod(a, 256)</font>
+<font color="red"> 791.         a, y = divmod(a, 256)</font>
+<font color="red"> 792.         a, z = divmod(a, 256)</font>
+<font color="red"> 793.         x = (x + a) % 256 or 1</font>
+<font color="red"> 794.         y = (y + a) % 256 or 1</font>
+<font color="red"> 795.         z = (z + a) % 256 or 1</font>
+<font color="red"> 796.         self.__whseed(x, y, z)</font>
+<font color="black"> 797. </font>
+<font color="black"> 798. ## --------------- Operating System Random Source  ------------------</font>
+<font color="black"> 799. </font>
+<font color="green"> 800. class SystemRandom(Random):</font>
+<font color="black"> 801.     &quot;&quot;&quot;Alternate random number generator using sources provided</font>
+<font color="black"> 802.     by the operating system (such as /dev/urandom on Unix or</font>
+<font color="black"> 803.     CryptGenRandom on Windows).</font>
+<font color="black"> 804. </font>
+<font color="black"> 805.      Not available on all systems (see os.urandom() for details).</font>
+<font color="green"> 806.     &quot;&quot;&quot;</font>
+<font color="black"> 807. </font>
+<font color="green"> 808.     def random(self):</font>
+<font color="black"> 809.         &quot;&quot;&quot;Get the next random number in the range [0.0, 1.0).&quot;&quot;&quot;</font>
+<font color="red"> 810.         return (long(_hexlify(_urandom(7)), 16) &gt;&gt; 3) * RECIP_BPF</font>
+<font color="black"> 811. </font>
+<font color="green"> 812.     def getrandbits(self, k):</font>
+<font color="black"> 813.         &quot;&quot;&quot;getrandbits(k) -&gt; x.  Generates a long int with k random bits.&quot;&quot;&quot;</font>
+<font color="red"> 814.         if k &lt;= 0:</font>
+<font color="red"> 815.             raise ValueError('number of bits must be greater than zero')</font>
+<font color="red"> 816.         if k != int(k):</font>
+<font color="red"> 817.             raise TypeError('number of bits should be an integer')</font>
+<font color="red"> 818.         bytes = (k + 7) // 8                    # bits / 8 and rounded up</font>
+<font color="red"> 819.         x = long(_hexlify(_urandom(bytes)), 16)</font>
+<font color="red"> 820.         return x &gt;&gt; (bytes * 8 - k)             # trim excess bits</font>
+<font color="black"> 821. </font>
+<font color="green"> 822.     def _stub(self, *args, **kwds):</font>
+<font color="black"> 823.         &quot;Stub method.  Not used for a system random number generator.&quot;</font>
+<font color="green"> 824.         return None</font>
+<font color="green"> 825.     seed = jumpahead = _stub</font>
+<font color="black"> 826. </font>
+<font color="green"> 827.     def _notimplemented(self, *args, **kwds):</font>
+<font color="black"> 828.         &quot;Method should not be called for a system random number generator.&quot;</font>
+<font color="red"> 829.         raise NotImplementedError('System entropy source does not have state.')</font>
+<font color="green"> 830.     getstate = setstate = _notimplemented</font>
+<font color="black"> 831. </font>
+<font color="black"> 832. ## -------------------- test program --------------------</font>
+<font color="black"> 833. </font>
+<font color="green"> 834. def _test_generator(n, func, args):</font>
+<font color="red"> 835.     import time</font>
+<font color="red"> 836.     print n, 'times', func.__name__</font>
+<font color="red"> 837.     total = 0.0</font>
+<font color="red"> 838.     sqsum = 0.0</font>
+<font color="red"> 839.     smallest = 1e10</font>
+<font color="red"> 840.     largest = -1e10</font>
+<font color="red"> 841.     t0 = time.time()</font>
+<font color="red"> 842.     for i in range(n):</font>
+<font color="red"> 843.         x = func(*args)</font>
+<font color="red"> 844.         total += x</font>
+<font color="red"> 845.         sqsum = sqsum + x*x</font>
+<font color="red"> 846.         smallest = min(x, smallest)</font>
+<font color="red"> 847.         largest = max(x, largest)</font>
+<font color="red"> 848.     t1 = time.time()</font>
+<font color="red"> 849.     print round(t1-t0, 3), 'sec,',</font>
+<font color="red"> 850.     avg = total/n</font>
+<font color="red"> 851.     stddev = _sqrt(sqsum/n - avg*avg)</font>
+<font color="red"> 852.     print 'avg %g, stddev %g, min %g, max %g' % \</font>
+<font color="red"> 853.               (avg, stddev, smallest, largest)</font>
+<font color="black"> 854. </font>
+<font color="black"> 855. </font>
+<font color="green"> 856. def _test(N=2000):</font>
+<font color="red"> 857.     _test_generator(N, random, ())</font>
+<font color="red"> 858.     _test_generator(N, normalvariate, (0.0, 1.0))</font>
+<font color="red"> 859.     _test_generator(N, lognormvariate, (0.0, 1.0))</font>
+<font color="red"> 860.     _test_generator(N, vonmisesvariate, (0.0, 1.0))</font>
+<font color="red"> 861.     _test_generator(N, gammavariate, (0.01, 1.0))</font>
+<font color="red"> 862.     _test_generator(N, gammavariate, (0.1, 1.0))</font>
+<font color="red"> 863.     _test_generator(N, gammavariate, (0.1, 2.0))</font>
+<font color="red"> 864.     _test_generator(N, gammavariate, (0.5, 1.0))</font>
+<font color="red"> 865.     _test_generator(N, gammavariate, (0.9, 1.0))</font>
+<font color="red"> 866.     _test_generator(N, gammavariate, (1.0, 1.0))</font>
+<font color="red"> 867.     _test_generator(N, gammavariate, (2.0, 1.0))</font>
+<font color="red"> 868.     _test_generator(N, gammavariate, (20.0, 1.0))</font>
+<font color="red"> 869.     _test_generator(N, gammavariate, (200.0, 1.0))</font>
+<font color="red"> 870.     _test_generator(N, gauss, (0.0, 1.0))</font>
+<font color="red"> 871.     _test_generator(N, betavariate, (3.0, 3.0))</font>
+<font color="red"> 872.     _test_generator(N, triangular, (0.0, 1.0, 1.0/3.0))</font>
+<font color="black"> 873. </font>
+<font color="black"> 874. # Create one instance, seeded from current time, and export its methods</font>
+<font color="black"> 875. # as module-level functions.  The functions share state across all uses</font>
+<font color="black"> 876. #(both in the user's code and in the Python libraries), but that's fine</font>
+<font color="black"> 877. # for most programs and is easier for the casual user than making them</font>
+<font color="black"> 878. # instantiate their own Random() instance.</font>
+<font color="black"> 879. </font>
+<font color="green"> 880. _inst = Random()</font>
+<font color="green"> 881. seed = _inst.seed</font>
+<font color="green"> 882. random = _inst.random</font>
+<font color="green"> 883. uniform = _inst.uniform</font>
+<font color="green"> 884. triangular = _inst.triangular</font>
+<font color="green"> 885. randint = _inst.randint</font>
+<font color="green"> 886. choice = _inst.choice</font>
+<font color="green"> 887. randrange = _inst.randrange</font>
+<font color="green"> 888. sample = _inst.sample</font>
+<font color="green"> 889. shuffle = _inst.shuffle</font>
+<font color="green"> 890. normalvariate = _inst.normalvariate</font>
+<font color="green"> 891. lognormvariate = _inst.lognormvariate</font>
+<font color="green"> 892. expovariate = _inst.expovariate</font>
+<font color="green"> 893. vonmisesvariate = _inst.vonmisesvariate</font>
+<font color="green"> 894. gammavariate = _inst.gammavariate</font>
+<font color="green"> 895. gauss = _inst.gauss</font>
+<font color="green"> 896. betavariate = _inst.betavariate</font>
+<font color="green"> 897. paretovariate = _inst.paretovariate</font>
+<font color="green"> 898. weibullvariate = _inst.weibullvariate</font>
+<font color="green"> 899. getstate = _inst.getstate</font>
+<font color="green"> 900. setstate = _inst.setstate</font>
+<font color="green"> 901. jumpahead = _inst.jumpahead</font>
+<font color="green"> 902. getrandbits = _inst.getrandbits</font>
+<font color="black"> 903. </font>
+<font color="green"> 904. if __name__ == '__main__':</font>
+<font color="red"> 905.     _test()</font>
+</pre>
+

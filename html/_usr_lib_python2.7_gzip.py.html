@@ -1,0 +1,525 @@
+source file: <b>/usr/lib/python2.7/gzip.py</b><br>
+
+
+file stats: <b>328 lines, 139 executed: 42.4% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Functions that read and write gzipped files.</font>
+<font color="black">   2. </font>
+<font color="black">   3. The user of the file doesn't have to worry about the compression,</font>
+<font color="green">   4. but random access is not allowed.&quot;&quot;&quot;</font>
+<font color="black">   5. </font>
+<font color="black">   6. # based on Andrew Kuchling's minigzip.py distributed with the zlib module</font>
+<font color="black">   7. </font>
+<font color="green">   8. import struct, sys, time, os</font>
+<font color="green">   9. import zlib</font>
+<font color="green">  10. import io</font>
+<font color="green">  11. import __builtin__</font>
+<font color="black">  12. </font>
+<font color="green">  13. __all__ = [&quot;GzipFile&quot;,&quot;open&quot;]</font>
+<font color="black">  14. </font>
+<font color="green">  15. FTEXT, FHCRC, FEXTRA, FNAME, FCOMMENT = 1, 2, 4, 8, 16</font>
+<font color="black">  16. </font>
+<font color="green">  17. READ, WRITE = 1, 2</font>
+<font color="black">  18. </font>
+<font color="green">  19. def write32u(output, value):</font>
+<font color="black">  20.     # The L format writes the bit pattern correctly whether signed</font>
+<font color="black">  21.     # or unsigned.</font>
+<font color="red">  22.     output.write(struct.pack(&quot;&lt;L&quot;, value))</font>
+<font color="black">  23. </font>
+<font color="green">  24. def read32(input):</font>
+<font color="green">  25.     return struct.unpack(&quot;&lt;I&quot;, input.read(4))[0]</font>
+<font color="black">  26. </font>
+<font color="green">  27. def open(filename, mode=&quot;rb&quot;, compresslevel=9):</font>
+<font color="black">  28.     &quot;&quot;&quot;Shorthand for GzipFile(filename, mode, compresslevel).</font>
+<font color="black">  29. </font>
+<font color="black">  30.     The filename argument is required; mode defaults to 'rb'</font>
+<font color="black">  31.     and compresslevel defaults to 9.</font>
+<font color="black">  32. </font>
+<font color="black">  33.     &quot;&quot;&quot;</font>
+<font color="green">  34.     return GzipFile(filename, mode, compresslevel)</font>
+<font color="black">  35. </font>
+<font color="green">  36. class GzipFile(io.BufferedIOBase):</font>
+<font color="black">  37.     &quot;&quot;&quot;The GzipFile class simulates most of the methods of a file object with</font>
+<font color="black">  38.     the exception of the readinto() and truncate() methods.</font>
+<font color="black">  39. </font>
+<font color="green">  40.     &quot;&quot;&quot;</font>
+<font color="black">  41. </font>
+<font color="green">  42.     myfileobj = None</font>
+<font color="green">  43.     max_read_chunk = 10 * 1024 * 1024   # 10Mb</font>
+<font color="black">  44. </font>
+<font color="green">  45.     def __init__(self, filename=None, mode=None,</font>
+<font color="green">  46.                  compresslevel=9, fileobj=None, mtime=None):</font>
+<font color="black">  47.         &quot;&quot;&quot;Constructor for the GzipFile class.</font>
+<font color="black">  48. </font>
+<font color="black">  49.         At least one of fileobj and filename must be given a</font>
+<font color="black">  50.         non-trivial value.</font>
+<font color="black">  51. </font>
+<font color="black">  52.         The new class instance is based on fileobj, which can be a regular</font>
+<font color="black">  53.         file, a StringIO object, or any other object which simulates a file.</font>
+<font color="black">  54.         It defaults to None, in which case filename is opened to provide</font>
+<font color="black">  55.         a file object.</font>
+<font color="black">  56. </font>
+<font color="black">  57.         When fileobj is not None, the filename argument is only used to be</font>
+<font color="black">  58.         included in the gzip file header, which may includes the original</font>
+<font color="black">  59.         filename of the uncompressed file.  It defaults to the filename of</font>
+<font color="black">  60.         fileobj, if discernible; otherwise, it defaults to the empty string,</font>
+<font color="black">  61.         and in this case the original filename is not included in the header.</font>
+<font color="black">  62. </font>
+<font color="black">  63.         The mode argument can be any of 'r', 'rb', 'a', 'ab', 'w', or 'wb',</font>
+<font color="black">  64.         depending on whether the file will be read or written.  The default</font>
+<font color="black">  65.         is the mode of fileobj if discernible; otherwise, the default is 'rb'.</font>
+<font color="black">  66.         Be aware that only the 'rb', 'ab', and 'wb' values should be used</font>
+<font color="black">  67.         for cross-platform portability.</font>
+<font color="black">  68. </font>
+<font color="black">  69.         The compresslevel argument is an integer from 0 to 9 controlling the</font>
+<font color="black">  70.         level of compression; 1 is fastest and produces the least compression,</font>
+<font color="black">  71.         and 9 is slowest and produces the most compression. 0 is no compression</font>
+<font color="black">  72.         at all. The default is 9.</font>
+<font color="black">  73. </font>
+<font color="black">  74.         The mtime argument is an optional numeric timestamp to be written</font>
+<font color="black">  75.         to the stream when compressing.  All gzip compressed streams</font>
+<font color="black">  76.         are required to contain a timestamp.  If omitted or None, the</font>
+<font color="black">  77.         current time is used.  This module ignores the timestamp when</font>
+<font color="black">  78.         decompressing; however, some programs, such as gunzip, make use</font>
+<font color="black">  79.         of it.  The format of the timestamp is the same as that of the</font>
+<font color="black">  80.         return value of time.time() and of the st_mtime member of the</font>
+<font color="black">  81.         object returned by os.stat().</font>
+<font color="black">  82. </font>
+<font color="black">  83.         &quot;&quot;&quot;</font>
+<font color="black">  84. </font>
+<font color="black">  85.         # Make sure we don't inadvertently enable universal newlines on the</font>
+<font color="black">  86.         # underlying file object - in read mode, this causes data corruption.</font>
+<font color="green">  87.         if mode:</font>
+<font color="green">  88.             mode = mode.replace('U', '')</font>
+<font color="black">  89.         # guarantee the file is opened in binary mode on platforms</font>
+<font color="black">  90.         # that care about that sort of thing</font>
+<font color="green">  91.         if mode and 'b' not in mode:</font>
+<font color="red">  92.             mode += 'b'</font>
+<font color="green">  93.         if fileobj is None:</font>
+<font color="green">  94.             fileobj = self.myfileobj = __builtin__.open(filename, mode or 'rb')</font>
+<font color="green">  95.         if filename is None:</font>
+<font color="black">  96.             # Issue #13781: os.fdopen() creates a fileobj with a bogus name</font>
+<font color="black">  97.             # attribute. Avoid saving this in the gzip header's filename field.</font>
+<font color="red">  98.             if hasattr(fileobj, 'name') and fileobj.name != '&lt;fdopen&gt;':</font>
+<font color="red">  99.                 filename = fileobj.name</font>
+<font color="black"> 100.             else:</font>
+<font color="red"> 101.                 filename = ''</font>
+<font color="green"> 102.         if mode is None:</font>
+<font color="red"> 103.             if hasattr(fileobj, 'mode'): mode = fileobj.mode</font>
+<font color="red"> 104.             else: mode = 'rb'</font>
+<font color="black"> 105. </font>
+<font color="green"> 106.         if mode[0:1] == 'r':</font>
+<font color="green"> 107.             self.mode = READ</font>
+<font color="black"> 108.             # Set flag indicating start of a new member</font>
+<font color="green"> 109.             self._new_member = True</font>
+<font color="black"> 110.             # Buffer data read from gzip file. extrastart is offset in</font>
+<font color="black"> 111.             # stream where buffer starts. extrasize is number of</font>
+<font color="black"> 112.             # bytes remaining in buffer from current stream position.</font>
+<font color="green"> 113.             self.extrabuf = &quot;&quot;</font>
+<font color="green"> 114.             self.extrasize = 0</font>
+<font color="green"> 115.             self.extrastart = 0</font>
+<font color="green"> 116.             self.name = filename</font>
+<font color="black"> 117.             # Starts small, scales exponentially</font>
+<font color="green"> 118.             self.min_readsize = 100</font>
+<font color="black"> 119. </font>
+<font color="red"> 120.         elif mode[0:1] == 'w' or mode[0:1] == 'a':</font>
+<font color="red"> 121.             self.mode = WRITE</font>
+<font color="red"> 122.             self._init_write(filename)</font>
+<font color="red"> 123.             self.compress = zlib.compressobj(compresslevel,</font>
+<font color="red"> 124.                                              zlib.DEFLATED,</font>
+<font color="red"> 125.                                              -zlib.MAX_WBITS,</font>
+<font color="red"> 126.                                              zlib.DEF_MEM_LEVEL,</font>
+<font color="red"> 127.                                              0)</font>
+<font color="black"> 128.         else:</font>
+<font color="red"> 129.             raise IOError, &quot;Mode &quot; + mode + &quot; not supported&quot;</font>
+<font color="black"> 130. </font>
+<font color="green"> 131.         self.fileobj = fileobj</font>
+<font color="green"> 132.         self.offset = 0</font>
+<font color="green"> 133.         self.mtime = mtime</font>
+<font color="black"> 134. </font>
+<font color="green"> 135.         if self.mode == WRITE:</font>
+<font color="red"> 136.             self._write_gzip_header()</font>
+<font color="black"> 137. </font>
+<font color="green"> 138.     @property</font>
+<font color="black"> 139.     def filename(self):</font>
+<font color="red"> 140.         import warnings</font>
+<font color="red"> 141.         warnings.warn(&quot;use the name attribute&quot;, DeprecationWarning, 2)</font>
+<font color="red"> 142.         if self.mode == WRITE and self.name[-3:] != &quot;.gz&quot;:</font>
+<font color="red"> 143.             return self.name + &quot;.gz&quot;</font>
+<font color="red"> 144.         return self.name</font>
+<font color="black"> 145. </font>
+<font color="green"> 146.     def __repr__(self):</font>
+<font color="red"> 147.         s = repr(self.fileobj)</font>
+<font color="red"> 148.         return '&lt;gzip ' + s[1:-1] + ' ' + hex(id(self)) + '&gt;'</font>
+<font color="black"> 149. </font>
+<font color="green"> 150.     def _check_closed(self):</font>
+<font color="black"> 151.         &quot;&quot;&quot;Raises a ValueError if the underlying file object has been closed.</font>
+<font color="black"> 152. </font>
+<font color="black"> 153.         &quot;&quot;&quot;</font>
+<font color="green"> 154.         if self.closed:</font>
+<font color="red"> 155.             raise ValueError('I/O operation on closed file.')</font>
+<font color="black"> 156. </font>
+<font color="green"> 157.     def _init_write(self, filename):</font>
+<font color="red"> 158.         self.name = filename</font>
+<font color="red"> 159.         self.crc = zlib.crc32(&quot;&quot;) &amp; 0xffffffffL</font>
+<font color="red"> 160.         self.size = 0</font>
+<font color="red"> 161.         self.writebuf = []</font>
+<font color="red"> 162.         self.bufsize = 0</font>
+<font color="black"> 163. </font>
+<font color="green"> 164.     def _write_gzip_header(self):</font>
+<font color="red"> 165.         self.fileobj.write('\037\213')             # magic header</font>
+<font color="red"> 166.         self.fileobj.write('\010')                 # compression method</font>
+<font color="red"> 167.         fname = os.path.basename(self.name)</font>
+<font color="red"> 168.         if fname.endswith(&quot;.gz&quot;):</font>
+<font color="red"> 169.             fname = fname[:-3]</font>
+<font color="red"> 170.         flags = 0</font>
+<font color="red"> 171.         if fname:</font>
+<font color="red"> 172.             flags = FNAME</font>
+<font color="red"> 173.         self.fileobj.write(chr(flags))</font>
+<font color="red"> 174.         mtime = self.mtime</font>
+<font color="red"> 175.         if mtime is None:</font>
+<font color="red"> 176.             mtime = time.time()</font>
+<font color="red"> 177.         write32u(self.fileobj, long(mtime))</font>
+<font color="red"> 178.         self.fileobj.write('\002')</font>
+<font color="red"> 179.         self.fileobj.write('\377')</font>
+<font color="red"> 180.         if fname:</font>
+<font color="red"> 181.             self.fileobj.write(fname + '\000')</font>
+<font color="black"> 182. </font>
+<font color="green"> 183.     def _init_read(self):</font>
+<font color="green"> 184.         self.crc = zlib.crc32(&quot;&quot;) &amp; 0xffffffffL</font>
+<font color="green"> 185.         self.size = 0</font>
+<font color="black"> 186. </font>
+<font color="green"> 187.     def _read_gzip_header(self):</font>
+<font color="green"> 188.         magic = self.fileobj.read(2)</font>
+<font color="green"> 189.         if magic != '\037\213':</font>
+<font color="red"> 190.             raise IOError, 'Not a gzipped file'</font>
+<font color="green"> 191.         method = ord( self.fileobj.read(1) )</font>
+<font color="green"> 192.         if method != 8:</font>
+<font color="red"> 193.             raise IOError, 'Unknown compression method'</font>
+<font color="green"> 194.         flag = ord( self.fileobj.read(1) )</font>
+<font color="green"> 195.         self.mtime = read32(self.fileobj)</font>
+<font color="black"> 196.         # extraflag = self.fileobj.read(1)</font>
+<font color="black"> 197.         # os = self.fileobj.read(1)</font>
+<font color="green"> 198.         self.fileobj.read(2)</font>
+<font color="black"> 199. </font>
+<font color="green"> 200.         if flag &amp; FEXTRA:</font>
+<font color="black"> 201.             # Read &amp; discard the extra field, if present</font>
+<font color="red"> 202.             xlen = ord(self.fileobj.read(1))</font>
+<font color="red"> 203.             xlen = xlen + 256*ord(self.fileobj.read(1))</font>
+<font color="red"> 204.             self.fileobj.read(xlen)</font>
+<font color="green"> 205.         if flag &amp; FNAME:</font>
+<font color="black"> 206.             # Read and discard a null-terminated string containing the filename</font>
+<font color="green"> 207.             while True:</font>
+<font color="green"> 208.                 s = self.fileobj.read(1)</font>
+<font color="green"> 209.                 if not s or s=='\000':</font>
+<font color="green"> 210.                     break</font>
+<font color="green"> 211.         if flag &amp; FCOMMENT:</font>
+<font color="black"> 212.             # Read and discard a null-terminated string containing a comment</font>
+<font color="red"> 213.             while True:</font>
+<font color="red"> 214.                 s = self.fileobj.read(1)</font>
+<font color="red"> 215.                 if not s or s=='\000':</font>
+<font color="red"> 216.                     break</font>
+<font color="green"> 217.         if flag &amp; FHCRC:</font>
+<font color="red"> 218.             self.fileobj.read(2)     # Read &amp; discard the 16-bit header CRC</font>
+<font color="black"> 219. </font>
+<font color="green"> 220.     def write(self,data):</font>
+<font color="red"> 221.         self._check_closed()</font>
+<font color="red"> 222.         if self.mode != WRITE:</font>
+<font color="red"> 223.             import errno</font>
+<font color="red"> 224.             raise IOError(errno.EBADF, &quot;write() on read-only GzipFile object&quot;)</font>
+<font color="black"> 225. </font>
+<font color="red"> 226.         if self.fileobj is None:</font>
+<font color="red"> 227.             raise ValueError, &quot;write() on closed GzipFile object&quot;</font>
+<font color="black"> 228. </font>
+<font color="black"> 229.         # Convert data type if called by io.BufferedWriter.</font>
+<font color="red"> 230.         if isinstance(data, memoryview):</font>
+<font color="red"> 231.             data = data.tobytes()</font>
+<font color="black"> 232. </font>
+<font color="red"> 233.         if len(data) &gt; 0:</font>
+<font color="red"> 234.             self.size = self.size + len(data)</font>
+<font color="red"> 235.             self.crc = zlib.crc32(data, self.crc) &amp; 0xffffffffL</font>
+<font color="red"> 236.             self.fileobj.write( self.compress.compress(data) )</font>
+<font color="red"> 237.             self.offset += len(data)</font>
+<font color="black"> 238. </font>
+<font color="red"> 239.         return len(data)</font>
+<font color="black"> 240. </font>
+<font color="green"> 241.     def read(self, size=-1):</font>
+<font color="green"> 242.         self._check_closed()</font>
+<font color="green"> 243.         if self.mode != READ:</font>
+<font color="red"> 244.             import errno</font>
+<font color="red"> 245.             raise IOError(errno.EBADF, &quot;read() on write-only GzipFile object&quot;)</font>
+<font color="black"> 246. </font>
+<font color="green"> 247.         if self.extrasize &lt;= 0 and self.fileobj is None:</font>
+<font color="red"> 248.             return ''</font>
+<font color="black"> 249. </font>
+<font color="green"> 250.         readsize = 1024</font>
+<font color="green"> 251.         if size &lt; 0:        # get the whole thing</font>
+<font color="green"> 252.             try:</font>
+<font color="green"> 253.                 while True:</font>
+<font color="green"> 254.                     self._read(readsize)</font>
+<font color="green"> 255.                     readsize = min(self.max_read_chunk, readsize * 2)</font>
+<font color="green"> 256.             except EOFError:</font>
+<font color="green"> 257.                 size = self.extrasize</font>
+<font color="black"> 258.         else:               # just get some more of it</font>
+<font color="red"> 259.             try:</font>
+<font color="red"> 260.                 while size &gt; self.extrasize:</font>
+<font color="red"> 261.                     self._read(readsize)</font>
+<font color="red"> 262.                     readsize = min(self.max_read_chunk, readsize * 2)</font>
+<font color="red"> 263.             except EOFError:</font>
+<font color="red"> 264.                 if size &gt; self.extrasize:</font>
+<font color="red"> 265.                     size = self.extrasize</font>
+<font color="black"> 266. </font>
+<font color="green"> 267.         offset = self.offset - self.extrastart</font>
+<font color="green"> 268.         chunk = self.extrabuf[offset: offset + size]</font>
+<font color="green"> 269.         self.extrasize = self.extrasize - size</font>
+<font color="black"> 270. </font>
+<font color="green"> 271.         self.offset += size</font>
+<font color="green"> 272.         return chunk</font>
+<font color="black"> 273. </font>
+<font color="green"> 274.     def _unread(self, buf):</font>
+<font color="red"> 275.         self.extrasize = len(buf) + self.extrasize</font>
+<font color="red"> 276.         self.offset -= len(buf)</font>
+<font color="black"> 277. </font>
+<font color="green"> 278.     def _read(self, size=1024):</font>
+<font color="green"> 279.         if self.fileobj is None:</font>
+<font color="red"> 280.             raise EOFError, &quot;Reached EOF&quot;</font>
+<font color="black"> 281. </font>
+<font color="green"> 282.         if self._new_member:</font>
+<font color="black"> 283.             # If the _new_member flag is set, we have to</font>
+<font color="black"> 284.             # jump to the next member, if there is one.</font>
+<font color="black"> 285.             #</font>
+<font color="black"> 286.             # First, check if we're at the end of the file;</font>
+<font color="black"> 287.             # if so, it's time to stop; no more members to read.</font>
+<font color="green"> 288.             pos = self.fileobj.tell()   # Save current position</font>
+<font color="green"> 289.             self.fileobj.seek(0, 2)     # Seek to end of file</font>
+<font color="green"> 290.             if pos == self.fileobj.tell():</font>
+<font color="green"> 291.                 raise EOFError, &quot;Reached EOF&quot;</font>
+<font color="black"> 292.             else:</font>
+<font color="green"> 293.                 self.fileobj.seek( pos ) # Return to original position</font>
+<font color="black"> 294. </font>
+<font color="green"> 295.             self._init_read()</font>
+<font color="green"> 296.             self._read_gzip_header()</font>
+<font color="green"> 297.             self.decompress = zlib.decompressobj(-zlib.MAX_WBITS)</font>
+<font color="green"> 298.             self._new_member = False</font>
+<font color="black"> 299. </font>
+<font color="black"> 300.         # Read a chunk of data from the file</font>
+<font color="green"> 301.         buf = self.fileobj.read(size)</font>
+<font color="black"> 302. </font>
+<font color="black"> 303.         # If the EOF has been reached, flush the decompression object</font>
+<font color="black"> 304.         # and mark this object as finished.</font>
+<font color="black"> 305. </font>
+<font color="green"> 306.         if buf == &quot;&quot;:</font>
+<font color="red"> 307.             uncompress = self.decompress.flush()</font>
+<font color="red"> 308.             self._read_eof()</font>
+<font color="red"> 309.             self._add_read_data( uncompress )</font>
+<font color="red"> 310.             raise EOFError, 'Reached EOF'</font>
+<font color="black"> 311. </font>
+<font color="green"> 312.         uncompress = self.decompress.decompress(buf)</font>
+<font color="green"> 313.         self._add_read_data( uncompress )</font>
+<font color="black"> 314. </font>
+<font color="green"> 315.         if self.decompress.unused_data != &quot;&quot;:</font>
+<font color="black"> 316.             # Ending case: we've come to the end of a member in the file,</font>
+<font color="black"> 317.             # so seek back to the start of the unused data, finish up</font>
+<font color="black"> 318.             # this member, and read a new gzip header.</font>
+<font color="black"> 319.             # (The number of bytes to seek back is the length of the unused</font>
+<font color="black"> 320.             # data, minus 8 because _read_eof() will rewind a further 8 bytes)</font>
+<font color="green"> 321.             self.fileobj.seek( -len(self.decompress.unused_data)+8, 1)</font>
+<font color="black"> 322. </font>
+<font color="black"> 323.             # Check the CRC and file size, and set the flag so we read</font>
+<font color="black"> 324.             # a new member on the next call</font>
+<font color="green"> 325.             self._read_eof()</font>
+<font color="green"> 326.             self._new_member = True</font>
+<font color="black"> 327. </font>
+<font color="green"> 328.     def _add_read_data(self, data):</font>
+<font color="green"> 329.         self.crc = zlib.crc32(data, self.crc) &amp; 0xffffffffL</font>
+<font color="green"> 330.         offset = self.offset - self.extrastart</font>
+<font color="green"> 331.         self.extrabuf = self.extrabuf[offset:] + data</font>
+<font color="green"> 332.         self.extrasize = self.extrasize + len(data)</font>
+<font color="green"> 333.         self.extrastart = self.offset</font>
+<font color="green"> 334.         self.size = self.size + len(data)</font>
+<font color="black"> 335. </font>
+<font color="green"> 336.     def _read_eof(self):</font>
+<font color="black"> 337.         # We've read to the end of the file, so we have to rewind in order</font>
+<font color="black"> 338.         # to reread the 8 bytes containing the CRC and the file size.</font>
+<font color="black"> 339.         # We check the that the computed CRC and size of the</font>
+<font color="black"> 340.         # uncompressed data matches the stored values.  Note that the size</font>
+<font color="black"> 341.         # stored is the true file size mod 2**32.</font>
+<font color="green"> 342.         self.fileobj.seek(-8, 1)</font>
+<font color="green"> 343.         crc32 = read32(self.fileobj)</font>
+<font color="green"> 344.         isize = read32(self.fileobj)  # may exceed 2GB</font>
+<font color="green"> 345.         if crc32 != self.crc:</font>
+<font color="red"> 346.             raise IOError(&quot;CRC check failed %s != %s&quot; % (hex(crc32),</font>
+<font color="red"> 347.                                                          hex(self.crc)))</font>
+<font color="green"> 348.         elif isize != (self.size &amp; 0xffffffffL):</font>
+<font color="red"> 349.             raise IOError, &quot;Incorrect length of data produced&quot;</font>
+<font color="black"> 350. </font>
+<font color="black"> 351.         # Gzip files can be padded with zeroes and still have archives.</font>
+<font color="black"> 352.         # Consume all zero bytes and set the file position to the first</font>
+<font color="black"> 353.         # non-zero byte. See http://www.gzip.org/#faq8</font>
+<font color="green"> 354.         c = &quot;\x00&quot;</font>
+<font color="green"> 355.         while c == &quot;\x00&quot;:</font>
+<font color="green"> 356.             c = self.fileobj.read(1)</font>
+<font color="green"> 357.         if c:</font>
+<font color="red"> 358.             self.fileobj.seek(-1, 1)</font>
+<font color="black"> 359. </font>
+<font color="green"> 360.     @property</font>
+<font color="black"> 361.     def closed(self):</font>
+<font color="green"> 362.         return self.fileobj is None</font>
+<font color="black"> 363. </font>
+<font color="green"> 364.     def close(self):</font>
+<font color="green"> 365.         if self.fileobj is None:</font>
+<font color="red"> 366.             return</font>
+<font color="green"> 367.         if self.mode == WRITE:</font>
+<font color="red"> 368.             self.fileobj.write(self.compress.flush())</font>
+<font color="red"> 369.             write32u(self.fileobj, self.crc)</font>
+<font color="black"> 370.             # self.size may exceed 2GB, or even 4GB</font>
+<font color="red"> 371.             write32u(self.fileobj, self.size &amp; 0xffffffffL)</font>
+<font color="red"> 372.             self.fileobj = None</font>
+<font color="green"> 373.         elif self.mode == READ:</font>
+<font color="green"> 374.             self.fileobj = None</font>
+<font color="green"> 375.         if self.myfileobj:</font>
+<font color="green"> 376.             self.myfileobj.close()</font>
+<font color="green"> 377.             self.myfileobj = None</font>
+<font color="black"> 378. </font>
+<font color="green"> 379.     def flush(self,zlib_mode=zlib.Z_SYNC_FLUSH):</font>
+<font color="red"> 380.         self._check_closed()</font>
+<font color="red"> 381.         if self.mode == WRITE:</font>
+<font color="black"> 382.             # Ensure the compressor's buffer is flushed</font>
+<font color="red"> 383.             self.fileobj.write(self.compress.flush(zlib_mode))</font>
+<font color="red"> 384.             self.fileobj.flush()</font>
+<font color="black"> 385. </font>
+<font color="green"> 386.     def fileno(self):</font>
+<font color="black"> 387.         &quot;&quot;&quot;Invoke the underlying file object's fileno() method.</font>
+<font color="black"> 388. </font>
+<font color="black"> 389.         This will raise AttributeError if the underlying file object</font>
+<font color="black"> 390.         doesn't support fileno().</font>
+<font color="black"> 391.         &quot;&quot;&quot;</font>
+<font color="red"> 392.         return self.fileobj.fileno()</font>
+<font color="black"> 393. </font>
+<font color="green"> 394.     def rewind(self):</font>
+<font color="black"> 395.         '''Return the uncompressed stream file position indicator to the</font>
+<font color="black"> 396.         beginning of the file'''</font>
+<font color="red"> 397.         if self.mode != READ:</font>
+<font color="red"> 398.             raise IOError(&quot;Can't rewind in write mode&quot;)</font>
+<font color="red"> 399.         self.fileobj.seek(0)</font>
+<font color="red"> 400.         self._new_member = True</font>
+<font color="red"> 401.         self.extrabuf = &quot;&quot;</font>
+<font color="red"> 402.         self.extrasize = 0</font>
+<font color="red"> 403.         self.extrastart = 0</font>
+<font color="red"> 404.         self.offset = 0</font>
+<font color="black"> 405. </font>
+<font color="green"> 406.     def readable(self):</font>
+<font color="red"> 407.         return self.mode == READ</font>
+<font color="black"> 408. </font>
+<font color="green"> 409.     def writable(self):</font>
+<font color="red"> 410.         return self.mode == WRITE</font>
+<font color="black"> 411. </font>
+<font color="green"> 412.     def seekable(self):</font>
+<font color="red"> 413.         return True</font>
+<font color="black"> 414. </font>
+<font color="green"> 415.     def seek(self, offset, whence=0):</font>
+<font color="red"> 416.         if whence:</font>
+<font color="red"> 417.             if whence == 1:</font>
+<font color="red"> 418.                 offset = self.offset + offset</font>
+<font color="black"> 419.             else:</font>
+<font color="red"> 420.                 raise ValueError('Seek from end not supported')</font>
+<font color="red"> 421.         if self.mode == WRITE:</font>
+<font color="red"> 422.             if offset &lt; self.offset:</font>
+<font color="red"> 423.                 raise IOError('Negative seek in write mode')</font>
+<font color="red"> 424.             count = offset - self.offset</font>
+<font color="red"> 425.             for i in xrange(count // 1024):</font>
+<font color="red"> 426.                 self.write(1024 * '\0')</font>
+<font color="red"> 427.             self.write((count % 1024) * '\0')</font>
+<font color="red"> 428.         elif self.mode == READ:</font>
+<font color="red"> 429.             if offset &lt; self.offset:</font>
+<font color="black"> 430.                 # for negative seek, rewind and do positive seek</font>
+<font color="red"> 431.                 self.rewind()</font>
+<font color="red"> 432.             count = offset - self.offset</font>
+<font color="red"> 433.             for i in xrange(count // 1024):</font>
+<font color="red"> 434.                 self.read(1024)</font>
+<font color="red"> 435.             self.read(count % 1024)</font>
+<font color="black"> 436. </font>
+<font color="red"> 437.         return self.offset</font>
+<font color="black"> 438. </font>
+<font color="green"> 439.     def readline(self, size=-1):</font>
+<font color="red"> 440.         if size &lt; 0:</font>
+<font color="black"> 441.             # Shortcut common case - newline found in buffer.</font>
+<font color="red"> 442.             offset = self.offset - self.extrastart</font>
+<font color="red"> 443.             i = self.extrabuf.find('\n', offset) + 1</font>
+<font color="red"> 444.             if i &gt; 0:</font>
+<font color="red"> 445.                 self.extrasize -= i - offset</font>
+<font color="red"> 446.                 self.offset += i - offset</font>
+<font color="red"> 447.                 return self.extrabuf[offset: i]</font>
+<font color="black"> 448. </font>
+<font color="red"> 449.             size = sys.maxint</font>
+<font color="red"> 450.             readsize = self.min_readsize</font>
+<font color="black"> 451.         else:</font>
+<font color="red"> 452.             readsize = size</font>
+<font color="red"> 453.         bufs = []</font>
+<font color="red"> 454.         while size != 0:</font>
+<font color="red"> 455.             c = self.read(readsize)</font>
+<font color="red"> 456.             i = c.find('\n')</font>
+<font color="black"> 457. </font>
+<font color="black"> 458.             # We set i=size to break out of the loop under two</font>
+<font color="black"> 459.             # conditions: 1) there's no newline, and the chunk is</font>
+<font color="black"> 460.             # larger than size, or 2) there is a newline, but the</font>
+<font color="black"> 461.             # resulting line would be longer than 'size'.</font>
+<font color="red"> 462.             if (size &lt;= i) or (i == -1 and len(c) &gt; size):</font>
+<font color="red"> 463.                 i = size - 1</font>
+<font color="black"> 464. </font>
+<font color="red"> 465.             if i &gt;= 0 or c == '':</font>
+<font color="red"> 466.                 bufs.append(c[:i + 1])    # Add portion of last chunk</font>
+<font color="red"> 467.                 self._unread(c[i + 1:])   # Push back rest of chunk</font>
+<font color="red"> 468.                 break</font>
+<font color="black"> 469. </font>
+<font color="black"> 470.             # Append chunk to list, decrease 'size',</font>
+<font color="red"> 471.             bufs.append(c)</font>
+<font color="red"> 472.             size = size - len(c)</font>
+<font color="red"> 473.             readsize = min(size, readsize * 2)</font>
+<font color="red"> 474.         if readsize &gt; self.min_readsize:</font>
+<font color="red"> 475.             self.min_readsize = min(readsize, self.min_readsize * 2, 512)</font>
+<font color="red"> 476.         return ''.join(bufs) # Return resulting line</font>
+<font color="black"> 477. </font>
+<font color="black"> 478. </font>
+<font color="green"> 479. def _test():</font>
+<font color="black"> 480.     # Act like gzip; with -d, act like gunzip.</font>
+<font color="black"> 481.     # The input file is not deleted, however, nor are any other gzip</font>
+<font color="black"> 482.     # options or features supported.</font>
+<font color="red"> 483.     args = sys.argv[1:]</font>
+<font color="red"> 484.     decompress = args and args[0] == &quot;-d&quot;</font>
+<font color="red"> 485.     if decompress:</font>
+<font color="red"> 486.         args = args[1:]</font>
+<font color="red"> 487.     if not args:</font>
+<font color="red"> 488.         args = [&quot;-&quot;]</font>
+<font color="red"> 489.     for arg in args:</font>
+<font color="red"> 490.         if decompress:</font>
+<font color="red"> 491.             if arg == &quot;-&quot;:</font>
+<font color="red"> 492.                 f = GzipFile(filename=&quot;&quot;, mode=&quot;rb&quot;, fileobj=sys.stdin)</font>
+<font color="red"> 493.                 g = sys.stdout</font>
+<font color="black"> 494.             else:</font>
+<font color="red"> 495.                 if arg[-3:] != &quot;.gz&quot;:</font>
+<font color="red"> 496.                     print &quot;filename doesn't end in .gz:&quot;, repr(arg)</font>
+<font color="red"> 497.                     continue</font>
+<font color="red"> 498.                 f = open(arg, &quot;rb&quot;)</font>
+<font color="red"> 499.                 g = __builtin__.open(arg[:-3], &quot;wb&quot;)</font>
+<font color="black"> 500.         else:</font>
+<font color="red"> 501.             if arg == &quot;-&quot;:</font>
+<font color="red"> 502.                 f = sys.stdin</font>
+<font color="red"> 503.                 g = GzipFile(filename=&quot;&quot;, mode=&quot;wb&quot;, fileobj=sys.stdout)</font>
+<font color="black"> 504.             else:</font>
+<font color="red"> 505.                 f = __builtin__.open(arg, &quot;rb&quot;)</font>
+<font color="red"> 506.                 g = open(arg + &quot;.gz&quot;, &quot;wb&quot;)</font>
+<font color="red"> 507.         while True:</font>
+<font color="red"> 508.             chunk = f.read(1024)</font>
+<font color="red"> 509.             if not chunk:</font>
+<font color="red"> 510.                 break</font>
+<font color="red"> 511.             g.write(chunk)</font>
+<font color="red"> 512.         if g is not sys.stdout:</font>
+<font color="red"> 513.             g.close()</font>
+<font color="red"> 514.         if f is not sys.stdin:</font>
+<font color="red"> 515.             f.close()</font>
+<font color="black"> 516. </font>
+<font color="green"> 517. if __name__ == '__main__':</font>
+<font color="red"> 518.     _test()</font>
+</pre>
+

@@ -1,0 +1,610 @@
+source file: <b>/usr/lib/python2.7/BaseHTTPServer.py</b><br>
+
+
+file stats: <b>238 lines, 88 executed: 37.0% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;HTTP server base class.</font>
+<font color="black">   2. </font>
+<font color="black">   3. Note: the class in this module doesn't implement any HTTP request; see</font>
+<font color="black">   4. SimpleHTTPServer for simple implementations of GET, HEAD and POST</font>
+<font color="black">   5. (including CGI scripts).  It does, however, optionally implement HTTP/1.1</font>
+<font color="black">   6. persistent connections, as of version 0.3.</font>
+<font color="black">   7. </font>
+<font color="black">   8. Contents:</font>
+<font color="black">   9. </font>
+<font color="black">  10. - BaseHTTPRequestHandler: HTTP request handler base class</font>
+<font color="black">  11. - test: test function</font>
+<font color="black">  12. </font>
+<font color="black">  13. XXX To do:</font>
+<font color="black">  14. </font>
+<font color="black">  15. - log requests even later (to capture byte count)</font>
+<font color="black">  16. - log user-agent header and other interesting goodies</font>
+<font color="black">  17. - send error log to separate file</font>
+<font color="green">  18. &quot;&quot;&quot;</font>
+<font color="black">  19. </font>
+<font color="black">  20. </font>
+<font color="black">  21. # See also:</font>
+<font color="black">  22. #</font>
+<font color="black">  23. # HTTP Working Group                                        T. Berners-Lee</font>
+<font color="black">  24. # INTERNET-DRAFT                                            R. T. Fielding</font>
+<font color="black">  25. # &lt;draft-ietf-http-v10-spec-00.txt&gt;                     H. Frystyk Nielsen</font>
+<font color="black">  26. # Expires September 8, 1995                                  March 8, 1995</font>
+<font color="black">  27. #</font>
+<font color="black">  28. # URL: http://www.ics.uci.edu/pub/ietf/http/draft-ietf-http-v10-spec-00.txt</font>
+<font color="black">  29. #</font>
+<font color="black">  30. # and</font>
+<font color="black">  31. #</font>
+<font color="black">  32. # Network Working Group                                      R. Fielding</font>
+<font color="black">  33. # Request for Comments: 2616                                       et al</font>
+<font color="black">  34. # Obsoletes: 2068                                              June 1999</font>
+<font color="black">  35. # Category: Standards Track</font>
+<font color="black">  36. #</font>
+<font color="black">  37. # URL: http://www.faqs.org/rfcs/rfc2616.html</font>
+<font color="black">  38. </font>
+<font color="black">  39. # Log files</font>
+<font color="black">  40. # ---------</font>
+<font color="black">  41. #</font>
+<font color="black">  42. # Here's a quote from the NCSA httpd docs about log file format.</font>
+<font color="black">  43. #</font>
+<font color="black">  44. # | The logfile format is as follows. Each line consists of:</font>
+<font color="black">  45. # |</font>
+<font color="black">  46. # | host rfc931 authuser [DD/Mon/YYYY:hh:mm:ss] &quot;request&quot; ddd bbbb</font>
+<font color="black">  47. # |</font>
+<font color="black">  48. # |        host: Either the DNS name or the IP number of the remote client</font>
+<font color="black">  49. # |        rfc931: Any information returned by identd for this person,</font>
+<font color="black">  50. # |                - otherwise.</font>
+<font color="black">  51. # |        authuser: If user sent a userid for authentication, the user name,</font>
+<font color="black">  52. # |                  - otherwise.</font>
+<font color="black">  53. # |        DD: Day</font>
+<font color="black">  54. # |        Mon: Month (calendar name)</font>
+<font color="black">  55. # |        YYYY: Year</font>
+<font color="black">  56. # |        hh: hour (24-hour format, the machine's timezone)</font>
+<font color="black">  57. # |        mm: minutes</font>
+<font color="black">  58. # |        ss: seconds</font>
+<font color="black">  59. # |        request: The first line of the HTTP request as sent by the client.</font>
+<font color="black">  60. # |        ddd: the status code returned by the server, - if not available.</font>
+<font color="black">  61. # |        bbbb: the total number of bytes sent,</font>
+<font color="black">  62. # |              *not including the HTTP/1.0 header*, - if not available</font>
+<font color="black">  63. # |</font>
+<font color="black">  64. # | You can determine the name of the file accessed through request.</font>
+<font color="black">  65. #</font>
+<font color="black">  66. # (Actually, the latter is only true if you know the server configuration</font>
+<font color="black">  67. # at the time the request was made!)</font>
+<font color="black">  68. </font>
+<font color="green">  69. __version__ = &quot;0.3&quot;</font>
+<font color="black">  70. </font>
+<font color="green">  71. __all__ = [&quot;HTTPServer&quot;, &quot;BaseHTTPRequestHandler&quot;]</font>
+<font color="black">  72. </font>
+<font color="green">  73. import sys</font>
+<font color="green">  74. import time</font>
+<font color="green">  75. import socket # For gethostbyaddr()</font>
+<font color="green">  76. from warnings import filterwarnings, catch_warnings</font>
+<font color="green">  77. with catch_warnings():</font>
+<font color="green">  78.     if sys.py3kwarning:</font>
+<font color="red">  79.         filterwarnings(&quot;ignore&quot;, &quot;.*mimetools has been removed&quot;,</font>
+<font color="red">  80.                         DeprecationWarning)</font>
+<font color="green">  81.     import mimetools</font>
+<font color="green">  82. import SocketServer</font>
+<font color="black">  83. </font>
+<font color="black">  84. # Default error message template</font>
+<font color="black">  85. DEFAULT_ERROR_MESSAGE = &quot;&quot;&quot;\</font>
+<font color="black">  86. &lt;head&gt;</font>
+<font color="black">  87. &lt;title&gt;Error response&lt;/title&gt;</font>
+<font color="black">  88. &lt;/head&gt;</font>
+<font color="black">  89. &lt;body&gt;</font>
+<font color="black">  90. &lt;h1&gt;Error response&lt;/h1&gt;</font>
+<font color="black">  91. &lt;p&gt;Error code %(code)d.</font>
+<font color="black">  92. &lt;p&gt;Message: %(message)s.</font>
+<font color="black">  93. &lt;p&gt;Error code explanation: %(code)s = %(explain)s.</font>
+<font color="black">  94. &lt;/body&gt;</font>
+<font color="green">  95. &quot;&quot;&quot;</font>
+<font color="black">  96. </font>
+<font color="green">  97. DEFAULT_ERROR_CONTENT_TYPE = &quot;text/html&quot;</font>
+<font color="black">  98. </font>
+<font color="green">  99. def _quote_html(html):</font>
+<font color="red"> 100.     return html.replace(&quot;&amp;&quot;, &quot;&amp;amp;&quot;).replace(&quot;&lt;&quot;, &quot;&amp;lt;&quot;).replace(&quot;&gt;&quot;, &quot;&amp;gt;&quot;)</font>
+<font color="black"> 101. </font>
+<font color="green"> 102. class HTTPServer(SocketServer.TCPServer):</font>
+<font color="black"> 103. </font>
+<font color="green"> 104.     allow_reuse_address = 1    # Seems to make sense in testing environment</font>
+<font color="black"> 105. </font>
+<font color="green"> 106.     def server_bind(self):</font>
+<font color="black"> 107.         &quot;&quot;&quot;Override server_bind to store the server name.&quot;&quot;&quot;</font>
+<font color="red"> 108.         SocketServer.TCPServer.server_bind(self)</font>
+<font color="red"> 109.         host, port = self.socket.getsockname()[:2]</font>
+<font color="red"> 110.         self.server_name = socket.getfqdn(host)</font>
+<font color="red"> 111.         self.server_port = port</font>
+<font color="black"> 112. </font>
+<font color="black"> 113. </font>
+<font color="green"> 114. class BaseHTTPRequestHandler(SocketServer.StreamRequestHandler):</font>
+<font color="black"> 115. </font>
+<font color="black"> 116.     &quot;&quot;&quot;HTTP request handler base class.</font>
+<font color="black"> 117. </font>
+<font color="black"> 118.     The following explanation of HTTP serves to guide you through the</font>
+<font color="black"> 119.     code as well as to expose any misunderstandings I may have about</font>
+<font color="black"> 120.     HTTP (so you don't need to read the code to figure out I'm wrong</font>
+<font color="black"> 121.     :-).</font>
+<font color="black"> 122. </font>
+<font color="black"> 123.     HTTP (HyperText Transfer Protocol) is an extensible protocol on</font>
+<font color="black"> 124.     top of a reliable stream transport (e.g. TCP/IP).  The protocol</font>
+<font color="black"> 125.     recognizes three parts to a request:</font>
+<font color="black"> 126. </font>
+<font color="black"> 127.     1. One line identifying the request type and path</font>
+<font color="black"> 128.     2. An optional set of RFC-822-style headers</font>
+<font color="black"> 129.     3. An optional data part</font>
+<font color="black"> 130. </font>
+<font color="black"> 131.     The headers and data are separated by a blank line.</font>
+<font color="black"> 132. </font>
+<font color="black"> 133.     The first line of the request has the form</font>
+<font color="black"> 134. </font>
+<font color="black"> 135.     &lt;command&gt; &lt;path&gt; &lt;version&gt;</font>
+<font color="black"> 136. </font>
+<font color="black"> 137.     where &lt;command&gt; is a (case-sensitive) keyword such as GET or POST,</font>
+<font color="black"> 138.     &lt;path&gt; is a string containing path information for the request,</font>
+<font color="black"> 139.     and &lt;version&gt; should be the string &quot;HTTP/1.0&quot; or &quot;HTTP/1.1&quot;.</font>
+<font color="black"> 140.     &lt;path&gt; is encoded using the URL encoding scheme (using %xx to signify</font>
+<font color="black"> 141.     the ASCII character with hex code xx).</font>
+<font color="black"> 142. </font>
+<font color="black"> 143.     The specification specifies that lines are separated by CRLF but</font>
+<font color="black"> 144.     for compatibility with the widest range of clients recommends</font>
+<font color="black"> 145.     servers also handle LF.  Similarly, whitespace in the request line</font>
+<font color="black"> 146.     is treated sensibly (allowing multiple spaces between components</font>
+<font color="black"> 147.     and allowing trailing whitespace).</font>
+<font color="black"> 148. </font>
+<font color="black"> 149.     Similarly, for output, lines ought to be separated by CRLF pairs</font>
+<font color="black"> 150.     but most clients grok LF characters just fine.</font>
+<font color="black"> 151. </font>
+<font color="black"> 152.     If the first line of the request has the form</font>
+<font color="black"> 153. </font>
+<font color="black"> 154.     &lt;command&gt; &lt;path&gt;</font>
+<font color="black"> 155. </font>
+<font color="black"> 156.     (i.e. &lt;version&gt; is left out) then this is assumed to be an HTTP</font>
+<font color="black"> 157.     0.9 request; this form has no optional headers and data part and</font>
+<font color="black"> 158.     the reply consists of just the data.</font>
+<font color="black"> 159. </font>
+<font color="black"> 160.     The reply form of the HTTP 1.x protocol again has three parts:</font>
+<font color="black"> 161. </font>
+<font color="black"> 162.     1. One line giving the response code</font>
+<font color="black"> 163.     2. An optional set of RFC-822-style headers</font>
+<font color="black"> 164.     3. The data</font>
+<font color="black"> 165. </font>
+<font color="black"> 166.     Again, the headers and data are separated by a blank line.</font>
+<font color="black"> 167. </font>
+<font color="black"> 168.     The response code line has the form</font>
+<font color="black"> 169. </font>
+<font color="black"> 170.     &lt;version&gt; &lt;responsecode&gt; &lt;responsestring&gt;</font>
+<font color="black"> 171. </font>
+<font color="black"> 172.     where &lt;version&gt; is the protocol version (&quot;HTTP/1.0&quot; or &quot;HTTP/1.1&quot;),</font>
+<font color="black"> 173.     &lt;responsecode&gt; is a 3-digit response code indicating success or</font>
+<font color="black"> 174.     failure of the request, and &lt;responsestring&gt; is an optional</font>
+<font color="black"> 175.     human-readable string explaining what the response code means.</font>
+<font color="black"> 176. </font>
+<font color="black"> 177.     This server parses the request and the headers, and then calls a</font>
+<font color="black"> 178.     function specific to the request type (&lt;command&gt;).  Specifically,</font>
+<font color="black"> 179.     a request SPAM will be handled by a method do_SPAM().  If no</font>
+<font color="black"> 180.     such method exists the server sends an error response to the</font>
+<font color="black"> 181.     client.  If it exists, it is called with no arguments:</font>
+<font color="black"> 182. </font>
+<font color="black"> 183.     do_SPAM()</font>
+<font color="black"> 184. </font>
+<font color="black"> 185.     Note that the request name is case sensitive (i.e. SPAM and spam</font>
+<font color="black"> 186.     are different requests).</font>
+<font color="black"> 187. </font>
+<font color="black"> 188.     The various request details are stored in instance variables:</font>
+<font color="black"> 189. </font>
+<font color="black"> 190.     - client_address is the client IP address in the form (host,</font>
+<font color="black"> 191.     port);</font>
+<font color="black"> 192. </font>
+<font color="black"> 193.     - command, path and version are the broken-down request line;</font>
+<font color="black"> 194. </font>
+<font color="black"> 195.     - headers is an instance of mimetools.Message (or a derived</font>
+<font color="black"> 196.     class) containing the header information;</font>
+<font color="black"> 197. </font>
+<font color="black"> 198.     - rfile is a file object open for reading positioned at the</font>
+<font color="black"> 199.     start of the optional input data part;</font>
+<font color="black"> 200. </font>
+<font color="black"> 201.     - wfile is a file object open for writing.</font>
+<font color="black"> 202. </font>
+<font color="black"> 203.     IT IS IMPORTANT TO ADHERE TO THE PROTOCOL FOR WRITING!</font>
+<font color="black"> 204. </font>
+<font color="black"> 205.     The first thing to be written must be the response line.  Then</font>
+<font color="black"> 206.     follow 0 or more header lines, then a blank line, and then the</font>
+<font color="black"> 207.     actual data (if any).  The meaning of the header lines depends on</font>
+<font color="black"> 208.     the command executed by the server; in most cases, when data is</font>
+<font color="black"> 209.     returned, there should be at least one header line of the form</font>
+<font color="black"> 210. </font>
+<font color="black"> 211.     Content-type: &lt;type&gt;/&lt;subtype&gt;</font>
+<font color="black"> 212. </font>
+<font color="black"> 213.     where &lt;type&gt; and &lt;subtype&gt; should be registered MIME types,</font>
+<font color="black"> 214.     e.g. &quot;text/html&quot; or &quot;text/plain&quot;.</font>
+<font color="black"> 215. </font>
+<font color="green"> 216.     &quot;&quot;&quot;</font>
+<font color="black"> 217. </font>
+<font color="black"> 218.     # The Python system version, truncated to its first component.</font>
+<font color="green"> 219.     sys_version = &quot;Python/&quot; + sys.version.split()[0]</font>
+<font color="black"> 220. </font>
+<font color="black"> 221.     # The server software version.  You may want to override this.</font>
+<font color="black"> 222.     # The format is multiple whitespace-separated strings,</font>
+<font color="black"> 223.     # where each string is of the form name[/version].</font>
+<font color="green"> 224.     server_version = &quot;BaseHTTP/&quot; + __version__</font>
+<font color="black"> 225. </font>
+<font color="black"> 226.     # The default request version.  This only affects responses up until</font>
+<font color="black"> 227.     # the point where the request line is parsed, so it mainly decides what</font>
+<font color="black"> 228.     # the client gets back when sending a malformed request line.</font>
+<font color="black"> 229.     # Most web servers default to HTTP 0.9, i.e. don't send a status line.</font>
+<font color="green"> 230.     default_request_version = &quot;HTTP/0.9&quot;</font>
+<font color="black"> 231. </font>
+<font color="green"> 232.     def parse_request(self):</font>
+<font color="black"> 233.         &quot;&quot;&quot;Parse a request (internal).</font>
+<font color="black"> 234. </font>
+<font color="black"> 235.         The request should be stored in self.raw_requestline; the results</font>
+<font color="black"> 236.         are in self.command, self.path, self.request_version and</font>
+<font color="black"> 237.         self.headers.</font>
+<font color="black"> 238. </font>
+<font color="black"> 239.         Return True for success, False for failure; on failure, an</font>
+<font color="black"> 240.         error is sent back.</font>
+<font color="black"> 241. </font>
+<font color="black"> 242.         &quot;&quot;&quot;</font>
+<font color="red"> 243.         self.command = None  # set in case of error on the first line</font>
+<font color="red"> 244.         self.request_version = version = self.default_request_version</font>
+<font color="red"> 245.         self.close_connection = 1</font>
+<font color="red"> 246.         requestline = self.raw_requestline</font>
+<font color="red"> 247.         requestline = requestline.rstrip('\r\n')</font>
+<font color="red"> 248.         self.requestline = requestline</font>
+<font color="red"> 249.         words = requestline.split()</font>
+<font color="red"> 250.         if len(words) == 3:</font>
+<font color="red"> 251.             command, path, version = words</font>
+<font color="red"> 252.             if version[:5] != 'HTTP/':</font>
+<font color="red"> 253.                 self.send_error(400, &quot;Bad request version (%r)&quot; % version)</font>
+<font color="red"> 254.                 return False</font>
+<font color="red"> 255.             try:</font>
+<font color="red"> 256.                 base_version_number = version.split('/', 1)[1]</font>
+<font color="red"> 257.                 version_number = base_version_number.split(&quot;.&quot;)</font>
+<font color="black"> 258.                 # RFC 2145 section 3.1 says there can be only one &quot;.&quot; and</font>
+<font color="black"> 259.                 #   - major and minor numbers MUST be treated as</font>
+<font color="black"> 260.                 #      separate integers;</font>
+<font color="black"> 261.                 #   - HTTP/2.4 is a lower version than HTTP/2.13, which in</font>
+<font color="black"> 262.                 #      turn is lower than HTTP/12.3;</font>
+<font color="black"> 263.                 #   - Leading zeros MUST be ignored by recipients.</font>
+<font color="red"> 264.                 if len(version_number) != 2:</font>
+<font color="red"> 265.                     raise ValueError</font>
+<font color="red"> 266.                 version_number = int(version_number[0]), int(version_number[1])</font>
+<font color="red"> 267.             except (ValueError, IndexError):</font>
+<font color="red"> 268.                 self.send_error(400, &quot;Bad request version (%r)&quot; % version)</font>
+<font color="red"> 269.                 return False</font>
+<font color="red"> 270.             if version_number &gt;= (1, 1) and self.protocol_version &gt;= &quot;HTTP/1.1&quot;:</font>
+<font color="red"> 271.                 self.close_connection = 0</font>
+<font color="red"> 272.             if version_number &gt;= (2, 0):</font>
+<font color="red"> 273.                 self.send_error(505,</font>
+<font color="red"> 274.                           &quot;Invalid HTTP Version (%s)&quot; % base_version_number)</font>
+<font color="red"> 275.                 return False</font>
+<font color="red"> 276.         elif len(words) == 2:</font>
+<font color="red"> 277.             command, path = words</font>
+<font color="red"> 278.             self.close_connection = 1</font>
+<font color="red"> 279.             if command != 'GET':</font>
+<font color="red"> 280.                 self.send_error(400,</font>
+<font color="red"> 281.                                 &quot;Bad HTTP/0.9 request type (%r)&quot; % command)</font>
+<font color="red"> 282.                 return False</font>
+<font color="red"> 283.         elif not words:</font>
+<font color="red"> 284.             return False</font>
+<font color="black"> 285.         else:</font>
+<font color="red"> 286.             self.send_error(400, &quot;Bad request syntax (%r)&quot; % requestline)</font>
+<font color="red"> 287.             return False</font>
+<font color="red"> 288.         self.command, self.path, self.request_version = command, path, version</font>
+<font color="black"> 289. </font>
+<font color="black"> 290.         # Examine the headers and look for a Connection directive</font>
+<font color="red"> 291.         self.headers = self.MessageClass(self.rfile, 0)</font>
+<font color="black"> 292. </font>
+<font color="red"> 293.         conntype = self.headers.get('Connection', &quot;&quot;)</font>
+<font color="red"> 294.         if conntype.lower() == 'close':</font>
+<font color="red"> 295.             self.close_connection = 1</font>
+<font color="red"> 296.         elif (conntype.lower() == 'keep-alive' and</font>
+<font color="red"> 297.               self.protocol_version &gt;= &quot;HTTP/1.1&quot;):</font>
+<font color="red"> 298.             self.close_connection = 0</font>
+<font color="red"> 299.         return True</font>
+<font color="black"> 300. </font>
+<font color="green"> 301.     def handle_one_request(self):</font>
+<font color="black"> 302.         &quot;&quot;&quot;Handle a single HTTP request.</font>
+<font color="black"> 303. </font>
+<font color="black"> 304.         You normally don't need to override this method; see the class</font>
+<font color="black"> 305.         __doc__ string for information on how to handle specific HTTP</font>
+<font color="black"> 306.         commands such as GET and POST.</font>
+<font color="black"> 307. </font>
+<font color="black"> 308.         &quot;&quot;&quot;</font>
+<font color="red"> 309.         try:</font>
+<font color="red"> 310.             self.raw_requestline = self.rfile.readline(65537)</font>
+<font color="red"> 311.             if len(self.raw_requestline) &gt; 65536:</font>
+<font color="red"> 312.                 self.requestline = ''</font>
+<font color="red"> 313.                 self.request_version = ''</font>
+<font color="red"> 314.                 self.command = ''</font>
+<font color="red"> 315.                 self.send_error(414)</font>
+<font color="red"> 316.                 return</font>
+<font color="red"> 317.             if not self.raw_requestline:</font>
+<font color="red"> 318.                 self.close_connection = 1</font>
+<font color="red"> 319.                 return</font>
+<font color="red"> 320.             if not self.parse_request():</font>
+<font color="black"> 321.                 # An error code has been sent, just exit</font>
+<font color="red"> 322.                 return</font>
+<font color="red"> 323.             mname = 'do_' + self.command</font>
+<font color="red"> 324.             if not hasattr(self, mname):</font>
+<font color="red"> 325.                 self.send_error(501, &quot;Unsupported method (%r)&quot; % self.command)</font>
+<font color="red"> 326.                 return</font>
+<font color="red"> 327.             method = getattr(self, mname)</font>
+<font color="red"> 328.             method()</font>
+<font color="red"> 329.             self.wfile.flush() #actually send the response if not already done.</font>
+<font color="red"> 330.         except socket.timeout, e:</font>
+<font color="black"> 331.             #a read or a write timed out.  Discard this connection</font>
+<font color="red"> 332.             self.log_error(&quot;Request timed out: %r&quot;, e)</font>
+<font color="red"> 333.             self.close_connection = 1</font>
+<font color="red"> 334.             return</font>
+<font color="black"> 335. </font>
+<font color="green"> 336.     def handle(self):</font>
+<font color="black"> 337.         &quot;&quot;&quot;Handle multiple requests if necessary.&quot;&quot;&quot;</font>
+<font color="red"> 338.         self.close_connection = 1</font>
+<font color="black"> 339. </font>
+<font color="red"> 340.         self.handle_one_request()</font>
+<font color="red"> 341.         while not self.close_connection:</font>
+<font color="red"> 342.             self.handle_one_request()</font>
+<font color="black"> 343. </font>
+<font color="green"> 344.     def send_error(self, code, message=None):</font>
+<font color="black"> 345.         &quot;&quot;&quot;Send and log an error reply.</font>
+<font color="black"> 346. </font>
+<font color="black"> 347.         Arguments are the error code, and a detailed message.</font>
+<font color="black"> 348.         The detailed message defaults to the short entry matching the</font>
+<font color="black"> 349.         response code.</font>
+<font color="black"> 350. </font>
+<font color="black"> 351.         This sends an error response (so it must be called before any</font>
+<font color="black"> 352.         output has been generated), logs the error, and finally sends</font>
+<font color="black"> 353.         a piece of HTML explaining the error to the user.</font>
+<font color="black"> 354. </font>
+<font color="black"> 355.         &quot;&quot;&quot;</font>
+<font color="black"> 356. </font>
+<font color="red"> 357.         try:</font>
+<font color="red"> 358.             short, long = self.responses[code]</font>
+<font color="red"> 359.         except KeyError:</font>
+<font color="red"> 360.             short, long = '???', '???'</font>
+<font color="red"> 361.         if message is None:</font>
+<font color="red"> 362.             message = short</font>
+<font color="red"> 363.         explain = long</font>
+<font color="red"> 364.         self.log_error(&quot;code %d, message %s&quot;, code, message)</font>
+<font color="black"> 365.         # using _quote_html to prevent Cross Site Scripting attacks (see bug #1100201)</font>
+<font color="red"> 366.         content = (self.error_message_format %</font>
+<font color="red"> 367.                    {'code': code, 'message': _quote_html(message), 'explain': explain})</font>
+<font color="red"> 368.         self.send_response(code, message)</font>
+<font color="red"> 369.         self.send_header(&quot;Content-Type&quot;, self.error_content_type)</font>
+<font color="red"> 370.         self.send_header('Connection', 'close')</font>
+<font color="red"> 371.         self.end_headers()</font>
+<font color="red"> 372.         if self.command != 'HEAD' and code &gt;= 200 and code not in (204, 304):</font>
+<font color="red"> 373.             self.wfile.write(content)</font>
+<font color="black"> 374. </font>
+<font color="green"> 375.     error_message_format = DEFAULT_ERROR_MESSAGE</font>
+<font color="green"> 376.     error_content_type = DEFAULT_ERROR_CONTENT_TYPE</font>
+<font color="black"> 377. </font>
+<font color="green"> 378.     def send_response(self, code, message=None):</font>
+<font color="black"> 379.         &quot;&quot;&quot;Send the response header and log the response code.</font>
+<font color="black"> 380. </font>
+<font color="black"> 381.         Also send two standard headers with the server software</font>
+<font color="black"> 382.         version and the current date.</font>
+<font color="black"> 383. </font>
+<font color="black"> 384.         &quot;&quot;&quot;</font>
+<font color="red"> 385.         self.log_request(code)</font>
+<font color="red"> 386.         if message is None:</font>
+<font color="red"> 387.             if code in self.responses:</font>
+<font color="red"> 388.                 message = self.responses[code][0]</font>
+<font color="black"> 389.             else:</font>
+<font color="red"> 390.                 message = ''</font>
+<font color="red"> 391.         if self.request_version != 'HTTP/0.9':</font>
+<font color="red"> 392.             self.wfile.write(&quot;%s %d %s\r\n&quot; %</font>
+<font color="red"> 393.                              (self.protocol_version, code, message))</font>
+<font color="black"> 394.             # print (self.protocol_version, code, message)</font>
+<font color="red"> 395.         self.send_header('Server', self.version_string())</font>
+<font color="red"> 396.         self.send_header('Date', self.date_time_string())</font>
+<font color="black"> 397. </font>
+<font color="green"> 398.     def send_header(self, keyword, value):</font>
+<font color="black"> 399.         &quot;&quot;&quot;Send a MIME header.&quot;&quot;&quot;</font>
+<font color="red"> 400.         if self.request_version != 'HTTP/0.9':</font>
+<font color="red"> 401.             self.wfile.write(&quot;%s: %s\r\n&quot; % (keyword, value))</font>
+<font color="black"> 402. </font>
+<font color="red"> 403.         if keyword.lower() == 'connection':</font>
+<font color="red"> 404.             if value.lower() == 'close':</font>
+<font color="red"> 405.                 self.close_connection = 1</font>
+<font color="red"> 406.             elif value.lower() == 'keep-alive':</font>
+<font color="red"> 407.                 self.close_connection = 0</font>
+<font color="black"> 408. </font>
+<font color="green"> 409.     def end_headers(self):</font>
+<font color="black"> 410.         &quot;&quot;&quot;Send the blank line ending the MIME headers.&quot;&quot;&quot;</font>
+<font color="red"> 411.         if self.request_version != 'HTTP/0.9':</font>
+<font color="red"> 412.             self.wfile.write(&quot;\r\n&quot;)</font>
+<font color="black"> 413. </font>
+<font color="green"> 414.     def log_request(self, code='-', size='-'):</font>
+<font color="black"> 415.         &quot;&quot;&quot;Log an accepted request.</font>
+<font color="black"> 416. </font>
+<font color="black"> 417.         This is called by send_response().</font>
+<font color="black"> 418. </font>
+<font color="black"> 419.         &quot;&quot;&quot;</font>
+<font color="black"> 420. </font>
+<font color="red"> 421.         self.log_message('&quot;%s&quot; %s %s',</font>
+<font color="red"> 422.                          self.requestline, str(code), str(size))</font>
+<font color="black"> 423. </font>
+<font color="green"> 424.     def log_error(self, format, *args):</font>
+<font color="black"> 425.         &quot;&quot;&quot;Log an error.</font>
+<font color="black"> 426. </font>
+<font color="black"> 427.         This is called when a request cannot be fulfilled.  By</font>
+<font color="black"> 428.         default it passes the message on to log_message().</font>
+<font color="black"> 429. </font>
+<font color="black"> 430.         Arguments are the same as for log_message().</font>
+<font color="black"> 431. </font>
+<font color="black"> 432.         XXX This should go to the separate error log.</font>
+<font color="black"> 433. </font>
+<font color="black"> 434.         &quot;&quot;&quot;</font>
+<font color="black"> 435. </font>
+<font color="red"> 436.         self.log_message(format, *args)</font>
+<font color="black"> 437. </font>
+<font color="green"> 438.     def log_message(self, format, *args):</font>
+<font color="black"> 439.         &quot;&quot;&quot;Log an arbitrary message.</font>
+<font color="black"> 440. </font>
+<font color="black"> 441.         This is used by all other logging functions.  Override</font>
+<font color="black"> 442.         it if you have specific logging wishes.</font>
+<font color="black"> 443. </font>
+<font color="black"> 444.         The first argument, FORMAT, is a format string for the</font>
+<font color="black"> 445.         message to be logged.  If the format string contains</font>
+<font color="black"> 446.         any % escapes requiring parameters, they should be</font>
+<font color="black"> 447.         specified as subsequent arguments (it's just like</font>
+<font color="black"> 448.         printf!).</font>
+<font color="black"> 449. </font>
+<font color="black"> 450.         The client ip address and current date/time are prefixed to every</font>
+<font color="black"> 451.         message.</font>
+<font color="black"> 452. </font>
+<font color="black"> 453.         &quot;&quot;&quot;</font>
+<font color="black"> 454. </font>
+<font color="red"> 455.         sys.stderr.write(&quot;%s - - [%s] %s\n&quot; %</font>
+<font color="red"> 456.                          (self.client_address[0],</font>
+<font color="red"> 457.                           self.log_date_time_string(),</font>
+<font color="red"> 458.                           format%args))</font>
+<font color="black"> 459. </font>
+<font color="green"> 460.     def version_string(self):</font>
+<font color="black"> 461.         &quot;&quot;&quot;Return the server software version string.&quot;&quot;&quot;</font>
+<font color="red"> 462.         return self.server_version + ' ' + self.sys_version</font>
+<font color="black"> 463. </font>
+<font color="green"> 464.     def date_time_string(self, timestamp=None):</font>
+<font color="black"> 465.         &quot;&quot;&quot;Return the current date and time formatted for a message header.&quot;&quot;&quot;</font>
+<font color="red"> 466.         if timestamp is None:</font>
+<font color="red"> 467.             timestamp = time.time()</font>
+<font color="red"> 468.         year, month, day, hh, mm, ss, wd, y, z = time.gmtime(timestamp)</font>
+<font color="red"> 469.         s = &quot;%s, %02d %3s %4d %02d:%02d:%02d GMT&quot; % (</font>
+<font color="red"> 470.                 self.weekdayname[wd],</font>
+<font color="red"> 471.                 day, self.monthname[month], year,</font>
+<font color="red"> 472.                 hh, mm, ss)</font>
+<font color="red"> 473.         return s</font>
+<font color="black"> 474. </font>
+<font color="green"> 475.     def log_date_time_string(self):</font>
+<font color="black"> 476.         &quot;&quot;&quot;Return the current time formatted for logging.&quot;&quot;&quot;</font>
+<font color="red"> 477.         now = time.time()</font>
+<font color="red"> 478.         year, month, day, hh, mm, ss, x, y, z = time.localtime(now)</font>
+<font color="red"> 479.         s = &quot;%02d/%3s/%04d %02d:%02d:%02d&quot; % (</font>
+<font color="red"> 480.                 day, self.monthname[month], year, hh, mm, ss)</font>
+<font color="red"> 481.         return s</font>
+<font color="black"> 482. </font>
+<font color="green"> 483.     weekdayname = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']</font>
+<font color="black"> 484. </font>
+<font color="green"> 485.     monthname = [None,</font>
+<font color="green"> 486.                  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',</font>
+<font color="green"> 487.                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']</font>
+<font color="black"> 488. </font>
+<font color="green"> 489.     def address_string(self):</font>
+<font color="black"> 490.         &quot;&quot;&quot;Return the client address formatted for logging.</font>
+<font color="black"> 491. </font>
+<font color="black"> 492.         This version looks up the full hostname using gethostbyaddr(),</font>
+<font color="black"> 493.         and tries to find a name that contains at least one dot.</font>
+<font color="black"> 494. </font>
+<font color="black"> 495.         &quot;&quot;&quot;</font>
+<font color="black"> 496. </font>
+<font color="red"> 497.         host, port = self.client_address[:2]</font>
+<font color="red"> 498.         return socket.getfqdn(host)</font>
+<font color="black"> 499. </font>
+<font color="black"> 500.     # Essentially static class variables</font>
+<font color="black"> 501. </font>
+<font color="black"> 502.     # The version of the HTTP protocol we support.</font>
+<font color="black"> 503.     # Set this to HTTP/1.1 to enable automatic keepalive</font>
+<font color="green"> 504.     protocol_version = &quot;HTTP/1.0&quot;</font>
+<font color="black"> 505. </font>
+<font color="black"> 506.     # The Message-like class used to parse headers</font>
+<font color="green"> 507.     MessageClass = mimetools.Message</font>
+<font color="black"> 508. </font>
+<font color="black"> 509.     # Table mapping response codes to messages; entries have the</font>
+<font color="black"> 510.     # form {code: (shortmessage, longmessage)}.</font>
+<font color="black"> 511.     # See RFC 2616.</font>
+<font color="green"> 512.     responses = {</font>
+<font color="green"> 513.         100: ('Continue', 'Request received, please continue'),</font>
+<font color="black"> 514.         101: ('Switching Protocols',</font>
+<font color="green"> 515.               'Switching to new protocol; obey Upgrade header'),</font>
+<font color="black"> 516. </font>
+<font color="green"> 517.         200: ('OK', 'Request fulfilled, document follows'),</font>
+<font color="green"> 518.         201: ('Created', 'Document created, URL follows'),</font>
+<font color="black"> 519.         202: ('Accepted',</font>
+<font color="green"> 520.               'Request accepted, processing continues off-line'),</font>
+<font color="green"> 521.         203: ('Non-Authoritative Information', 'Request fulfilled from cache'),</font>
+<font color="green"> 522.         204: ('No Content', 'Request fulfilled, nothing follows'),</font>
+<font color="green"> 523.         205: ('Reset Content', 'Clear input form for further input.'),</font>
+<font color="green"> 524.         206: ('Partial Content', 'Partial content follows.'),</font>
+<font color="black"> 525. </font>
+<font color="black"> 526.         300: ('Multiple Choices',</font>
+<font color="green"> 527.               'Object has several resources -- see URI list'),</font>
+<font color="green"> 528.         301: ('Moved Permanently', 'Object moved permanently -- see URI list'),</font>
+<font color="green"> 529.         302: ('Found', 'Object moved temporarily -- see URI list'),</font>
+<font color="green"> 530.         303: ('See Other', 'Object moved -- see Method and URL list'),</font>
+<font color="black"> 531.         304: ('Not Modified',</font>
+<font color="green"> 532.               'Document has not changed since given time'),</font>
+<font color="black"> 533.         305: ('Use Proxy',</font>
+<font color="green"> 534.               'You must use proxy specified in Location to access this '</font>
+<font color="black"> 535.               'resource.'),</font>
+<font color="black"> 536.         307: ('Temporary Redirect',</font>
+<font color="green"> 537.               'Object moved temporarily -- see URI list'),</font>
+<font color="black"> 538. </font>
+<font color="black"> 539.         400: ('Bad Request',</font>
+<font color="green"> 540.               'Bad request syntax or unsupported method'),</font>
+<font color="black"> 541.         401: ('Unauthorized',</font>
+<font color="green"> 542.               'No permission -- see authorization schemes'),</font>
+<font color="black"> 543.         402: ('Payment Required',</font>
+<font color="green"> 544.               'No payment -- see charging schemes'),</font>
+<font color="black"> 545.         403: ('Forbidden',</font>
+<font color="green"> 546.               'Request forbidden -- authorization will not help'),</font>
+<font color="green"> 547.         404: ('Not Found', 'Nothing matches the given URI'),</font>
+<font color="black"> 548.         405: ('Method Not Allowed',</font>
+<font color="green"> 549.               'Specified method is invalid for this resource.'),</font>
+<font color="green"> 550.         406: ('Not Acceptable', 'URI not available in preferred format.'),</font>
+<font color="green"> 551.         407: ('Proxy Authentication Required', 'You must authenticate with '</font>
+<font color="black"> 552.               'this proxy before proceeding.'),</font>
+<font color="green"> 553.         408: ('Request Timeout', 'Request timed out; try again later.'),</font>
+<font color="green"> 554.         409: ('Conflict', 'Request conflict.'),</font>
+<font color="black"> 555.         410: ('Gone',</font>
+<font color="green"> 556.               'URI no longer exists and has been permanently removed.'),</font>
+<font color="green"> 557.         411: ('Length Required', 'Client must specify Content-Length.'),</font>
+<font color="green"> 558.         412: ('Precondition Failed', 'Precondition in headers is false.'),</font>
+<font color="green"> 559.         413: ('Request Entity Too Large', 'Entity is too large.'),</font>
+<font color="green"> 560.         414: ('Request-URI Too Long', 'URI is too long.'),</font>
+<font color="green"> 561.         415: ('Unsupported Media Type', 'Entity body in unsupported format.'),</font>
+<font color="black"> 562.         416: ('Requested Range Not Satisfiable',</font>
+<font color="green"> 563.               'Cannot satisfy request range.'),</font>
+<font color="black"> 564.         417: ('Expectation Failed',</font>
+<font color="green"> 565.               'Expect condition could not be satisfied.'),</font>
+<font color="black"> 566. </font>
+<font color="green"> 567.         500: ('Internal Server Error', 'Server got itself in trouble'),</font>
+<font color="black"> 568.         501: ('Not Implemented',</font>
+<font color="green"> 569.               'Server does not support this operation'),</font>
+<font color="green"> 570.         502: ('Bad Gateway', 'Invalid responses from another server/proxy.'),</font>
+<font color="black"> 571.         503: ('Service Unavailable',</font>
+<font color="green"> 572.               'The server cannot process the request due to a high load'),</font>
+<font color="black"> 573.         504: ('Gateway Timeout',</font>
+<font color="green"> 574.               'The gateway server did not receive a timely response'),</font>
+<font color="green"> 575.         505: ('HTTP Version Not Supported', 'Cannot fulfill request.'),</font>
+<font color="black"> 576.         }</font>
+<font color="black"> 577. </font>
+<font color="black"> 578. </font>
+<font color="green"> 579. def test(HandlerClass = BaseHTTPRequestHandler,</font>
+<font color="green"> 580.          ServerClass = HTTPServer, protocol=&quot;HTTP/1.0&quot;):</font>
+<font color="black"> 581.     &quot;&quot;&quot;Test the HTTP request handler class.</font>
+<font color="black"> 582. </font>
+<font color="black"> 583.     This runs an HTTP server on port 8000 (or the first command line</font>
+<font color="black"> 584.     argument).</font>
+<font color="black"> 585. </font>
+<font color="black"> 586.     &quot;&quot;&quot;</font>
+<font color="black"> 587. </font>
+<font color="red"> 588.     if sys.argv[1:]:</font>
+<font color="red"> 589.         port = int(sys.argv[1])</font>
+<font color="black"> 590.     else:</font>
+<font color="red"> 591.         port = 8000</font>
+<font color="red"> 592.     server_address = ('', port)</font>
+<font color="black"> 593. </font>
+<font color="red"> 594.     HandlerClass.protocol_version = protocol</font>
+<font color="red"> 595.     httpd = ServerClass(server_address, HandlerClass)</font>
+<font color="black"> 596. </font>
+<font color="red"> 597.     sa = httpd.socket.getsockname()</font>
+<font color="red"> 598.     print &quot;Serving HTTP on&quot;, sa[0], &quot;port&quot;, sa[1], &quot;...&quot;</font>
+<font color="red"> 599.     httpd.serve_forever()</font>
+<font color="black"> 600. </font>
+<font color="black"> 601. </font>
+<font color="green"> 602. if __name__ == '__main__':</font>
+<font color="red"> 603.     test()</font>
+</pre>
+

@@ -1,0 +1,123 @@
+source file: <b>/usr/lib/python2.7/fnmatch.py</b><br>
+
+
+file stats: <b>66 lines, 30 executed: 45.5% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Filename matching with shell patterns.</font>
+<font color="black">   2. </font>
+<font color="black">   3. fnmatch(FILENAME, PATTERN) matches according to the local convention.</font>
+<font color="black">   4. fnmatchcase(FILENAME, PATTERN) always takes case in account.</font>
+<font color="black">   5. </font>
+<font color="black">   6. The functions operate by translating the pattern into a regular</font>
+<font color="black">   7. expression.  They cache the compiled regular expressions for speed.</font>
+<font color="black">   8. </font>
+<font color="black">   9. The function translate(PATTERN) returns a regular expression</font>
+<font color="black">  10. corresponding to PATTERN.  (It does not compile it.)</font>
+<font color="green">  11. &quot;&quot;&quot;</font>
+<font color="black">  12. </font>
+<font color="green">  13. import re</font>
+<font color="black">  14. </font>
+<font color="green">  15. __all__ = [&quot;filter&quot;, &quot;fnmatch&quot;, &quot;fnmatchcase&quot;, &quot;translate&quot;]</font>
+<font color="black">  16. </font>
+<font color="green">  17. _cache = {}</font>
+<font color="green">  18. _MAXCACHE = 100</font>
+<font color="black">  19. </font>
+<font color="green">  20. def _purge():</font>
+<font color="black">  21.     &quot;&quot;&quot;Clear the pattern cache&quot;&quot;&quot;</font>
+<font color="red">  22.     _cache.clear()</font>
+<font color="black">  23. </font>
+<font color="green">  24. def fnmatch(name, pat):</font>
+<font color="black">  25.     &quot;&quot;&quot;Test whether FILENAME matches PATTERN.</font>
+<font color="black">  26. </font>
+<font color="black">  27.     Patterns are Unix shell style:</font>
+<font color="black">  28. </font>
+<font color="black">  29.     *       matches everything</font>
+<font color="black">  30.     ?       matches any single character</font>
+<font color="black">  31.     [seq]   matches any character in seq</font>
+<font color="black">  32.     [!seq]  matches any char not in seq</font>
+<font color="black">  33. </font>
+<font color="black">  34.     An initial period in FILENAME is not special.</font>
+<font color="black">  35.     Both FILENAME and PATTERN are first case-normalized</font>
+<font color="black">  36.     if the operating system requires it.</font>
+<font color="black">  37.     If you don't want this, use fnmatchcase(FILENAME, PATTERN).</font>
+<font color="black">  38.     &quot;&quot;&quot;</font>
+<font color="black">  39. </font>
+<font color="green">  40.     import os</font>
+<font color="green">  41.     name = os.path.normcase(name)</font>
+<font color="green">  42.     pat = os.path.normcase(pat)</font>
+<font color="green">  43.     return fnmatchcase(name, pat)</font>
+<font color="black">  44. </font>
+<font color="green">  45. def filter(names, pat):</font>
+<font color="black">  46.     &quot;&quot;&quot;Return the subset of the list NAMES that match PAT&quot;&quot;&quot;</font>
+<font color="red">  47.     import os,posixpath</font>
+<font color="red">  48.     result=[]</font>
+<font color="red">  49.     pat=os.path.normcase(pat)</font>
+<font color="red">  50.     if not pat in _cache:</font>
+<font color="red">  51.         res = translate(pat)</font>
+<font color="red">  52.         if len(_cache) &gt;= _MAXCACHE:</font>
+<font color="red">  53.             _cache.clear()</font>
+<font color="red">  54.         _cache[pat] = re.compile(res)</font>
+<font color="red">  55.     match=_cache[pat].match</font>
+<font color="red">  56.     if os.path is posixpath:</font>
+<font color="black">  57.         # normcase on posix is NOP. Optimize it away from the loop.</font>
+<font color="red">  58.         for name in names:</font>
+<font color="red">  59.             if match(name):</font>
+<font color="red">  60.                 result.append(name)</font>
+<font color="black">  61.     else:</font>
+<font color="red">  62.         for name in names:</font>
+<font color="red">  63.             if match(os.path.normcase(name)):</font>
+<font color="red">  64.                 result.append(name)</font>
+<font color="red">  65.     return result</font>
+<font color="black">  66. </font>
+<font color="green">  67. def fnmatchcase(name, pat):</font>
+<font color="black">  68.     &quot;&quot;&quot;Test whether FILENAME matches PATTERN, including case.</font>
+<font color="black">  69. </font>
+<font color="black">  70.     This is a version of fnmatch() which doesn't case-normalize</font>
+<font color="black">  71.     its arguments.</font>
+<font color="black">  72.     &quot;&quot;&quot;</font>
+<font color="black">  73. </font>
+<font color="green">  74.     if not pat in _cache:</font>
+<font color="green">  75.         res = translate(pat)</font>
+<font color="green">  76.         if len(_cache) &gt;= _MAXCACHE:</font>
+<font color="red">  77.             _cache.clear()</font>
+<font color="green">  78.         _cache[pat] = re.compile(res)</font>
+<font color="green">  79.     return _cache[pat].match(name) is not None</font>
+<font color="black">  80. </font>
+<font color="green">  81. def translate(pat):</font>
+<font color="black">  82.     &quot;&quot;&quot;Translate a shell PATTERN to a regular expression.</font>
+<font color="black">  83. </font>
+<font color="black">  84.     There is no way to quote meta-characters.</font>
+<font color="black">  85.     &quot;&quot;&quot;</font>
+<font color="black">  86. </font>
+<font color="green">  87.     i, n = 0, len(pat)</font>
+<font color="green">  88.     res = ''</font>
+<font color="green">  89.     while i &lt; n:</font>
+<font color="green">  90.         c = pat[i]</font>
+<font color="green">  91.         i = i+1</font>
+<font color="green">  92.         if c == '*':</font>
+<font color="green">  93.             res = res + '.*'</font>
+<font color="green">  94.         elif c == '?':</font>
+<font color="red">  95.             res = res + '.'</font>
+<font color="green">  96.         elif c == '[':</font>
+<font color="red">  97.             j = i</font>
+<font color="red">  98.             if j &lt; n and pat[j] == '!':</font>
+<font color="red">  99.                 j = j+1</font>
+<font color="red"> 100.             if j &lt; n and pat[j] == ']':</font>
+<font color="red"> 101.                 j = j+1</font>
+<font color="red"> 102.             while j &lt; n and pat[j] != ']':</font>
+<font color="red"> 103.                 j = j+1</font>
+<font color="red"> 104.             if j &gt;= n:</font>
+<font color="red"> 105.                 res = res + '\\['</font>
+<font color="black"> 106.             else:</font>
+<font color="red"> 107.                 stuff = pat[i:j].replace('\\','\\\\')</font>
+<font color="red"> 108.                 i = j+1</font>
+<font color="red"> 109.                 if stuff[0] == '!':</font>
+<font color="red"> 110.                     stuff = '^' + stuff[1:]</font>
+<font color="red"> 111.                 elif stuff[0] == '^':</font>
+<font color="red"> 112.                     stuff = '\\' + stuff</font>
+<font color="red"> 113.                 res = '%s[%s]' % (res, stuff)</font>
+<font color="black"> 114.         else:</font>
+<font color="green"> 115.             res = res + re.escape(c)</font>
+<font color="green"> 116.     return res + '\Z(?ms)'</font>
+</pre>
+

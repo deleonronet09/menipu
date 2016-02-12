@@ -1,0 +1,327 @@
+source file: <b>/usr/lib/python2.7/traceback.py</b><br>
+
+
+file stats: <b>187 lines, 41 executed: 21.9% covered</b>
+<pre>
+<font color="red">   1. &quot;&quot;&quot;Extract, format and print information about Python stack traces.&quot;&quot;&quot;</font>
+<font color="black">   2. </font>
+<font color="red">   3. import linecache</font>
+<font color="red">   4. import sys</font>
+<font color="red">   5. import types</font>
+<font color="black">   6. </font>
+<font color="red">   7. __all__ = ['extract_stack', 'extract_tb', 'format_exception',</font>
+<font color="red">   8.            'format_exception_only', 'format_list', 'format_stack',</font>
+<font color="red">   9.            'format_tb', 'print_exc', 'format_exc', 'print_exception',</font>
+<font color="red">  10.            'print_last', 'print_stack', 'print_tb', 'tb_lineno']</font>
+<font color="black">  11. </font>
+<font color="red">  12. def _print(file, str='', terminator='\n'):</font>
+<font color="red">  13.     file.write(str+terminator)</font>
+<font color="black">  14. </font>
+<font color="black">  15. </font>
+<font color="red">  16. def print_list(extracted_list, file=None):</font>
+<font color="black">  17.     &quot;&quot;&quot;Print the list of tuples as returned by extract_tb() or</font>
+<font color="black">  18.     extract_stack() as a formatted stack trace to the given file.&quot;&quot;&quot;</font>
+<font color="red">  19.     if file is None:</font>
+<font color="red">  20.         file = sys.stderr</font>
+<font color="red">  21.     for filename, lineno, name, line in extracted_list:</font>
+<font color="red">  22.         _print(file,</font>
+<font color="red">  23.                '  File &quot;%s&quot;, line %d, in %s' % (filename,lineno,name))</font>
+<font color="red">  24.         if line:</font>
+<font color="red">  25.             _print(file, '    %s' % line.strip())</font>
+<font color="black">  26. </font>
+<font color="red">  27. def format_list(extracted_list):</font>
+<font color="black">  28.     &quot;&quot;&quot;Format a list of traceback entry tuples for printing.</font>
+<font color="black">  29. </font>
+<font color="black">  30.     Given a list of tuples as returned by extract_tb() or</font>
+<font color="black">  31.     extract_stack(), return a list of strings ready for printing.</font>
+<font color="black">  32.     Each string in the resulting list corresponds to the item with the</font>
+<font color="black">  33.     same index in the argument list.  Each string ends in a newline;</font>
+<font color="black">  34.     the strings may contain internal newlines as well, for those items</font>
+<font color="black">  35.     whose source text line is not None.</font>
+<font color="black">  36.     &quot;&quot;&quot;</font>
+<font color="green">  37.     list = []</font>
+<font color="green">  38.     for filename, lineno, name, line in extracted_list:</font>
+<font color="green">  39.         item = '  File &quot;%s&quot;, line %d, in %s\n' % (filename,lineno,name)</font>
+<font color="green">  40.         if line:</font>
+<font color="green">  41.             item = item + '    %s\n' % line.strip()</font>
+<font color="green">  42.         list.append(item)</font>
+<font color="green">  43.     return list</font>
+<font color="black">  44. </font>
+<font color="black">  45. </font>
+<font color="red">  46. def print_tb(tb, limit=None, file=None):</font>
+<font color="black">  47.     &quot;&quot;&quot;Print up to 'limit' stack trace entries from the traceback 'tb'.</font>
+<font color="black">  48. </font>
+<font color="black">  49.     If 'limit' is omitted or None, all entries are printed.  If 'file'</font>
+<font color="black">  50.     is omitted or None, the output goes to sys.stderr; otherwise</font>
+<font color="black">  51.     'file' should be an open file or file-like object with a write()</font>
+<font color="black">  52.     method.</font>
+<font color="black">  53.     &quot;&quot;&quot;</font>
+<font color="red">  54.     if file is None:</font>
+<font color="red">  55.         file = sys.stderr</font>
+<font color="red">  56.     if limit is None:</font>
+<font color="red">  57.         if hasattr(sys, 'tracebacklimit'):</font>
+<font color="red">  58.             limit = sys.tracebacklimit</font>
+<font color="red">  59.     n = 0</font>
+<font color="red">  60.     while tb is not None and (limit is None or n &lt; limit):</font>
+<font color="red">  61.         f = tb.tb_frame</font>
+<font color="red">  62.         lineno = tb.tb_lineno</font>
+<font color="red">  63.         co = f.f_code</font>
+<font color="red">  64.         filename = co.co_filename</font>
+<font color="red">  65.         name = co.co_name</font>
+<font color="red">  66.         _print(file,</font>
+<font color="red">  67.                '  File &quot;%s&quot;, line %d, in %s' % (filename, lineno, name))</font>
+<font color="red">  68.         linecache.checkcache(filename)</font>
+<font color="red">  69.         line = linecache.getline(filename, lineno, f.f_globals)</font>
+<font color="red">  70.         if line: _print(file, '    ' + line.strip())</font>
+<font color="red">  71.         tb = tb.tb_next</font>
+<font color="red">  72.         n = n+1</font>
+<font color="black">  73. </font>
+<font color="red">  74. def format_tb(tb, limit = None):</font>
+<font color="black">  75.     &quot;&quot;&quot;A shorthand for 'format_list(extract_tb(tb, limit))'.&quot;&quot;&quot;</font>
+<font color="green">  76.     return format_list(extract_tb(tb, limit))</font>
+<font color="black">  77. </font>
+<font color="red">  78. def extract_tb(tb, limit = None):</font>
+<font color="black">  79.     &quot;&quot;&quot;Return list of up to limit pre-processed entries from traceback.</font>
+<font color="black">  80. </font>
+<font color="black">  81.     This is useful for alternate formatting of stack traces.  If</font>
+<font color="black">  82.     'limit' is omitted or None, all entries are extracted.  A</font>
+<font color="black">  83.     pre-processed stack trace entry is a quadruple (filename, line</font>
+<font color="black">  84.     number, function name, text) representing the information that is</font>
+<font color="black">  85.     usually printed for a stack trace.  The text is a string with</font>
+<font color="black">  86.     leading and trailing whitespace stripped; if the source is not</font>
+<font color="black">  87.     available it is None.</font>
+<font color="black">  88.     &quot;&quot;&quot;</font>
+<font color="green">  89.     if limit is None:</font>
+<font color="red">  90.         if hasattr(sys, 'tracebacklimit'):</font>
+<font color="red">  91.             limit = sys.tracebacklimit</font>
+<font color="green">  92.     list = []</font>
+<font color="green">  93.     n = 0</font>
+<font color="green">  94.     while tb is not None and (limit is None or n &lt; limit):</font>
+<font color="green">  95.         f = tb.tb_frame</font>
+<font color="green">  96.         lineno = tb.tb_lineno</font>
+<font color="green">  97.         co = f.f_code</font>
+<font color="green">  98.         filename = co.co_filename</font>
+<font color="green">  99.         name = co.co_name</font>
+<font color="green"> 100.         linecache.checkcache(filename)</font>
+<font color="green"> 101.         line = linecache.getline(filename, lineno, f.f_globals)</font>
+<font color="green"> 102.         if line: line = line.strip()</font>
+<font color="red"> 103.         else: line = None</font>
+<font color="green"> 104.         list.append((filename, lineno, name, line))</font>
+<font color="green"> 105.         tb = tb.tb_next</font>
+<font color="green"> 106.         n = n+1</font>
+<font color="green"> 107.     return list</font>
+<font color="black"> 108. </font>
+<font color="black"> 109. </font>
+<font color="red"> 110. def print_exception(etype, value, tb, limit=None, file=None):</font>
+<font color="black"> 111.     &quot;&quot;&quot;Print exception up to 'limit' stack trace entries from 'tb' to 'file'.</font>
+<font color="black"> 112. </font>
+<font color="black"> 113.     This differs from print_tb() in the following ways: (1) if</font>
+<font color="black"> 114.     traceback is not None, it prints a header &quot;Traceback (most recent</font>
+<font color="black"> 115.     call last):&quot;; (2) it prints the exception type and value after the</font>
+<font color="black"> 116.     stack trace; (3) if type is SyntaxError and value has the</font>
+<font color="black"> 117.     appropriate format, it prints the line where the syntax error</font>
+<font color="black"> 118.     occurred with a caret on the next line indicating the approximate</font>
+<font color="black"> 119.     position of the error.</font>
+<font color="black"> 120.     &quot;&quot;&quot;</font>
+<font color="red"> 121.     if file is None:</font>
+<font color="red"> 122.         file = sys.stderr</font>
+<font color="red"> 123.     if tb:</font>
+<font color="red"> 124.         _print(file, 'Traceback (most recent call last):')</font>
+<font color="red"> 125.         print_tb(tb, limit, file)</font>
+<font color="red"> 126.     lines = format_exception_only(etype, value)</font>
+<font color="red"> 127.     for line in lines:</font>
+<font color="red"> 128.         _print(file, line, '')</font>
+<font color="black"> 129. </font>
+<font color="red"> 130. def format_exception(etype, value, tb, limit = None):</font>
+<font color="black"> 131.     &quot;&quot;&quot;Format a stack trace and the exception information.</font>
+<font color="black"> 132. </font>
+<font color="black"> 133.     The arguments have the same meaning as the corresponding arguments</font>
+<font color="black"> 134.     to print_exception().  The return value is a list of strings, each</font>
+<font color="black"> 135.     ending in a newline and some containing internal newlines.  When</font>
+<font color="black"> 136.     these lines are concatenated and printed, exactly the same text is</font>
+<font color="black"> 137.     printed as does print_exception().</font>
+<font color="black"> 138.     &quot;&quot;&quot;</font>
+<font color="green"> 139.     if tb:</font>
+<font color="green"> 140.         list = ['Traceback (most recent call last):\n']</font>
+<font color="green"> 141.         list = list + format_tb(tb, limit)</font>
+<font color="black"> 142.     else:</font>
+<font color="red"> 143.         list = []</font>
+<font color="green"> 144.     list = list + format_exception_only(etype, value)</font>
+<font color="green"> 145.     return list</font>
+<font color="black"> 146. </font>
+<font color="red"> 147. def format_exception_only(etype, value):</font>
+<font color="black"> 148.     &quot;&quot;&quot;Format the exception part of a traceback.</font>
+<font color="black"> 149. </font>
+<font color="black"> 150.     The arguments are the exception type and value such as given by</font>
+<font color="black"> 151.     sys.last_type and sys.last_value. The return value is a list of</font>
+<font color="black"> 152.     strings, each ending in a newline.</font>
+<font color="black"> 153. </font>
+<font color="black"> 154.     Normally, the list contains a single string; however, for</font>
+<font color="black"> 155.     SyntaxError exceptions, it contains several lines that (when</font>
+<font color="black"> 156.     printed) display detailed information about where the syntax</font>
+<font color="black"> 157.     error occurred.</font>
+<font color="black"> 158. </font>
+<font color="black"> 159.     The message indicating which exception occurred is always the last</font>
+<font color="black"> 160.     string in the list.</font>
+<font color="black"> 161. </font>
+<font color="black"> 162.     &quot;&quot;&quot;</font>
+<font color="black"> 163. </font>
+<font color="black"> 164.     # An instance should not have a meaningful value parameter, but</font>
+<font color="black"> 165.     # sometimes does, particularly for string exceptions, such as</font>
+<font color="black"> 166.     # &gt;&gt;&gt; raise string1, string2  # deprecated</font>
+<font color="black"> 167.     #</font>
+<font color="black"> 168.     # Clear these out first because issubtype(string1, SyntaxError)</font>
+<font color="black"> 169.     # would raise another exception and mask the original problem.</font>
+<font color="green"> 170.     if (isinstance(etype, BaseException) or</font>
+<font color="green"> 171.         isinstance(etype, types.InstanceType) or</font>
+<font color="green"> 172.         etype is None or type(etype) is str):</font>
+<font color="red"> 173.         return [_format_final_exc_line(etype, value)]</font>
+<font color="black"> 174. </font>
+<font color="green"> 175.     stype = etype.__name__</font>
+<font color="black"> 176. </font>
+<font color="green"> 177.     if not issubclass(etype, SyntaxError):</font>
+<font color="green"> 178.         return [_format_final_exc_line(stype, value)]</font>
+<font color="black"> 179. </font>
+<font color="black"> 180.     # It was a syntax error; show exactly where the problem was found.</font>
+<font color="red"> 181.     lines = []</font>
+<font color="red"> 182.     try:</font>
+<font color="red"> 183.         msg, (filename, lineno, offset, badline) = value.args</font>
+<font color="red"> 184.     except Exception:</font>
+<font color="red"> 185.         pass</font>
+<font color="black"> 186.     else:</font>
+<font color="red"> 187.         filename = filename or &quot;&lt;string&gt;&quot;</font>
+<font color="red"> 188.         lines.append('  File &quot;%s&quot;, line %d\n' % (filename, lineno))</font>
+<font color="red"> 189.         if badline is not None:</font>
+<font color="red"> 190.             lines.append('    %s\n' % badline.strip())</font>
+<font color="red"> 191.             if offset is not None:</font>
+<font color="red"> 192.                 caretspace = badline.rstrip('\n')</font>
+<font color="red"> 193.                 offset = min(len(caretspace), offset) - 1</font>
+<font color="red"> 194.                 caretspace = caretspace[:offset].lstrip()</font>
+<font color="black"> 195.                 # non-space whitespace (likes tabs) must be kept for alignment</font>
+<font color="red"> 196.                 caretspace = ((c.isspace() and c or ' ') for c in caretspace)</font>
+<font color="red"> 197.                 lines.append('    %s^\n' % ''.join(caretspace))</font>
+<font color="red"> 198.         value = msg</font>
+<font color="black"> 199. </font>
+<font color="red"> 200.     lines.append(_format_final_exc_line(stype, value))</font>
+<font color="red"> 201.     return lines</font>
+<font color="black"> 202. </font>
+<font color="red"> 203. def _format_final_exc_line(etype, value):</font>
+<font color="black"> 204.     &quot;&quot;&quot;Return a list of a single line -- normal case for format_exception_only&quot;&quot;&quot;</font>
+<font color="green"> 205.     valuestr = _some_str(value)</font>
+<font color="green"> 206.     if value is None or not valuestr:</font>
+<font color="red"> 207.         line = &quot;%s\n&quot; % etype</font>
+<font color="black"> 208.     else:</font>
+<font color="green"> 209.         line = &quot;%s: %s\n&quot; % (etype, valuestr)</font>
+<font color="green"> 210.     return line</font>
+<font color="black"> 211. </font>
+<font color="red"> 212. def _some_str(value):</font>
+<font color="green"> 213.     try:</font>
+<font color="green"> 214.         return str(value)</font>
+<font color="red"> 215.     except Exception:</font>
+<font color="red"> 216.         pass</font>
+<font color="red"> 217.     try:</font>
+<font color="red"> 218.         value = unicode(value)</font>
+<font color="red"> 219.         return value.encode(&quot;ascii&quot;, &quot;backslashreplace&quot;)</font>
+<font color="red"> 220.     except Exception:</font>
+<font color="red"> 221.         pass</font>
+<font color="red"> 222.     return '&lt;unprintable %s object&gt;' % type(value).__name__</font>
+<font color="black"> 223. </font>
+<font color="black"> 224. </font>
+<font color="red"> 225. def print_exc(limit=None, file=None):</font>
+<font color="black"> 226.     &quot;&quot;&quot;Shorthand for 'print_exception(sys.exc_type, sys.exc_value, sys.exc_traceback, limit, file)'.</font>
+<font color="black"> 227.     (In fact, it uses sys.exc_info() to retrieve the same information</font>
+<font color="black"> 228.     in a thread-safe way.)&quot;&quot;&quot;</font>
+<font color="red"> 229.     if file is None:</font>
+<font color="red"> 230.         file = sys.stderr</font>
+<font color="red"> 231.     try:</font>
+<font color="red"> 232.         etype, value, tb = sys.exc_info()</font>
+<font color="red"> 233.         print_exception(etype, value, tb, limit, file)</font>
+<font color="black"> 234.     finally:</font>
+<font color="red"> 235.         etype = value = tb = None</font>
+<font color="black"> 236. </font>
+<font color="black"> 237. </font>
+<font color="red"> 238. def format_exc(limit=None):</font>
+<font color="black"> 239.     &quot;&quot;&quot;Like print_exc() but return a string.&quot;&quot;&quot;</font>
+<font color="red"> 240.     try:</font>
+<font color="red"> 241.         etype, value, tb = sys.exc_info()</font>
+<font color="red"> 242.         return ''.join(format_exception(etype, value, tb, limit))</font>
+<font color="black"> 243.     finally:</font>
+<font color="red"> 244.         etype = value = tb = None</font>
+<font color="black"> 245. </font>
+<font color="black"> 246. </font>
+<font color="red"> 247. def print_last(limit=None, file=None):</font>
+<font color="black"> 248.     &quot;&quot;&quot;This is a shorthand for 'print_exception(sys.last_type,</font>
+<font color="black"> 249.     sys.last_value, sys.last_traceback, limit, file)'.&quot;&quot;&quot;</font>
+<font color="red"> 250.     if not hasattr(sys, &quot;last_type&quot;):</font>
+<font color="red"> 251.         raise ValueError(&quot;no last exception&quot;)</font>
+<font color="red"> 252.     if file is None:</font>
+<font color="red"> 253.         file = sys.stderr</font>
+<font color="red"> 254.     print_exception(sys.last_type, sys.last_value, sys.last_traceback,</font>
+<font color="red"> 255.                     limit, file)</font>
+<font color="black"> 256. </font>
+<font color="black"> 257. </font>
+<font color="red"> 258. def print_stack(f=None, limit=None, file=None):</font>
+<font color="black"> 259.     &quot;&quot;&quot;Print a stack trace from its invocation point.</font>
+<font color="black"> 260. </font>
+<font color="black"> 261.     The optional 'f' argument can be used to specify an alternate</font>
+<font color="black"> 262.     stack frame at which to start. The optional 'limit' and 'file'</font>
+<font color="black"> 263.     arguments have the same meaning as for print_exception().</font>
+<font color="black"> 264.     &quot;&quot;&quot;</font>
+<font color="red"> 265.     if f is None:</font>
+<font color="red"> 266.         try:</font>
+<font color="red"> 267.             raise ZeroDivisionError</font>
+<font color="red"> 268.         except ZeroDivisionError:</font>
+<font color="red"> 269.             f = sys.exc_info()[2].tb_frame.f_back</font>
+<font color="red"> 270.     print_list(extract_stack(f, limit), file)</font>
+<font color="black"> 271. </font>
+<font color="red"> 272. def format_stack(f=None, limit=None):</font>
+<font color="black"> 273.     &quot;&quot;&quot;Shorthand for 'format_list(extract_stack(f, limit))'.&quot;&quot;&quot;</font>
+<font color="red"> 274.     if f is None:</font>
+<font color="red"> 275.         try:</font>
+<font color="red"> 276.             raise ZeroDivisionError</font>
+<font color="red"> 277.         except ZeroDivisionError:</font>
+<font color="red"> 278.             f = sys.exc_info()[2].tb_frame.f_back</font>
+<font color="red"> 279.     return format_list(extract_stack(f, limit))</font>
+<font color="black"> 280. </font>
+<font color="red"> 281. def extract_stack(f=None, limit = None):</font>
+<font color="black"> 282.     &quot;&quot;&quot;Extract the raw traceback from the current stack frame.</font>
+<font color="black"> 283. </font>
+<font color="black"> 284.     The return value has the same format as for extract_tb().  The</font>
+<font color="black"> 285.     optional 'f' and 'limit' arguments have the same meaning as for</font>
+<font color="black"> 286.     print_stack().  Each item in the list is a quadruple (filename,</font>
+<font color="black"> 287.     line number, function name, text), and the entries are in order</font>
+<font color="black"> 288.     from oldest to newest stack frame.</font>
+<font color="black"> 289.     &quot;&quot;&quot;</font>
+<font color="red"> 290.     if f is None:</font>
+<font color="red"> 291.         try:</font>
+<font color="red"> 292.             raise ZeroDivisionError</font>
+<font color="red"> 293.         except ZeroDivisionError:</font>
+<font color="red"> 294.             f = sys.exc_info()[2].tb_frame.f_back</font>
+<font color="red"> 295.     if limit is None:</font>
+<font color="red"> 296.         if hasattr(sys, 'tracebacklimit'):</font>
+<font color="red"> 297.             limit = sys.tracebacklimit</font>
+<font color="red"> 298.     list = []</font>
+<font color="red"> 299.     n = 0</font>
+<font color="red"> 300.     while f is not None and (limit is None or n &lt; limit):</font>
+<font color="red"> 301.         lineno = f.f_lineno</font>
+<font color="red"> 302.         co = f.f_code</font>
+<font color="red"> 303.         filename = co.co_filename</font>
+<font color="red"> 304.         name = co.co_name</font>
+<font color="red"> 305.         linecache.checkcache(filename)</font>
+<font color="red"> 306.         line = linecache.getline(filename, lineno, f.f_globals)</font>
+<font color="red"> 307.         if line: line = line.strip()</font>
+<font color="red"> 308.         else: line = None</font>
+<font color="red"> 309.         list.append((filename, lineno, name, line))</font>
+<font color="red"> 310.         f = f.f_back</font>
+<font color="red"> 311.         n = n+1</font>
+<font color="red"> 312.     list.reverse()</font>
+<font color="red"> 313.     return list</font>
+<font color="black"> 314. </font>
+<font color="red"> 315. def tb_lineno(tb):</font>
+<font color="black"> 316.     &quot;&quot;&quot;Calculate correct line number of traceback given in tb.</font>
+<font color="black"> 317. </font>
+<font color="black"> 318.     Obsolete in 2.3.</font>
+<font color="black"> 319.     &quot;&quot;&quot;</font>
+<font color="red"> 320.     return tb.tb_lineno</font>
+</pre>
+

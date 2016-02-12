@@ -1,0 +1,200 @@
+source file: <b>/usr/lib/python2.7/unittest/result.py</b><br>
+
+
+file stats: <b>123 lines, 79 executed: 64.2% covered</b>
+<pre>
+<font color="green">   1. &quot;&quot;&quot;Test result object&quot;&quot;&quot;</font>
+<font color="black">   2. </font>
+<font color="green">   3. import os</font>
+<font color="green">   4. import sys</font>
+<font color="green">   5. import traceback</font>
+<font color="black">   6. </font>
+<font color="green">   7. from StringIO import StringIO</font>
+<font color="black">   8. </font>
+<font color="green">   9. from . import util</font>
+<font color="green">  10. from functools import wraps</font>
+<font color="black">  11. </font>
+<font color="green">  12. __unittest = True</font>
+<font color="black">  13. </font>
+<font color="green">  14. def failfast(method):</font>
+<font color="green">  15.     @wraps(method)</font>
+<font color="black">  16.     def inner(self, *args, **kw):</font>
+<font color="green">  17.         if getattr(self, 'failfast', False):</font>
+<font color="red">  18.             self.stop()</font>
+<font color="green">  19.         return method(self, *args, **kw)</font>
+<font color="green">  20.     return inner</font>
+<font color="black">  21. </font>
+<font color="green">  22. STDOUT_LINE = '\nStdout:\n%s'</font>
+<font color="green">  23. STDERR_LINE = '\nStderr:\n%s'</font>
+<font color="black">  24. </font>
+<font color="black">  25. </font>
+<font color="green">  26. class TestResult(object):</font>
+<font color="black">  27.     &quot;&quot;&quot;Holder for test result information.</font>
+<font color="black">  28. </font>
+<font color="black">  29.     Test results are automatically managed by the TestCase and TestSuite</font>
+<font color="black">  30.     classes, and do not need to be explicitly manipulated by writers of tests.</font>
+<font color="black">  31. </font>
+<font color="black">  32.     Each instance holds the total number of tests run, and collections of</font>
+<font color="black">  33.     failures and errors that occurred among those test runs. The collections</font>
+<font color="black">  34.     contain tuples of (testcase, exceptioninfo), where exceptioninfo is the</font>
+<font color="black">  35.     formatted traceback of the error that occurred.</font>
+<font color="green">  36.     &quot;&quot;&quot;</font>
+<font color="green">  37.     _previousTestClass = None</font>
+<font color="green">  38.     _testRunEntered = False</font>
+<font color="green">  39.     _moduleSetUpFailed = False</font>
+<font color="green">  40.     def __init__(self, stream=None, descriptions=None, verbosity=None):</font>
+<font color="green">  41.         self.failfast = False</font>
+<font color="green">  42.         self.failures = []</font>
+<font color="green">  43.         self.errors = []</font>
+<font color="green">  44.         self.testsRun = 0</font>
+<font color="green">  45.         self.skipped = []</font>
+<font color="green">  46.         self.expectedFailures = []</font>
+<font color="green">  47.         self.unexpectedSuccesses = []</font>
+<font color="green">  48.         self.shouldStop = False</font>
+<font color="green">  49.         self.buffer = False</font>
+<font color="green">  50.         self._stdout_buffer = None</font>
+<font color="green">  51.         self._stderr_buffer = None</font>
+<font color="green">  52.         self._original_stdout = sys.stdout</font>
+<font color="green">  53.         self._original_stderr = sys.stderr</font>
+<font color="green">  54.         self._mirrorOutput = False</font>
+<font color="black">  55. </font>
+<font color="green">  56.     def printErrors(self):</font>
+<font color="black">  57.         &quot;Called by TestRunner after test run&quot;</font>
+<font color="black">  58. </font>
+<font color="green">  59.     def startTest(self, test):</font>
+<font color="black">  60.         &quot;Called when the given test is about to be run&quot;</font>
+<font color="green">  61.         self.testsRun += 1</font>
+<font color="green">  62.         self._mirrorOutput = False</font>
+<font color="green">  63.         self._setupStdout()</font>
+<font color="black">  64. </font>
+<font color="green">  65.     def _setupStdout(self):</font>
+<font color="green">  66.         if self.buffer:</font>
+<font color="red">  67.             if self._stderr_buffer is None:</font>
+<font color="red">  68.                 self._stderr_buffer = StringIO()</font>
+<font color="red">  69.                 self._stdout_buffer = StringIO()</font>
+<font color="red">  70.             sys.stdout = self._stdout_buffer</font>
+<font color="red">  71.             sys.stderr = self._stderr_buffer</font>
+<font color="black">  72. </font>
+<font color="green">  73.     def startTestRun(self):</font>
+<font color="black">  74.         &quot;&quot;&quot;Called once before any tests are executed.</font>
+<font color="black">  75. </font>
+<font color="black">  76.         See startTest for a method called before each test.</font>
+<font color="black">  77.         &quot;&quot;&quot;</font>
+<font color="black">  78. </font>
+<font color="green">  79.     def stopTest(self, test):</font>
+<font color="black">  80.         &quot;&quot;&quot;Called when the given test has been run&quot;&quot;&quot;</font>
+<font color="green">  81.         self._restoreStdout()</font>
+<font color="green">  82.         self._mirrorOutput = False</font>
+<font color="black">  83. </font>
+<font color="green">  84.     def _restoreStdout(self):</font>
+<font color="green">  85.         if self.buffer:</font>
+<font color="red">  86.             if self._mirrorOutput:</font>
+<font color="red">  87.                 output = sys.stdout.getvalue()</font>
+<font color="red">  88.                 error = sys.stderr.getvalue()</font>
+<font color="red">  89.                 if output:</font>
+<font color="red">  90.                     if not output.endswith('\n'):</font>
+<font color="red">  91.                         output += '\n'</font>
+<font color="red">  92.                     self._original_stdout.write(STDOUT_LINE % output)</font>
+<font color="red">  93.                 if error:</font>
+<font color="red">  94.                     if not error.endswith('\n'):</font>
+<font color="red">  95.                         error += '\n'</font>
+<font color="red">  96.                     self._original_stderr.write(STDERR_LINE % error)</font>
+<font color="black">  97. </font>
+<font color="red">  98.             sys.stdout = self._original_stdout</font>
+<font color="red">  99.             sys.stderr = self._original_stderr</font>
+<font color="red"> 100.             self._stdout_buffer.seek(0)</font>
+<font color="red"> 101.             self._stdout_buffer.truncate()</font>
+<font color="red"> 102.             self._stderr_buffer.seek(0)</font>
+<font color="red"> 103.             self._stderr_buffer.truncate()</font>
+<font color="black"> 104. </font>
+<font color="green"> 105.     def stopTestRun(self):</font>
+<font color="black"> 106.         &quot;&quot;&quot;Called once after all tests are executed.</font>
+<font color="black"> 107. </font>
+<font color="black"> 108.         See stopTest for a method called after each test.</font>
+<font color="black"> 109.         &quot;&quot;&quot;</font>
+<font color="black"> 110. </font>
+<font color="green"> 111.     @failfast</font>
+<font color="black"> 112.     def addError(self, test, err):</font>
+<font color="black"> 113.         &quot;&quot;&quot;Called when an error has occurred. 'err' is a tuple of values as</font>
+<font color="black"> 114.         returned by sys.exc_info().</font>
+<font color="black"> 115.         &quot;&quot;&quot;</font>
+<font color="red"> 116.         self.errors.append((test, self._exc_info_to_string(err, test)))</font>
+<font color="red"> 117.         self._mirrorOutput = True</font>
+<font color="black"> 118. </font>
+<font color="green"> 119.     @failfast</font>
+<font color="black"> 120.     def addFailure(self, test, err):</font>
+<font color="black"> 121.         &quot;&quot;&quot;Called when an error has occurred. 'err' is a tuple of values as</font>
+<font color="black"> 122.         returned by sys.exc_info().&quot;&quot;&quot;</font>
+<font color="green"> 123.         self.failures.append((test, self._exc_info_to_string(err, test)))</font>
+<font color="green"> 124.         self._mirrorOutput = True</font>
+<font color="black"> 125. </font>
+<font color="green"> 126.     def addSuccess(self, test):</font>
+<font color="black"> 127.         &quot;Called when a test has completed successfully&quot;</font>
+<font color="green"> 128.         pass</font>
+<font color="black"> 129. </font>
+<font color="green"> 130.     def addSkip(self, test, reason):</font>
+<font color="black"> 131.         &quot;&quot;&quot;Called when a test is skipped.&quot;&quot;&quot;</font>
+<font color="red"> 132.         self.skipped.append((test, reason))</font>
+<font color="black"> 133. </font>
+<font color="green"> 134.     def addExpectedFailure(self, test, err):</font>
+<font color="black"> 135.         &quot;&quot;&quot;Called when an expected failure/error occured.&quot;&quot;&quot;</font>
+<font color="red"> 136.         self.expectedFailures.append(</font>
+<font color="red"> 137.             (test, self._exc_info_to_string(err, test)))</font>
+<font color="black"> 138. </font>
+<font color="green"> 139.     @failfast</font>
+<font color="black"> 140.     def addUnexpectedSuccess(self, test):</font>
+<font color="black"> 141.         &quot;&quot;&quot;Called when a test was expected to fail, but succeed.&quot;&quot;&quot;</font>
+<font color="red"> 142.         self.unexpectedSuccesses.append(test)</font>
+<font color="black"> 143. </font>
+<font color="green"> 144.     def wasSuccessful(self):</font>
+<font color="black"> 145.         &quot;Tells whether or not this result was a success&quot;</font>
+<font color="green"> 146.         return len(self.failures) == len(self.errors) == 0</font>
+<font color="black"> 147. </font>
+<font color="green"> 148.     def stop(self):</font>
+<font color="black"> 149.         &quot;Indicates that the tests should be aborted&quot;</font>
+<font color="red"> 150.         self.shouldStop = True</font>
+<font color="black"> 151. </font>
+<font color="green"> 152.     def _exc_info_to_string(self, err, test):</font>
+<font color="black"> 153.         &quot;&quot;&quot;Converts a sys.exc_info()-style tuple of values into a string.&quot;&quot;&quot;</font>
+<font color="green"> 154.         exctype, value, tb = err</font>
+<font color="black"> 155.         # Skip test runner traceback levels</font>
+<font color="green"> 156.         while tb and self._is_relevant_tb_level(tb):</font>
+<font color="green"> 157.             tb = tb.tb_next</font>
+<font color="black"> 158. </font>
+<font color="green"> 159.         if exctype is test.failureException:</font>
+<font color="black"> 160.             # Skip assert*() traceback levels</font>
+<font color="green"> 161.             length = self._count_relevant_tb_levels(tb)</font>
+<font color="green"> 162.             msgLines = traceback.format_exception(exctype, value, tb, length)</font>
+<font color="black"> 163.         else:</font>
+<font color="red"> 164.             msgLines = traceback.format_exception(exctype, value, tb)</font>
+<font color="black"> 165. </font>
+<font color="green"> 166.         if self.buffer:</font>
+<font color="red"> 167.             output = sys.stdout.getvalue()</font>
+<font color="red"> 168.             error = sys.stderr.getvalue()</font>
+<font color="red"> 169.             if output:</font>
+<font color="red"> 170.                 if not output.endswith('\n'):</font>
+<font color="red"> 171.                     output += '\n'</font>
+<font color="red"> 172.                 msgLines.append(STDOUT_LINE % output)</font>
+<font color="red"> 173.             if error:</font>
+<font color="red"> 174.                 if not error.endswith('\n'):</font>
+<font color="red"> 175.                     error += '\n'</font>
+<font color="red"> 176.                 msgLines.append(STDERR_LINE % error)</font>
+<font color="green"> 177.         return ''.join(msgLines)</font>
+<font color="black"> 178. </font>
+<font color="black"> 179. </font>
+<font color="green"> 180.     def _is_relevant_tb_level(self, tb):</font>
+<font color="green"> 181.         return '__unittest' in tb.tb_frame.f_globals</font>
+<font color="black"> 182. </font>
+<font color="green"> 183.     def _count_relevant_tb_levels(self, tb):</font>
+<font color="green"> 184.         length = 0</font>
+<font color="green"> 185.         while tb and not self._is_relevant_tb_level(tb):</font>
+<font color="green"> 186.             length += 1</font>
+<font color="green"> 187.             tb = tb.tb_next</font>
+<font color="green"> 188.         return length</font>
+<font color="black"> 189. </font>
+<font color="green"> 190.     def __repr__(self):</font>
+<font color="red"> 191.         return (&quot;&lt;%s run=%i errors=%i failures=%i&gt;&quot; %</font>
+<font color="red"> 192.                (util.strclass(self.__class__), self.testsRun, len(self.errors),</font>
+<font color="red"> 193.                 len(self.failures)))</font>
+</pre>
+

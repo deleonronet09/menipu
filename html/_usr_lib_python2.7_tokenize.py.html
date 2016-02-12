@@ -1,0 +1,439 @@
+source file: <b>/usr/lib/python2.7/tokenize.py</b><br>
+
+
+file stats: <b>291 lines, 98 executed: 33.7% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Tokenization help for Python programs.</font>
+<font color="black">   2. </font>
+<font color="black">   3. generate_tokens(readline) is a generator that breaks a stream of</font>
+<font color="black">   4. text into Python tokens.  It accepts a readline-like method which is called</font>
+<font color="black">   5. repeatedly to get the next line of input (or &quot;&quot; for EOF).  It generates</font>
+<font color="black">   6. 5-tuples with these members:</font>
+<font color="black">   7. </font>
+<font color="black">   8.     the token type (see token.py)</font>
+<font color="black">   9.     the token (a string)</font>
+<font color="black">  10.     the starting (row, column) indices of the token (a 2-tuple of ints)</font>
+<font color="black">  11.     the ending (row, column) indices of the token (a 2-tuple of ints)</font>
+<font color="black">  12.     the original line (string)</font>
+<font color="black">  13. </font>
+<font color="black">  14. It is designed to match the working of the Python tokenizer exactly, except</font>
+<font color="black">  15. that it produces COMMENT tokens for comments and gives type OP for all</font>
+<font color="black">  16. operators</font>
+<font color="black">  17. </font>
+<font color="black">  18. Older entry points</font>
+<font color="black">  19.     tokenize_loop(readline, tokeneater)</font>
+<font color="black">  20.     tokenize(readline, tokeneater=printtoken)</font>
+<font color="black">  21. are the same, except instead of generating tokens, tokeneater is a callback</font>
+<font color="black">  22. function to which the 5 fields described above are passed as 5 arguments,</font>
+<font color="green">  23. each time a new token is found.&quot;&quot;&quot;</font>
+<font color="black">  24. </font>
+<font color="green">  25. __author__ = 'Ka-Ping Yee &lt;ping@lfw.org&gt;'</font>
+<font color="green">  26. __credits__ = ('GvR, ESR, Tim Peters, Thomas Wouters, Fred Drake, '</font>
+<font color="black">  27.                'Skip Montanaro, Raymond Hettinger')</font>
+<font color="black">  28. </font>
+<font color="green">  29. from itertools import chain</font>
+<font color="green">  30. import string, re</font>
+<font color="green">  31. from token import *</font>
+<font color="black">  32. </font>
+<font color="green">  33. import token</font>
+<font color="green">  34. __all__ = [x for x in dir(token) if not x.startswith(&quot;_&quot;)]</font>
+<font color="green">  35. __all__ += [&quot;COMMENT&quot;, &quot;tokenize&quot;, &quot;generate_tokens&quot;, &quot;NL&quot;, &quot;untokenize&quot;]</font>
+<font color="green">  36. del x</font>
+<font color="green">  37. del token</font>
+<font color="black">  38. </font>
+<font color="green">  39. COMMENT = N_TOKENS</font>
+<font color="green">  40. tok_name[COMMENT] = 'COMMENT'</font>
+<font color="green">  41. NL = N_TOKENS + 1</font>
+<font color="green">  42. tok_name[NL] = 'NL'</font>
+<font color="green">  43. N_TOKENS += 2</font>
+<font color="black">  44. </font>
+<font color="green">  45. def group(*choices): return '(' + '|'.join(choices) + ')'</font>
+<font color="green">  46. def any(*choices): return group(*choices) + '*'</font>
+<font color="green">  47. def maybe(*choices): return group(*choices) + '?'</font>
+<font color="black">  48. </font>
+<font color="green">  49. Whitespace = r'[ \f\t]*'</font>
+<font color="green">  50. Comment = r'#[^\r\n]*'</font>
+<font color="green">  51. Ignore = Whitespace + any(r'\\\r?\n' + Whitespace) + maybe(Comment)</font>
+<font color="green">  52. Name = r'[a-zA-Z_]\w*'</font>
+<font color="black">  53. </font>
+<font color="green">  54. Hexnumber = r'0[xX][\da-fA-F]+[lL]?'</font>
+<font color="green">  55. Octnumber = r'(0[oO][0-7]+)|(0[0-7]*)[lL]?'</font>
+<font color="green">  56. Binnumber = r'0[bB][01]+[lL]?'</font>
+<font color="green">  57. Decnumber = r'[1-9]\d*[lL]?'</font>
+<font color="green">  58. Intnumber = group(Hexnumber, Binnumber, Octnumber, Decnumber)</font>
+<font color="green">  59. Exponent = r'[eE][-+]?\d+'</font>
+<font color="green">  60. Pointfloat = group(r'\d+\.\d*', r'\.\d+') + maybe(Exponent)</font>
+<font color="green">  61. Expfloat = r'\d+' + Exponent</font>
+<font color="green">  62. Floatnumber = group(Pointfloat, Expfloat)</font>
+<font color="green">  63. Imagnumber = group(r'\d+[jJ]', Floatnumber + r'[jJ]')</font>
+<font color="green">  64. Number = group(Imagnumber, Floatnumber, Intnumber)</font>
+<font color="black">  65. </font>
+<font color="black">  66. # Tail end of ' string.</font>
+<font color="green">  67. Single = r&quot;[^'\\]*(?:\\.[^'\\]*)*'&quot;</font>
+<font color="black">  68. # Tail end of &quot; string.</font>
+<font color="green">  69. Double = r'[^&quot;\\]*(?:\\.[^&quot;\\]*)*&quot;'</font>
+<font color="black">  70. # Tail end of ''' string.</font>
+<font color="green">  71. Single3 = r&quot;[^'\\]*(?:(?:\\.|'(?!''))[^'\\]*)*'''&quot;</font>
+<font color="black">  72. # Tail end of &quot;&quot;&quot; string.</font>
+<font color="green">  73. Double3 = r'[^&quot;\\]*(?:(?:\\.|&quot;(?!&quot;&quot;))[^&quot;\\]*)*&quot;&quot;&quot;'</font>
+<font color="green">  74. Triple = group(&quot;[uUbB]?[rR]?'''&quot;, '[uUbB]?[rR]?&quot;&quot;&quot;')</font>
+<font color="black">  75. # Single-line ' or &quot; string.</font>
+<font color="green">  76. String = group(r&quot;[uUbB]?[rR]?'[^\n'\\]*(?:\\.[^\n'\\]*)*'&quot;,</font>
+<font color="green">  77.                r'[uUbB]?[rR]?&quot;[^\n&quot;\\]*(?:\\.[^\n&quot;\\]*)*&quot;')</font>
+<font color="black">  78. </font>
+<font color="black">  79. # Because of leftmost-then-longest match semantics, be sure to put the</font>
+<font color="black">  80. # longest operators first (e.g., if = came before ==, == would get</font>
+<font color="black">  81. # recognized as two instances of =).</font>
+<font color="green">  82. Operator = group(r&quot;\*\*=?&quot;, r&quot;&gt;&gt;=?&quot;, r&quot;&lt;&lt;=?&quot;, r&quot;&lt;&gt;&quot;, r&quot;!=&quot;,</font>
+<font color="green">  83.                  r&quot;//=?&quot;,</font>
+<font color="green">  84.                  r&quot;[+\-*/%&amp;|^=&lt;&gt;]=?&quot;,</font>
+<font color="green">  85.                  r&quot;~&quot;)</font>
+<font color="black">  86. </font>
+<font color="green">  87. Bracket = '[][(){}]'</font>
+<font color="green">  88. Special = group(r'\r?\n', r'[:;.,`@]')</font>
+<font color="green">  89. Funny = group(Operator, Bracket, Special)</font>
+<font color="black">  90. </font>
+<font color="green">  91. PlainToken = group(Number, Funny, String, Name)</font>
+<font color="green">  92. Token = Ignore + PlainToken</font>
+<font color="black">  93. </font>
+<font color="black">  94. # First (or only) line of ' or &quot; string.</font>
+<font color="green">  95. ContStr = group(r&quot;[uUbB]?[rR]?'[^\n'\\]*(?:\\.[^\n'\\]*)*&quot; +</font>
+<font color="green">  96.                 group(&quot;'&quot;, r'\\\r?\n'),</font>
+<font color="green">  97.                 r'[uUbB]?[rR]?&quot;[^\n&quot;\\]*(?:\\.[^\n&quot;\\]*)*' +</font>
+<font color="green">  98.                 group('&quot;', r'\\\r?\n'))</font>
+<font color="green">  99. PseudoExtras = group(r'\\\r?\n|\Z', Comment, Triple)</font>
+<font color="green"> 100. PseudoToken = Whitespace + group(PseudoExtras, Number, Funny, ContStr, Name)</font>
+<font color="black"> 101. </font>
+<font color="green"> 102. tokenprog, pseudoprog, single3prog, double3prog = map(</font>
+<font color="green"> 103.     re.compile, (Token, PseudoToken, Single3, Double3))</font>
+<font color="green"> 104. endprogs = {&quot;'&quot;: re.compile(Single), '&quot;': re.compile(Double),</font>
+<font color="green"> 105.             &quot;'''&quot;: single3prog, '&quot;&quot;&quot;': double3prog,</font>
+<font color="green"> 106.             &quot;r'''&quot;: single3prog, 'r&quot;&quot;&quot;': double3prog,</font>
+<font color="green"> 107.             &quot;u'''&quot;: single3prog, 'u&quot;&quot;&quot;': double3prog,</font>
+<font color="green"> 108.             &quot;ur'''&quot;: single3prog, 'ur&quot;&quot;&quot;': double3prog,</font>
+<font color="green"> 109.             &quot;R'''&quot;: single3prog, 'R&quot;&quot;&quot;': double3prog,</font>
+<font color="green"> 110.             &quot;U'''&quot;: single3prog, 'U&quot;&quot;&quot;': double3prog,</font>
+<font color="green"> 111.             &quot;uR'''&quot;: single3prog, 'uR&quot;&quot;&quot;': double3prog,</font>
+<font color="green"> 112.             &quot;Ur'''&quot;: single3prog, 'Ur&quot;&quot;&quot;': double3prog,</font>
+<font color="green"> 113.             &quot;UR'''&quot;: single3prog, 'UR&quot;&quot;&quot;': double3prog,</font>
+<font color="green"> 114.             &quot;b'''&quot;: single3prog, 'b&quot;&quot;&quot;': double3prog,</font>
+<font color="green"> 115.             &quot;br'''&quot;: single3prog, 'br&quot;&quot;&quot;': double3prog,</font>
+<font color="green"> 116.             &quot;B'''&quot;: single3prog, 'B&quot;&quot;&quot;': double3prog,</font>
+<font color="green"> 117.             &quot;bR'''&quot;: single3prog, 'bR&quot;&quot;&quot;': double3prog,</font>
+<font color="green"> 118.             &quot;Br'''&quot;: single3prog, 'Br&quot;&quot;&quot;': double3prog,</font>
+<font color="green"> 119.             &quot;BR'''&quot;: single3prog, 'BR&quot;&quot;&quot;': double3prog,</font>
+<font color="green"> 120.             'r': None, 'R': None, 'u': None, 'U': None,</font>
+<font color="green"> 121.             'b': None, 'B': None}</font>
+<font color="black"> 122. </font>
+<font color="green"> 123. triple_quoted = {}</font>
+<font color="green"> 124. for t in (&quot;'''&quot;, '&quot;&quot;&quot;',</font>
+<font color="black"> 125.           &quot;r'''&quot;, 'r&quot;&quot;&quot;', &quot;R'''&quot;, 'R&quot;&quot;&quot;',</font>
+<font color="black"> 126.           &quot;u'''&quot;, 'u&quot;&quot;&quot;', &quot;U'''&quot;, 'U&quot;&quot;&quot;',</font>
+<font color="black"> 127.           &quot;ur'''&quot;, 'ur&quot;&quot;&quot;', &quot;Ur'''&quot;, 'Ur&quot;&quot;&quot;',</font>
+<font color="black"> 128.           &quot;uR'''&quot;, 'uR&quot;&quot;&quot;', &quot;UR'''&quot;, 'UR&quot;&quot;&quot;',</font>
+<font color="black"> 129.           &quot;b'''&quot;, 'b&quot;&quot;&quot;', &quot;B'''&quot;, 'B&quot;&quot;&quot;',</font>
+<font color="black"> 130.           &quot;br'''&quot;, 'br&quot;&quot;&quot;', &quot;Br'''&quot;, 'Br&quot;&quot;&quot;',</font>
+<font color="green"> 131.           &quot;bR'''&quot;, 'bR&quot;&quot;&quot;', &quot;BR'''&quot;, 'BR&quot;&quot;&quot;'):</font>
+<font color="green"> 132.     triple_quoted[t] = t</font>
+<font color="green"> 133. single_quoted = {}</font>
+<font color="green"> 134. for t in (&quot;'&quot;, '&quot;',</font>
+<font color="black"> 135.           &quot;r'&quot;, 'r&quot;', &quot;R'&quot;, 'R&quot;',</font>
+<font color="black"> 136.           &quot;u'&quot;, 'u&quot;', &quot;U'&quot;, 'U&quot;',</font>
+<font color="black"> 137.           &quot;ur'&quot;, 'ur&quot;', &quot;Ur'&quot;, 'Ur&quot;',</font>
+<font color="black"> 138.           &quot;uR'&quot;, 'uR&quot;', &quot;UR'&quot;, 'UR&quot;',</font>
+<font color="black"> 139.           &quot;b'&quot;, 'b&quot;', &quot;B'&quot;, 'B&quot;',</font>
+<font color="black"> 140.           &quot;br'&quot;, 'br&quot;', &quot;Br'&quot;, 'Br&quot;',</font>
+<font color="green"> 141.           &quot;bR'&quot;, 'bR&quot;', &quot;BR'&quot;, 'BR&quot;' ):</font>
+<font color="green"> 142.     single_quoted[t] = t</font>
+<font color="black"> 143. </font>
+<font color="green"> 144. tabsize = 8</font>
+<font color="black"> 145. </font>
+<font color="green"> 146. class TokenError(Exception): pass</font>
+<font color="black"> 147. </font>
+<font color="green"> 148. class StopTokenizing(Exception): pass</font>
+<font color="black"> 149. </font>
+<font color="green"> 150. def printtoken(type, token, srow_scol, erow_ecol, line): # for testing</font>
+<font color="red"> 151.     srow, scol = srow_scol</font>
+<font color="red"> 152.     erow, ecol = erow_ecol</font>
+<font color="red"> 153.     print &quot;%d,%d-%d,%d:\t%s\t%s&quot; % \</font>
+<font color="red"> 154.         (srow, scol, erow, ecol, tok_name[type], repr(token))</font>
+<font color="black"> 155. </font>
+<font color="green"> 156. def tokenize(readline, tokeneater=printtoken):</font>
+<font color="black"> 157.     &quot;&quot;&quot;</font>
+<font color="black"> 158.     The tokenize() function accepts two parameters: one representing the</font>
+<font color="black"> 159.     input stream, and one providing an output mechanism for tokenize().</font>
+<font color="black"> 160. </font>
+<font color="black"> 161.     The first parameter, readline, must be a callable object which provides</font>
+<font color="black"> 162.     the same interface as the readline() method of built-in file objects.</font>
+<font color="black"> 163.     Each call to the function should return one line of input as a string.</font>
+<font color="black"> 164. </font>
+<font color="black"> 165.     The second parameter, tokeneater, must also be a callable object. It is</font>
+<font color="black"> 166.     called once for each token, with five arguments, corresponding to the</font>
+<font color="black"> 167.     tuples generated by generate_tokens().</font>
+<font color="black"> 168.     &quot;&quot;&quot;</font>
+<font color="red"> 169.     try:</font>
+<font color="red"> 170.         tokenize_loop(readline, tokeneater)</font>
+<font color="red"> 171.     except StopTokenizing:</font>
+<font color="red"> 172.         pass</font>
+<font color="black"> 173. </font>
+<font color="black"> 174. # backwards compatible interface</font>
+<font color="green"> 175. def tokenize_loop(readline, tokeneater):</font>
+<font color="red"> 176.     for token_info in generate_tokens(readline):</font>
+<font color="red"> 177.         tokeneater(*token_info)</font>
+<font color="black"> 178. </font>
+<font color="green"> 179. class Untokenizer:</font>
+<font color="black"> 180. </font>
+<font color="green"> 181.     def __init__(self):</font>
+<font color="red"> 182.         self.tokens = []</font>
+<font color="red"> 183.         self.prev_row = 1</font>
+<font color="red"> 184.         self.prev_col = 0</font>
+<font color="black"> 185. </font>
+<font color="green"> 186.     def add_whitespace(self, start):</font>
+<font color="red"> 187.         row, col = start</font>
+<font color="red"> 188.         if row &lt; self.prev_row or row == self.prev_row and col &lt; self.prev_col:</font>
+<font color="red"> 189.             raise ValueError(&quot;start ({},{}) precedes previous end ({},{})&quot;</font>
+<font color="red"> 190.                              .format(row, col, self.prev_row, self.prev_col))</font>
+<font color="red"> 191.         row_offset = row - self.prev_row</font>
+<font color="red"> 192.         if row_offset:</font>
+<font color="red"> 193.             self.tokens.append(&quot;\\\n&quot; * row_offset)</font>
+<font color="red"> 194.             self.prev_col = 0</font>
+<font color="red"> 195.         col_offset = col - self.prev_col</font>
+<font color="red"> 196.         if col_offset:</font>
+<font color="red"> 197.             self.tokens.append(&quot; &quot; * col_offset)</font>
+<font color="black"> 198. </font>
+<font color="green"> 199.     def untokenize(self, iterable):</font>
+<font color="red"> 200.         it = iter(iterable)</font>
+<font color="red"> 201.         for t in it:</font>
+<font color="red"> 202.             if len(t) == 2:</font>
+<font color="red"> 203.                 self.compat(t, it)</font>
+<font color="red"> 204.                 break</font>
+<font color="red"> 205.             tok_type, token, start, end, line = t</font>
+<font color="red"> 206.             if tok_type == ENDMARKER:</font>
+<font color="red"> 207.                 break</font>
+<font color="red"> 208.             self.add_whitespace(start)</font>
+<font color="red"> 209.             self.tokens.append(token)</font>
+<font color="red"> 210.             self.prev_row, self.prev_col = end</font>
+<font color="red"> 211.             if tok_type in (NEWLINE, NL):</font>
+<font color="red"> 212.                 self.prev_row += 1</font>
+<font color="red"> 213.                 self.prev_col = 0</font>
+<font color="red"> 214.         return &quot;&quot;.join(self.tokens)</font>
+<font color="black"> 215. </font>
+<font color="green"> 216.     def compat(self, token, iterable):</font>
+<font color="red"> 217.         indents = []</font>
+<font color="red"> 218.         toks_append = self.tokens.append</font>
+<font color="red"> 219.         startline = token[0] in (NEWLINE, NL)</font>
+<font color="red"> 220.         prevstring = False</font>
+<font color="black"> 221. </font>
+<font color="red"> 222.         for tok in chain([token], iterable):</font>
+<font color="red"> 223.             toknum, tokval = tok[:2]</font>
+<font color="black"> 224. </font>
+<font color="red"> 225.             if toknum in (NAME, NUMBER):</font>
+<font color="red"> 226.                 tokval += ' '</font>
+<font color="black"> 227. </font>
+<font color="black"> 228.             # Insert a space between two consecutive strings</font>
+<font color="red"> 229.             if toknum == STRING:</font>
+<font color="red"> 230.                 if prevstring:</font>
+<font color="red"> 231.                     tokval = ' ' + tokval</font>
+<font color="red"> 232.                 prevstring = True</font>
+<font color="black"> 233.             else:</font>
+<font color="red"> 234.                 prevstring = False</font>
+<font color="black"> 235. </font>
+<font color="red"> 236.             if toknum == INDENT:</font>
+<font color="red"> 237.                 indents.append(tokval)</font>
+<font color="red"> 238.                 continue</font>
+<font color="red"> 239.             elif toknum == DEDENT:</font>
+<font color="red"> 240.                 indents.pop()</font>
+<font color="red"> 241.                 continue</font>
+<font color="red"> 242.             elif toknum in (NEWLINE, NL):</font>
+<font color="red"> 243.                 startline = True</font>
+<font color="red"> 244.             elif startline and indents:</font>
+<font color="red"> 245.                 toks_append(indents[-1])</font>
+<font color="red"> 246.                 startline = False</font>
+<font color="red"> 247.             toks_append(tokval)</font>
+<font color="black"> 248. </font>
+<font color="green"> 249. def untokenize(iterable):</font>
+<font color="black"> 250.     &quot;&quot;&quot;Transform tokens back into Python source code.</font>
+<font color="black"> 251. </font>
+<font color="black"> 252.     Each element returned by the iterable must be a token sequence</font>
+<font color="black"> 253.     with at least two elements, a token number and token value.  If</font>
+<font color="black"> 254.     only two tokens are passed, the resulting output is poor.</font>
+<font color="black"> 255. </font>
+<font color="black"> 256.     Round-trip invariant for full input:</font>
+<font color="black"> 257.         Untokenized source will match input source exactly</font>
+<font color="black"> 258. </font>
+<font color="black"> 259.     Round-trip invariant for limited intput:</font>
+<font color="black"> 260.         # Output text will tokenize the back to the input</font>
+<font color="black"> 261.         t1 = [tok[:2] for tok in generate_tokens(f.readline)]</font>
+<font color="black"> 262.         newcode = untokenize(t1)</font>
+<font color="black"> 263.         readline = iter(newcode.splitlines(1)).next</font>
+<font color="black"> 264.         t2 = [tok[:2] for tok in generate_tokens(readline)]</font>
+<font color="black"> 265.         assert t1 == t2</font>
+<font color="black"> 266.     &quot;&quot;&quot;</font>
+<font color="red"> 267.     ut = Untokenizer()</font>
+<font color="red"> 268.     return ut.untokenize(iterable)</font>
+<font color="black"> 269. </font>
+<font color="green"> 270. def generate_tokens(readline):</font>
+<font color="black"> 271.     &quot;&quot;&quot;</font>
+<font color="black"> 272.     The generate_tokens() generator requires one argument, readline, which</font>
+<font color="black"> 273.     must be a callable object which provides the same interface as the</font>
+<font color="black"> 274.     readline() method of built-in file objects. Each call to the function</font>
+<font color="black"> 275.     should return one line of input as a string.  Alternately, readline</font>
+<font color="black"> 276.     can be a callable function terminating with StopIteration:</font>
+<font color="black"> 277.         readline = open(myfile).next    # Example of alternate readline</font>
+<font color="black"> 278. </font>
+<font color="black"> 279.     The generator produces 5-tuples with these members: the token type; the</font>
+<font color="black"> 280.     token string; a 2-tuple (srow, scol) of ints specifying the row and</font>
+<font color="black"> 281.     column where the token begins in the source; a 2-tuple (erow, ecol) of</font>
+<font color="black"> 282.     ints specifying the row and column where the token ends in the source;</font>
+<font color="black"> 283.     and the line on which the token was found. The line passed is the</font>
+<font color="black"> 284.     logical line; continuation lines are included.</font>
+<font color="black"> 285.     &quot;&quot;&quot;</font>
+<font color="red"> 286.     lnum = parenlev = continued = 0</font>
+<font color="red"> 287.     namechars, numchars = string.ascii_letters + '_', '0123456789'</font>
+<font color="red"> 288.     contstr, needcont = '', 0</font>
+<font color="red"> 289.     contline = None</font>
+<font color="red"> 290.     indents = [0]</font>
+<font color="black"> 291. </font>
+<font color="red"> 292.     while 1:                                   # loop over lines in stream</font>
+<font color="red"> 293.         try:</font>
+<font color="red"> 294.             line = readline()</font>
+<font color="red"> 295.         except StopIteration:</font>
+<font color="red"> 296.             line = ''</font>
+<font color="red"> 297.         lnum += 1</font>
+<font color="red"> 298.         pos, max = 0, len(line)</font>
+<font color="black"> 299. </font>
+<font color="red"> 300.         if contstr:                            # continued string</font>
+<font color="red"> 301.             if not line:</font>
+<font color="red"> 302.                 raise TokenError, (&quot;EOF in multi-line string&quot;, strstart)</font>
+<font color="red"> 303.             endmatch = endprog.match(line)</font>
+<font color="red"> 304.             if endmatch:</font>
+<font color="red"> 305.                 pos = end = endmatch.end(0)</font>
+<font color="red"> 306.                 yield (STRING, contstr + line[:end],</font>
+<font color="red"> 307.                        strstart, (lnum, end), contline + line)</font>
+<font color="red"> 308.                 contstr, needcont = '', 0</font>
+<font color="red"> 309.                 contline = None</font>
+<font color="red"> 310.             elif needcont and line[-2:] != '\\\n' and line[-3:] != '\\\r\n':</font>
+<font color="red"> 311.                 yield (ERRORTOKEN, contstr + line,</font>
+<font color="red"> 312.                            strstart, (lnum, len(line)), contline)</font>
+<font color="red"> 313.                 contstr = ''</font>
+<font color="red"> 314.                 contline = None</font>
+<font color="red"> 315.                 continue</font>
+<font color="black"> 316.             else:</font>
+<font color="red"> 317.                 contstr = contstr + line</font>
+<font color="red"> 318.                 contline = contline + line</font>
+<font color="red"> 319.                 continue</font>
+<font color="black"> 320. </font>
+<font color="red"> 321.         elif parenlev == 0 and not continued:  # new statement</font>
+<font color="red"> 322.             if not line: break</font>
+<font color="red"> 323.             column = 0</font>
+<font color="red"> 324.             while pos &lt; max:                   # measure leading whitespace</font>
+<font color="red"> 325.                 if line[pos] == ' ':</font>
+<font color="red"> 326.                     column += 1</font>
+<font color="red"> 327.                 elif line[pos] == '\t':</font>
+<font color="red"> 328.                     column = (column//tabsize + 1)*tabsize</font>
+<font color="red"> 329.                 elif line[pos] == '\f':</font>
+<font color="red"> 330.                     column = 0</font>
+<font color="black"> 331.                 else:</font>
+<font color="red"> 332.                     break</font>
+<font color="red"> 333.                 pos += 1</font>
+<font color="red"> 334.             if pos == max:</font>
+<font color="red"> 335.                 break</font>
+<font color="black"> 336. </font>
+<font color="red"> 337.             if line[pos] in '#\r\n':           # skip comments or blank lines</font>
+<font color="red"> 338.                 if line[pos] == '#':</font>
+<font color="red"> 339.                     comment_token = line[pos:].rstrip('\r\n')</font>
+<font color="red"> 340.                     nl_pos = pos + len(comment_token)</font>
+<font color="red"> 341.                     yield (COMMENT, comment_token,</font>
+<font color="red"> 342.                            (lnum, pos), (lnum, pos + len(comment_token)), line)</font>
+<font color="red"> 343.                     yield (NL, line[nl_pos:],</font>
+<font color="red"> 344.                            (lnum, nl_pos), (lnum, len(line)), line)</font>
+<font color="black"> 345.                 else:</font>
+<font color="red"> 346.                     yield ((NL, COMMENT)[line[pos] == '#'], line[pos:],</font>
+<font color="red"> 347.                            (lnum, pos), (lnum, len(line)), line)</font>
+<font color="red"> 348.                 continue</font>
+<font color="black"> 349. </font>
+<font color="red"> 350.             if column &gt; indents[-1]:           # count indents or dedents</font>
+<font color="red"> 351.                 indents.append(column)</font>
+<font color="red"> 352.                 yield (INDENT, line[:pos], (lnum, 0), (lnum, pos), line)</font>
+<font color="red"> 353.             while column &lt; indents[-1]:</font>
+<font color="red"> 354.                 if column not in indents:</font>
+<font color="red"> 355.                     raise IndentationError(</font>
+<font color="red"> 356.                         &quot;unindent does not match any outer indentation level&quot;,</font>
+<font color="red"> 357.                         (&quot;&lt;tokenize&gt;&quot;, lnum, pos, line))</font>
+<font color="red"> 358.                 indents = indents[:-1]</font>
+<font color="red"> 359.                 yield (DEDENT, '', (lnum, pos), (lnum, pos), line)</font>
+<font color="black"> 360. </font>
+<font color="black"> 361.         else:                                  # continued statement</font>
+<font color="red"> 362.             if not line:</font>
+<font color="red"> 363.                 raise TokenError, (&quot;EOF in multi-line statement&quot;, (lnum, 0))</font>
+<font color="red"> 364.             continued = 0</font>
+<font color="black"> 365. </font>
+<font color="red"> 366.         while pos &lt; max:</font>
+<font color="red"> 367.             pseudomatch = pseudoprog.match(line, pos)</font>
+<font color="red"> 368.             if pseudomatch:                                # scan for tokens</font>
+<font color="red"> 369.                 start, end = pseudomatch.span(1)</font>
+<font color="red"> 370.                 spos, epos, pos = (lnum, start), (lnum, end), end</font>
+<font color="red"> 371.                 if start == end:</font>
+<font color="red"> 372.                     continue</font>
+<font color="red"> 373.                 token, initial = line[start:end], line[start]</font>
+<font color="black"> 374. </font>
+<font color="red"> 375.                 if initial in numchars or \</font>
+<font color="red"> 376.                    (initial == '.' and token != '.'):      # ordinary number</font>
+<font color="red"> 377.                     yield (NUMBER, token, spos, epos, line)</font>
+<font color="red"> 378.                 elif initial in '\r\n':</font>
+<font color="red"> 379.                     yield (NL if parenlev &gt; 0 else NEWLINE,</font>
+<font color="red"> 380.                            token, spos, epos, line)</font>
+<font color="red"> 381.                 elif initial == '#':</font>
+<font color="red"> 382.                     assert not token.endswith(&quot;\n&quot;)</font>
+<font color="red"> 383.                     yield (COMMENT, token, spos, epos, line)</font>
+<font color="red"> 384.                 elif token in triple_quoted:</font>
+<font color="red"> 385.                     endprog = endprogs[token]</font>
+<font color="red"> 386.                     endmatch = endprog.match(line, pos)</font>
+<font color="red"> 387.                     if endmatch:                           # all on one line</font>
+<font color="red"> 388.                         pos = endmatch.end(0)</font>
+<font color="red"> 389.                         token = line[start:pos]</font>
+<font color="red"> 390.                         yield (STRING, token, spos, (lnum, pos), line)</font>
+<font color="black"> 391.                     else:</font>
+<font color="red"> 392.                         strstart = (lnum, start)           # multiple lines</font>
+<font color="red"> 393.                         contstr = line[start:]</font>
+<font color="red"> 394.                         contline = line</font>
+<font color="red"> 395.                         break</font>
+<font color="red"> 396.                 elif initial in single_quoted or \</font>
+<font color="red"> 397.                     token[:2] in single_quoted or \</font>
+<font color="red"> 398.                     token[:3] in single_quoted:</font>
+<font color="red"> 399.                     if token[-1] == '\n':                  # continued string</font>
+<font color="red"> 400.                         strstart = (lnum, start)</font>
+<font color="red"> 401.                         endprog = (endprogs[initial] or endprogs[token[1]] or</font>
+<font color="red"> 402.                                    endprogs[token[2]])</font>
+<font color="red"> 403.                         contstr, needcont = line[start:], 1</font>
+<font color="red"> 404.                         contline = line</font>
+<font color="red"> 405.                         break</font>
+<font color="black"> 406.                     else:                                  # ordinary string</font>
+<font color="red"> 407.                         yield (STRING, token, spos, epos, line)</font>
+<font color="red"> 408.                 elif initial in namechars:                 # ordinary name</font>
+<font color="red"> 409.                     yield (NAME, token, spos, epos, line)</font>
+<font color="red"> 410.                 elif initial == '\\':                      # continued stmt</font>
+<font color="red"> 411.                     continued = 1</font>
+<font color="black"> 412.                 else:</font>
+<font color="red"> 413.                     if initial in '([{':</font>
+<font color="red"> 414.                         parenlev += 1</font>
+<font color="red"> 415.                     elif initial in ')]}':</font>
+<font color="red"> 416.                         parenlev -= 1</font>
+<font color="red"> 417.                     yield (OP, token, spos, epos, line)</font>
+<font color="black"> 418.             else:</font>
+<font color="red"> 419.                 yield (ERRORTOKEN, line[pos],</font>
+<font color="red"> 420.                            (lnum, pos), (lnum, pos+1), line)</font>
+<font color="red"> 421.                 pos += 1</font>
+<font color="black"> 422. </font>
+<font color="red"> 423.     for indent in indents[1:]:                 # pop remaining indent levels</font>
+<font color="red"> 424.         yield (DEDENT, '', (lnum, 0), (lnum, 0), '')</font>
+<font color="red"> 425.     yield (ENDMARKER, '', (lnum, 0), (lnum, 0), '')</font>
+<font color="black"> 426. </font>
+<font color="green"> 427. if __name__ == '__main__':                     # testing</font>
+<font color="red"> 428.     import sys</font>
+<font color="red"> 429.     if len(sys.argv) &gt; 1:</font>
+<font color="red"> 430.         tokenize(open(sys.argv[1]).readline)</font>
+<font color="black"> 431.     else:</font>
+<font color="red"> 432.         tokenize(sys.stdin.readline)</font>
+</pre>
+

@@ -1,0 +1,147 @@
+source file: <b>/usr/lib/python2.7/linecache.py</b><br>
+
+
+file stats: <b>82 lines, 20 executed: 24.4% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Cache lines from files.</font>
+<font color="black">   2. </font>
+<font color="black">   3. This is intended to read lines from modules imported -- hence if a filename</font>
+<font color="black">   4. is not found, it will look down the module search path for a file by</font>
+<font color="black">   5. that name.</font>
+<font color="red">   6. &quot;&quot;&quot;</font>
+<font color="black">   7. </font>
+<font color="red">   8. import sys</font>
+<font color="red">   9. import os</font>
+<font color="black">  10. </font>
+<font color="red">  11. __all__ = [&quot;getline&quot;, &quot;clearcache&quot;, &quot;checkcache&quot;]</font>
+<font color="black">  12. </font>
+<font color="red">  13. def getline(filename, lineno, module_globals=None):</font>
+<font color="green">  14.     lines = getlines(filename, module_globals)</font>
+<font color="green">  15.     if 1 &lt;= lineno &lt;= len(lines):</font>
+<font color="green">  16.         return lines[lineno-1]</font>
+<font color="black">  17.     else:</font>
+<font color="red">  18.         return ''</font>
+<font color="black">  19. </font>
+<font color="black">  20. </font>
+<font color="black">  21. # The cache</font>
+<font color="black">  22. </font>
+<font color="red">  23. cache = {} # The cache</font>
+<font color="black">  24. </font>
+<font color="black">  25. </font>
+<font color="red">  26. def clearcache():</font>
+<font color="black">  27.     &quot;&quot;&quot;Clear the cache entirely.&quot;&quot;&quot;</font>
+<font color="black">  28. </font>
+<font color="black">  29.     global cache</font>
+<font color="red">  30.     cache = {}</font>
+<font color="black">  31. </font>
+<font color="black">  32. </font>
+<font color="red">  33. def getlines(filename, module_globals=None):</font>
+<font color="black">  34.     &quot;&quot;&quot;Get the lines for a file from the cache.</font>
+<font color="black">  35.     Update the cache if it doesn't contain an entry for this file already.&quot;&quot;&quot;</font>
+<font color="black">  36. </font>
+<font color="green">  37.     if filename in cache:</font>
+<font color="red">  38.         return cache[filename][2]</font>
+<font color="black">  39.     else:</font>
+<font color="green">  40.         return updatecache(filename, module_globals)</font>
+<font color="black">  41. </font>
+<font color="black">  42. </font>
+<font color="red">  43. def checkcache(filename=None):</font>
+<font color="black">  44.     &quot;&quot;&quot;Discard cache entries that are out of date.</font>
+<font color="black">  45.     (This is not checked upon each call!)&quot;&quot;&quot;</font>
+<font color="black">  46. </font>
+<font color="green">  47.     if filename is None:</font>
+<font color="red">  48.         filenames = cache.keys()</font>
+<font color="black">  49.     else:</font>
+<font color="green">  50.         if filename in cache:</font>
+<font color="red">  51.             filenames = [filename]</font>
+<font color="black">  52.         else:</font>
+<font color="green">  53.             return</font>
+<font color="black">  54. </font>
+<font color="red">  55.     for filename in filenames:</font>
+<font color="red">  56.         size, mtime, lines, fullname = cache[filename]</font>
+<font color="red">  57.         if mtime is None:</font>
+<font color="red">  58.             continue   # no-op for files loaded via a __loader__</font>
+<font color="red">  59.         try:</font>
+<font color="red">  60.             stat = os.stat(fullname)</font>
+<font color="red">  61.         except os.error:</font>
+<font color="red">  62.             del cache[filename]</font>
+<font color="red">  63.             continue</font>
+<font color="red">  64.         if size != stat.st_size or mtime != stat.st_mtime:</font>
+<font color="red">  65.             del cache[filename]</font>
+<font color="black">  66. </font>
+<font color="black">  67. </font>
+<font color="red">  68. def updatecache(filename, module_globals=None):</font>
+<font color="black">  69.     &quot;&quot;&quot;Update a cache entry and return its list of lines.</font>
+<font color="black">  70.     If something's wrong, print a message, discard the cache entry,</font>
+<font color="black">  71.     and return an empty list.&quot;&quot;&quot;</font>
+<font color="black">  72. </font>
+<font color="green">  73.     if filename in cache:</font>
+<font color="red">  74.         del cache[filename]</font>
+<font color="green">  75.     if not filename or (filename.startswith('&lt;') and filename.endswith('&gt;')):</font>
+<font color="red">  76.         return []</font>
+<font color="black">  77. </font>
+<font color="green">  78.     fullname = filename</font>
+<font color="green">  79.     try:</font>
+<font color="green">  80.         stat = os.stat(fullname)</font>
+<font color="red">  81.     except OSError:</font>
+<font color="red">  82.         basename = filename</font>
+<font color="black">  83. </font>
+<font color="black">  84.         # Try for a __loader__, if available</font>
+<font color="red">  85.         if module_globals and '__loader__' in module_globals:</font>
+<font color="red">  86.             name = module_globals.get('__name__')</font>
+<font color="red">  87.             loader = module_globals['__loader__']</font>
+<font color="red">  88.             get_source = getattr(loader, 'get_source', None)</font>
+<font color="black">  89. </font>
+<font color="red">  90.             if name and get_source:</font>
+<font color="red">  91.                 try:</font>
+<font color="red">  92.                     data = get_source(name)</font>
+<font color="red">  93.                 except (ImportError, IOError):</font>
+<font color="red">  94.                     pass</font>
+<font color="black">  95.                 else:</font>
+<font color="red">  96.                     if data is None:</font>
+<font color="black">  97.                         # No luck, the PEP302 loader cannot find the source</font>
+<font color="black">  98.                         # for this module.</font>
+<font color="red">  99.                         return []</font>
+<font color="black"> 100.                     cache[filename] = (</font>
+<font color="red"> 101.                         len(data), None,</font>
+<font color="red"> 102.                         [line+'\n' for line in data.splitlines()], fullname</font>
+<font color="black"> 103.                     )</font>
+<font color="red"> 104.                     return cache[filename][2]</font>
+<font color="black"> 105. </font>
+<font color="black"> 106.         # Try looking through the module search path, which is only useful</font>
+<font color="black"> 107.         # when handling a relative filename.</font>
+<font color="red"> 108.         if os.path.isabs(filename):</font>
+<font color="red"> 109.             return []</font>
+<font color="black"> 110. </font>
+<font color="black"> 111.         # Take care to handle packages</font>
+<font color="red"> 112.         if basename == '__init__.py':</font>
+<font color="black"> 113.             # filename referes to a package</font>
+<font color="red"> 114.             basename = filename</font>
+<font color="black"> 115. </font>
+<font color="red"> 116.         for dirname in sys.path:</font>
+<font color="black"> 117.             # When using imputil, sys.path may contain things other than</font>
+<font color="black"> 118.             # strings; ignore them when it happens.</font>
+<font color="red"> 119.             try:</font>
+<font color="red"> 120.                 fullname = os.path.join(dirname, basename)</font>
+<font color="red"> 121.             except (TypeError, AttributeError):</font>
+<font color="black"> 122.                 # Not sufficiently string-like to do anything useful with.</font>
+<font color="red"> 123.                 continue</font>
+<font color="red"> 124.             try:</font>
+<font color="red"> 125.                 stat = os.stat(fullname)</font>
+<font color="red"> 126.                 break</font>
+<font color="red"> 127.             except os.error:</font>
+<font color="red"> 128.                 pass</font>
+<font color="black"> 129.         else:</font>
+<font color="red"> 130.             return []</font>
+<font color="green"> 131.     try:</font>
+<font color="green"> 132.         with open(fullname, 'rU') as fp:</font>
+<font color="green"> 133.             lines = fp.readlines()</font>
+<font color="red"> 134.     except IOError:</font>
+<font color="red"> 135.         return []</font>
+<font color="green"> 136.     if lines and not lines[-1].endswith('\n'):</font>
+<font color="red"> 137.         lines[-1] += '\n'</font>
+<font color="green"> 138.     size, mtime = stat.st_size, stat.st_mtime</font>
+<font color="green"> 139.     cache[filename] = size, mtime, lines, fullname</font>
+<font color="green"> 140.     return lines</font>
+</pre>
+

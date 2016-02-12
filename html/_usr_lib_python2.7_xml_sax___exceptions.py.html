@@ -1,0 +1,138 @@
+source file: <b>/usr/lib/python2.7/xml/sax/_exceptions.py</b><br>
+
+
+file stats: <b>52 lines, 25 executed: 48.1% covered</b>
+<pre>
+<font color="green">   1. &quot;&quot;&quot;Different kinds of SAX Exceptions&quot;&quot;&quot;</font>
+<font color="green">   2. import sys</font>
+<font color="green">   3. if sys.platform[:4] == &quot;java&quot;:</font>
+<font color="red">   4.     from java.lang import Exception</font>
+<font color="green">   5. del sys</font>
+<font color="black">   6. </font>
+<font color="black">   7. # ===== SAXEXCEPTION =====</font>
+<font color="black">   8. </font>
+<font color="green">   9. class SAXException(Exception):</font>
+<font color="black">  10.     &quot;&quot;&quot;Encapsulate an XML error or warning. This class can contain</font>
+<font color="black">  11.     basic error or warning information from either the XML parser or</font>
+<font color="black">  12.     the application: you can subclass it to provide additional</font>
+<font color="black">  13.     functionality, or to add localization. Note that although you will</font>
+<font color="black">  14.     receive a SAXException as the argument to the handlers in the</font>
+<font color="black">  15.     ErrorHandler interface, you are not actually required to raise</font>
+<font color="black">  16.     the exception; instead, you can simply read the information in</font>
+<font color="green">  17.     it.&quot;&quot;&quot;</font>
+<font color="black">  18. </font>
+<font color="green">  19.     def __init__(self, msg, exception=None):</font>
+<font color="black">  20.         &quot;&quot;&quot;Creates an exception. The message is required, but the exception</font>
+<font color="black">  21.         is optional.&quot;&quot;&quot;</font>
+<font color="red">  22.         self._msg = msg</font>
+<font color="red">  23.         self._exception = exception</font>
+<font color="red">  24.         Exception.__init__(self, msg)</font>
+<font color="black">  25. </font>
+<font color="green">  26.     def getMessage(self):</font>
+<font color="black">  27.         &quot;Return a message for this exception.&quot;</font>
+<font color="red">  28.         return self._msg</font>
+<font color="black">  29. </font>
+<font color="green">  30.     def getException(self):</font>
+<font color="black">  31.         &quot;Return the embedded exception, or None if there was none.&quot;</font>
+<font color="red">  32.         return self._exception</font>
+<font color="black">  33. </font>
+<font color="green">  34.     def __str__(self):</font>
+<font color="black">  35.         &quot;Create a string representation of the exception.&quot;</font>
+<font color="red">  36.         return self._msg</font>
+<font color="black">  37. </font>
+<font color="green">  38.     def __getitem__(self, ix):</font>
+<font color="black">  39.         &quot;&quot;&quot;Avoids weird error messages if someone does exception[ix] by</font>
+<font color="black">  40.         mistake, since Exception has __getitem__ defined.&quot;&quot;&quot;</font>
+<font color="red">  41.         raise AttributeError(&quot;__getitem__&quot;)</font>
+<font color="black">  42. </font>
+<font color="black">  43. </font>
+<font color="black">  44. # ===== SAXPARSEEXCEPTION =====</font>
+<font color="black">  45. </font>
+<font color="green">  46. class SAXParseException(SAXException):</font>
+<font color="black">  47.     &quot;&quot;&quot;Encapsulate an XML parse error or warning.</font>
+<font color="black">  48. </font>
+<font color="black">  49.     This exception will include information for locating the error in</font>
+<font color="black">  50.     the original XML document. Note that although the application will</font>
+<font color="black">  51.     receive a SAXParseException as the argument to the handlers in the</font>
+<font color="black">  52.     ErrorHandler interface, the application is not actually required</font>
+<font color="black">  53.     to raise the exception; instead, it can simply read the</font>
+<font color="black">  54.     information in it and take a different action.</font>
+<font color="black">  55. </font>
+<font color="black">  56.     Since this exception is a subclass of SAXException, it inherits</font>
+<font color="green">  57.     the ability to wrap another exception.&quot;&quot;&quot;</font>
+<font color="black">  58. </font>
+<font color="green">  59.     def __init__(self, msg, exception, locator):</font>
+<font color="black">  60.         &quot;Creates the exception. The exception parameter is allowed to be None.&quot;</font>
+<font color="red">  61.         SAXException.__init__(self, msg, exception)</font>
+<font color="red">  62.         self._locator = locator</font>
+<font color="black">  63. </font>
+<font color="black">  64.         # We need to cache this stuff at construction time.</font>
+<font color="black">  65.         # If this exception is raised, the objects through which we must</font>
+<font color="black">  66.         # traverse to get this information may be deleted by the time</font>
+<font color="black">  67.         # it gets caught.</font>
+<font color="red">  68.         self._systemId = self._locator.getSystemId()</font>
+<font color="red">  69.         self._colnum = self._locator.getColumnNumber()</font>
+<font color="red">  70.         self._linenum = self._locator.getLineNumber()</font>
+<font color="black">  71. </font>
+<font color="green">  72.     def getColumnNumber(self):</font>
+<font color="black">  73.         &quot;&quot;&quot;The column number of the end of the text where the exception</font>
+<font color="black">  74.         occurred.&quot;&quot;&quot;</font>
+<font color="red">  75.         return self._colnum</font>
+<font color="black">  76. </font>
+<font color="green">  77.     def getLineNumber(self):</font>
+<font color="black">  78.         &quot;The line number of the end of the text where the exception occurred.&quot;</font>
+<font color="red">  79.         return self._linenum</font>
+<font color="black">  80. </font>
+<font color="green">  81.     def getPublicId(self):</font>
+<font color="black">  82.         &quot;Get the public identifier of the entity where the exception occurred.&quot;</font>
+<font color="red">  83.         return self._locator.getPublicId()</font>
+<font color="black">  84. </font>
+<font color="green">  85.     def getSystemId(self):</font>
+<font color="black">  86.         &quot;Get the system identifier of the entity where the exception occurred.&quot;</font>
+<font color="red">  87.         return self._systemId</font>
+<font color="black">  88. </font>
+<font color="green">  89.     def __str__(self):</font>
+<font color="black">  90.         &quot;Create a string representation of the exception.&quot;</font>
+<font color="red">  91.         sysid = self.getSystemId()</font>
+<font color="red">  92.         if sysid is None:</font>
+<font color="red">  93.             sysid = &quot;&lt;unknown&gt;&quot;</font>
+<font color="red">  94.         linenum = self.getLineNumber()</font>
+<font color="red">  95.         if linenum is None:</font>
+<font color="red">  96.             linenum = &quot;?&quot;</font>
+<font color="red">  97.         colnum = self.getColumnNumber()</font>
+<font color="red">  98.         if colnum is None:</font>
+<font color="red">  99.             colnum = &quot;?&quot;</font>
+<font color="red"> 100.         return &quot;%s:%s:%s: %s&quot; % (sysid, linenum, colnum, self._msg)</font>
+<font color="black"> 101. </font>
+<font color="black"> 102. </font>
+<font color="black"> 103. # ===== SAXNOTRECOGNIZEDEXCEPTION =====</font>
+<font color="black"> 104. </font>
+<font color="green"> 105. class SAXNotRecognizedException(SAXException):</font>
+<font color="black"> 106.     &quot;&quot;&quot;Exception class for an unrecognized identifier.</font>
+<font color="black"> 107. </font>
+<font color="black"> 108.     An XMLReader will raise this exception when it is confronted with an</font>
+<font color="black"> 109.     unrecognized feature or property. SAX applications and extensions may</font>
+<font color="green"> 110.     use this class for similar purposes.&quot;&quot;&quot;</font>
+<font color="black"> 111. </font>
+<font color="black"> 112. </font>
+<font color="black"> 113. # ===== SAXNOTSUPPORTEDEXCEPTION =====</font>
+<font color="black"> 114. </font>
+<font color="green"> 115. class SAXNotSupportedException(SAXException):</font>
+<font color="black"> 116.     &quot;&quot;&quot;Exception class for an unsupported operation.</font>
+<font color="black"> 117. </font>
+<font color="black"> 118.     An XMLReader will raise this exception when a service it cannot</font>
+<font color="black"> 119.     perform is requested (specifically setting a state or value). SAX</font>
+<font color="black"> 120.     applications and extensions may use this class for similar</font>
+<font color="green"> 121.     purposes.&quot;&quot;&quot;</font>
+<font color="black"> 122. </font>
+<font color="black"> 123. # ===== SAXNOTSUPPORTEDEXCEPTION =====</font>
+<font color="black"> 124. </font>
+<font color="green"> 125. class SAXReaderNotAvailable(SAXNotSupportedException):</font>
+<font color="black"> 126.     &quot;&quot;&quot;Exception class for a missing driver.</font>
+<font color="black"> 127. </font>
+<font color="black"> 128.     An XMLReader module (driver) should raise this exception when it</font>
+<font color="black"> 129.     is first imported, e.g. when a support module cannot be imported.</font>
+<font color="black"> 130.     It also may be raised during parsing, e.g. if executing an external</font>
+<font color="green"> 131.     program is not permitted.&quot;&quot;&quot;</font>
+</pre>
+

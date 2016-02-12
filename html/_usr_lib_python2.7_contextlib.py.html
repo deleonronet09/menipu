@@ -1,0 +1,161 @@
+source file: <b>/usr/lib/python2.7/contextlib.py</b><br>
+
+
+file stats: <b>67 lines, 28 executed: 41.8% covered</b>
+<pre>
+<font color="green">   1. &quot;&quot;&quot;Utilities for with-statement contexts.  See PEP 343.&quot;&quot;&quot;</font>
+<font color="black">   2. </font>
+<font color="green">   3. import sys</font>
+<font color="green">   4. from functools import wraps</font>
+<font color="green">   5. from warnings import warn</font>
+<font color="black">   6. </font>
+<font color="green">   7. __all__ = [&quot;contextmanager&quot;, &quot;nested&quot;, &quot;closing&quot;]</font>
+<font color="black">   8. </font>
+<font color="green">   9. class GeneratorContextManager(object):</font>
+<font color="green">  10.     &quot;&quot;&quot;Helper for @contextmanager decorator.&quot;&quot;&quot;</font>
+<font color="black">  11. </font>
+<font color="green">  12.     def __init__(self, gen):</font>
+<font color="green">  13.         self.gen = gen</font>
+<font color="black">  14. </font>
+<font color="green">  15.     def __enter__(self):</font>
+<font color="green">  16.         try:</font>
+<font color="green">  17.             return self.gen.next()</font>
+<font color="red">  18.         except StopIteration:</font>
+<font color="red">  19.             raise RuntimeError(&quot;generator didn't yield&quot;)</font>
+<font color="black">  20. </font>
+<font color="green">  21.     def __exit__(self, type, value, traceback):</font>
+<font color="green">  22.         if type is None:</font>
+<font color="green">  23.             try:</font>
+<font color="green">  24.                 self.gen.next()</font>
+<font color="green">  25.             except StopIteration:</font>
+<font color="green">  26.                 return</font>
+<font color="black">  27.             else:</font>
+<font color="red">  28.                 raise RuntimeError(&quot;generator didn't stop&quot;)</font>
+<font color="black">  29.         else:</font>
+<font color="red">  30.             if value is None:</font>
+<font color="black">  31.                 # Need to force instantiation so we can reliably</font>
+<font color="black">  32.                 # tell if we get the same exception back</font>
+<font color="red">  33.                 value = type()</font>
+<font color="red">  34.             try:</font>
+<font color="red">  35.                 self.gen.throw(type, value, traceback)</font>
+<font color="red">  36.                 raise RuntimeError(&quot;generator didn't stop after throw()&quot;)</font>
+<font color="red">  37.             except StopIteration, exc:</font>
+<font color="black">  38.                 # Suppress the exception *unless* it's the same exception that</font>
+<font color="black">  39.                 # was passed to throw().  This prevents a StopIteration</font>
+<font color="black">  40.                 # raised inside the &quot;with&quot; statement from being suppressed</font>
+<font color="red">  41.                 return exc is not value</font>
+<font color="red">  42.             except:</font>
+<font color="black">  43.                 # only re-raise if it's *not* the exception that was</font>
+<font color="black">  44.                 # passed to throw(), because __exit__() must not raise</font>
+<font color="black">  45.                 # an exception unless __exit__() itself failed.  But throw()</font>
+<font color="black">  46.                 # has to raise the exception to signal propagation, so this</font>
+<font color="black">  47.                 # fixes the impedance mismatch between the throw() protocol</font>
+<font color="black">  48.                 # and the __exit__() protocol.</font>
+<font color="black">  49.                 #</font>
+<font color="red">  50.                 if sys.exc_info()[1] is not value:</font>
+<font color="red">  51.                     raise</font>
+<font color="black">  52. </font>
+<font color="black">  53. </font>
+<font color="green">  54. def contextmanager(func):</font>
+<font color="black">  55.     &quot;&quot;&quot;@contextmanager decorator.</font>
+<font color="black">  56. </font>
+<font color="black">  57.     Typical usage:</font>
+<font color="black">  58. </font>
+<font color="black">  59.         @contextmanager</font>
+<font color="black">  60.         def some_generator(&lt;arguments&gt;):</font>
+<font color="black">  61.             &lt;setup&gt;</font>
+<font color="black">  62.             try:</font>
+<font color="black">  63.                 yield &lt;value&gt;</font>
+<font color="black">  64.             finally:</font>
+<font color="black">  65.                 &lt;cleanup&gt;</font>
+<font color="black">  66. </font>
+<font color="black">  67.     This makes this:</font>
+<font color="black">  68. </font>
+<font color="black">  69.         with some_generator(&lt;arguments&gt;) as &lt;variable&gt;:</font>
+<font color="black">  70.             &lt;body&gt;</font>
+<font color="black">  71. </font>
+<font color="black">  72.     equivalent to this:</font>
+<font color="black">  73. </font>
+<font color="black">  74.         &lt;setup&gt;</font>
+<font color="black">  75.         try:</font>
+<font color="black">  76.             &lt;variable&gt; = &lt;value&gt;</font>
+<font color="black">  77.             &lt;body&gt;</font>
+<font color="black">  78.         finally:</font>
+<font color="black">  79.             &lt;cleanup&gt;</font>
+<font color="black">  80. </font>
+<font color="black">  81.     &quot;&quot;&quot;</font>
+<font color="green">  82.     @wraps(func)</font>
+<font color="black">  83.     def helper(*args, **kwds):</font>
+<font color="green">  84.         return GeneratorContextManager(func(*args, **kwds))</font>
+<font color="green">  85.     return helper</font>
+<font color="black">  86. </font>
+<font color="black">  87. </font>
+<font color="green">  88. @contextmanager</font>
+<font color="black">  89. def nested(*managers):</font>
+<font color="black">  90.     &quot;&quot;&quot;Combine multiple context managers into a single nested context manager.</font>
+<font color="black">  91. </font>
+<font color="black">  92.    This function has been deprecated in favour of the multiple manager form</font>
+<font color="black">  93.    of the with statement.</font>
+<font color="black">  94. </font>
+<font color="black">  95.    The one advantage of this function over the multiple manager form of the</font>
+<font color="black">  96.    with statement is that argument unpacking allows it to be</font>
+<font color="black">  97.    used with a variable number of context managers as follows:</font>
+<font color="black">  98. </font>
+<font color="black">  99.       with nested(*managers):</font>
+<font color="black"> 100.           do_something()</font>
+<font color="black"> 101. </font>
+<font color="black"> 102.     &quot;&quot;&quot;</font>
+<font color="red"> 103.     warn(&quot;With-statements now directly support multiple context managers&quot;,</font>
+<font color="red"> 104.          DeprecationWarning, 3)</font>
+<font color="red"> 105.     exits = []</font>
+<font color="red"> 106.     vars = []</font>
+<font color="red"> 107.     exc = (None, None, None)</font>
+<font color="red"> 108.     try:</font>
+<font color="red"> 109.         for mgr in managers:</font>
+<font color="red"> 110.             exit = mgr.__exit__</font>
+<font color="red"> 111.             enter = mgr.__enter__</font>
+<font color="red"> 112.             vars.append(enter())</font>
+<font color="red"> 113.             exits.append(exit)</font>
+<font color="red"> 114.         yield vars</font>
+<font color="red"> 115.     except:</font>
+<font color="red"> 116.         exc = sys.exc_info()</font>
+<font color="black"> 117.     finally:</font>
+<font color="red"> 118.         while exits:</font>
+<font color="red"> 119.             exit = exits.pop()</font>
+<font color="red"> 120.             try:</font>
+<font color="red"> 121.                 if exit(*exc):</font>
+<font color="red"> 122.                     exc = (None, None, None)</font>
+<font color="red"> 123.             except:</font>
+<font color="red"> 124.                 exc = sys.exc_info()</font>
+<font color="red"> 125.         if exc != (None, None, None):</font>
+<font color="black"> 126.             # Don't rely on sys.exc_info() still containing</font>
+<font color="black"> 127.             # the right information. Another exception may</font>
+<font color="black"> 128.             # have been raised and caught by an exit method</font>
+<font color="red"> 129.             raise exc[0], exc[1], exc[2]</font>
+<font color="black"> 130. </font>
+<font color="black"> 131. </font>
+<font color="green"> 132. class closing(object):</font>
+<font color="black"> 133.     &quot;&quot;&quot;Context to automatically close something at the end of a block.</font>
+<font color="black"> 134. </font>
+<font color="black"> 135.     Code like this:</font>
+<font color="black"> 136. </font>
+<font color="black"> 137.         with closing(&lt;module&gt;.open(&lt;arguments&gt;)) as f:</font>
+<font color="black"> 138.             &lt;block&gt;</font>
+<font color="black"> 139. </font>
+<font color="black"> 140.     is equivalent to this:</font>
+<font color="black"> 141. </font>
+<font color="black"> 142.         f = &lt;module&gt;.open(&lt;arguments&gt;)</font>
+<font color="black"> 143.         try:</font>
+<font color="black"> 144.             &lt;block&gt;</font>
+<font color="black"> 145.         finally:</font>
+<font color="black"> 146.             f.close()</font>
+<font color="black"> 147. </font>
+<font color="green"> 148.     &quot;&quot;&quot;</font>
+<font color="green"> 149.     def __init__(self, thing):</font>
+<font color="red"> 150.         self.thing = thing</font>
+<font color="green"> 151.     def __enter__(self):</font>
+<font color="red"> 152.         return self.thing</font>
+<font color="green"> 153.     def __exit__(self, *exc_info):</font>
+<font color="red"> 154.         self.thing.close()</font>
+</pre>
+

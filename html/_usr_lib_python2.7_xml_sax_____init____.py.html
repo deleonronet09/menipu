@@ -1,0 +1,115 @@
+source file: <b>/usr/lib/python2.7/xml/sax/__init__.py</b><br>
+
+
+file stats: <b>53 lines, 18 executed: 34.0% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Simple API for XML (SAX) implementation for Python.</font>
+<font color="black">   2. </font>
+<font color="black">   3. This module provides an implementation of the SAX 2 interface;</font>
+<font color="black">   4. information about the Java version of the interface can be found at</font>
+<font color="black">   5. http://www.megginson.com/SAX/.  The Python version of the interface is</font>
+<font color="black">   6. documented at &lt;...&gt;.</font>
+<font color="black">   7. </font>
+<font color="black">   8. This package contains the following modules:</font>
+<font color="black">   9. </font>
+<font color="black">  10. handler -- Base classes and constants which define the SAX 2 API for</font>
+<font color="black">  11.            the 'client-side' of SAX for Python.</font>
+<font color="black">  12. </font>
+<font color="black">  13. saxutils -- Implementation of the convenience classes commonly used to</font>
+<font color="black">  14.             work with SAX.</font>
+<font color="black">  15. </font>
+<font color="black">  16. xmlreader -- Base classes and constants which define the SAX 2 API for</font>
+<font color="black">  17.              the parsers used with SAX for Python.</font>
+<font color="black">  18. </font>
+<font color="black">  19. expatreader -- Driver that allows use of the Expat parser with SAX.</font>
+<font color="green">  20. &quot;&quot;&quot;</font>
+<font color="black">  21. </font>
+<font color="green">  22. from xmlreader import InputSource</font>
+<font color="green">  23. from handler import ContentHandler, ErrorHandler</font>
+<font color="green">  24. from _exceptions import SAXException, SAXNotRecognizedException, \</font>
+<font color="black">  25.                         SAXParseException, SAXNotSupportedException, \</font>
+<font color="black">  26.                         SAXReaderNotAvailable</font>
+<font color="black">  27. </font>
+<font color="black">  28. </font>
+<font color="green">  29. def parse(source, handler, errorHandler=ErrorHandler()):</font>
+<font color="red">  30.     parser = make_parser()</font>
+<font color="red">  31.     parser.setContentHandler(handler)</font>
+<font color="red">  32.     parser.setErrorHandler(errorHandler)</font>
+<font color="red">  33.     parser.parse(source)</font>
+<font color="black">  34. </font>
+<font color="green">  35. def parseString(string, handler, errorHandler=ErrorHandler()):</font>
+<font color="red">  36.     try:</font>
+<font color="red">  37.         from cStringIO import StringIO</font>
+<font color="red">  38.     except ImportError:</font>
+<font color="red">  39.         from StringIO import StringIO</font>
+<font color="black">  40. </font>
+<font color="red">  41.     if errorHandler is None:</font>
+<font color="red">  42.         errorHandler = ErrorHandler()</font>
+<font color="red">  43.     parser = make_parser()</font>
+<font color="red">  44.     parser.setContentHandler(handler)</font>
+<font color="red">  45.     parser.setErrorHandler(errorHandler)</font>
+<font color="black">  46. </font>
+<font color="red">  47.     inpsrc = InputSource()</font>
+<font color="red">  48.     inpsrc.setByteStream(StringIO(string))</font>
+<font color="red">  49.     parser.parse(inpsrc)</font>
+<font color="black">  50. </font>
+<font color="black">  51. # this is the parser list used by the make_parser function if no</font>
+<font color="black">  52. # alternatives are given as parameters to the function</font>
+<font color="black">  53. </font>
+<font color="green">  54. default_parser_list = [&quot;xml.sax.expatreader&quot;]</font>
+<font color="black">  55. </font>
+<font color="black">  56. # tell modulefinder that importing sax potentially imports expatreader</font>
+<font color="green">  57. _false = 0</font>
+<font color="green">  58. if _false:</font>
+<font color="red">  59.     import xml.sax.expatreader</font>
+<font color="black">  60. </font>
+<font color="green">  61. import os, sys</font>
+<font color="green">  62. if &quot;PY_SAX_PARSER&quot; in os.environ:</font>
+<font color="red">  63.     default_parser_list = os.environ[&quot;PY_SAX_PARSER&quot;].split(&quot;,&quot;)</font>
+<font color="green">  64. del os</font>
+<font color="black">  65. </font>
+<font color="green">  66. _key = &quot;python.xml.sax.parser&quot;</font>
+<font color="green">  67. if sys.platform[:4] == &quot;java&quot; and sys.registry.containsKey(_key):</font>
+<font color="red">  68.     default_parser_list = sys.registry.getProperty(_key).split(&quot;,&quot;)</font>
+<font color="black">  69. </font>
+<font color="black">  70. </font>
+<font color="green">  71. def make_parser(parser_list = []):</font>
+<font color="black">  72.     &quot;&quot;&quot;Creates and returns a SAX parser.</font>
+<font color="black">  73. </font>
+<font color="black">  74.     Creates the first parser it is able to instantiate of the ones</font>
+<font color="black">  75.     given in the list created by doing parser_list +</font>
+<font color="black">  76.     default_parser_list.  The lists must contain the names of Python</font>
+<font color="black">  77.     modules containing both a SAX parser and a create_parser function.&quot;&quot;&quot;</font>
+<font color="black">  78. </font>
+<font color="red">  79.     for parser_name in parser_list + default_parser_list:</font>
+<font color="red">  80.         try:</font>
+<font color="red">  81.             return _create_parser(parser_name)</font>
+<font color="red">  82.         except ImportError,e:</font>
+<font color="red">  83.             import sys</font>
+<font color="red">  84.             if parser_name in sys.modules:</font>
+<font color="black">  85.                 # The parser module was found, but importing it</font>
+<font color="black">  86.                 # failed unexpectedly, pass this exception through</font>
+<font color="red">  87.                 raise</font>
+<font color="red">  88.         except SAXReaderNotAvailable:</font>
+<font color="black">  89.             # The parser module detected that it won't work properly,</font>
+<font color="black">  90.             # so try the next one</font>
+<font color="red">  91.             pass</font>
+<font color="black">  92. </font>
+<font color="red">  93.     raise SAXReaderNotAvailable(&quot;No parsers found&quot;, None)</font>
+<font color="black">  94. </font>
+<font color="black">  95. # --- Internal utility methods used by make_parser</font>
+<font color="black">  96. </font>
+<font color="green">  97. if sys.platform[ : 4] == &quot;java&quot;:</font>
+<font color="red">  98.     def _create_parser(parser_name):</font>
+<font color="red">  99.         from org.python.core import imp</font>
+<font color="red"> 100.         drv_module = imp.importName(parser_name, 0, globals())</font>
+<font color="red"> 101.         return drv_module.create_parser()</font>
+<font color="black"> 102. </font>
+<font color="black"> 103. else:</font>
+<font color="green"> 104.     def _create_parser(parser_name):</font>
+<font color="red"> 105.         drv_module = __import__(parser_name,{},{},['create_parser'])</font>
+<font color="red"> 106.         return drv_module.create_parser()</font>
+<font color="black"> 107. </font>
+<font color="green"> 108. del sys</font>
+</pre>
+

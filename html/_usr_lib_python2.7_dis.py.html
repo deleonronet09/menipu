@@ -1,0 +1,231 @@
+source file: <b>/usr/lib/python2.7/dis.py</b><br>
+
+
+file stats: <b>183 lines, 20 executed: 10.9% covered</b>
+<pre>
+<font color="green">   1. &quot;&quot;&quot;Disassembler of Python byte code into mnemonics.&quot;&quot;&quot;</font>
+<font color="black">   2. </font>
+<font color="green">   3. import sys</font>
+<font color="green">   4. import types</font>
+<font color="black">   5. </font>
+<font color="green">   6. from opcode import *</font>
+<font color="green">   7. from opcode import __all__ as _opcodes_all</font>
+<font color="black">   8. </font>
+<font color="green">   9. __all__ = [&quot;dis&quot;, &quot;disassemble&quot;, &quot;distb&quot;, &quot;disco&quot;,</font>
+<font color="green">  10.            &quot;findlinestarts&quot;, &quot;findlabels&quot;] + _opcodes_all</font>
+<font color="green">  11. del _opcodes_all</font>
+<font color="black">  12. </font>
+<font color="green">  13. _have_code = (types.MethodType, types.FunctionType, types.CodeType,</font>
+<font color="green">  14.               types.ClassType, type)</font>
+<font color="black">  15. </font>
+<font color="green">  16. def dis(x=None):</font>
+<font color="black">  17.     &quot;&quot;&quot;Disassemble classes, methods, functions, or code.</font>
+<font color="black">  18. </font>
+<font color="black">  19.     With no argument, disassemble the last traceback.</font>
+<font color="black">  20. </font>
+<font color="black">  21.     &quot;&quot;&quot;</font>
+<font color="red">  22.     if x is None:</font>
+<font color="red">  23.         distb()</font>
+<font color="red">  24.         return</font>
+<font color="red">  25.     if isinstance(x, types.InstanceType):</font>
+<font color="red">  26.         x = x.__class__</font>
+<font color="red">  27.     if hasattr(x, 'im_func'):</font>
+<font color="red">  28.         x = x.im_func</font>
+<font color="red">  29.     if hasattr(x, 'func_code'):</font>
+<font color="red">  30.         x = x.func_code</font>
+<font color="red">  31.     if hasattr(x, '__dict__'):</font>
+<font color="red">  32.         items = x.__dict__.items()</font>
+<font color="red">  33.         items.sort()</font>
+<font color="red">  34.         for name, x1 in items:</font>
+<font color="red">  35.             if isinstance(x1, _have_code):</font>
+<font color="red">  36.                 print &quot;Disassembly of %s:&quot; % name</font>
+<font color="red">  37.                 try:</font>
+<font color="red">  38.                     dis(x1)</font>
+<font color="red">  39.                 except TypeError, msg:</font>
+<font color="red">  40.                     print &quot;Sorry:&quot;, msg</font>
+<font color="red">  41.                 print</font>
+<font color="red">  42.     elif hasattr(x, 'co_code'):</font>
+<font color="red">  43.         disassemble(x)</font>
+<font color="red">  44.     elif isinstance(x, str):</font>
+<font color="red">  45.         disassemble_string(x)</font>
+<font color="black">  46.     else:</font>
+<font color="red">  47.         raise TypeError, \</font>
+<font color="red">  48.               &quot;don't know how to disassemble %s objects&quot; % \</font>
+<font color="red">  49.               type(x).__name__</font>
+<font color="black">  50. </font>
+<font color="green">  51. def distb(tb=None):</font>
+<font color="black">  52.     &quot;&quot;&quot;Disassemble a traceback (default: last traceback).&quot;&quot;&quot;</font>
+<font color="red">  53.     if tb is None:</font>
+<font color="red">  54.         try:</font>
+<font color="red">  55.             tb = sys.last_traceback</font>
+<font color="red">  56.         except AttributeError:</font>
+<font color="red">  57.             raise RuntimeError, &quot;no last traceback to disassemble&quot;</font>
+<font color="red">  58.         while tb.tb_next: tb = tb.tb_next</font>
+<font color="red">  59.     disassemble(tb.tb_frame.f_code, tb.tb_lasti)</font>
+<font color="black">  60. </font>
+<font color="green">  61. def disassemble(co, lasti=-1):</font>
+<font color="black">  62.     &quot;&quot;&quot;Disassemble a code object.&quot;&quot;&quot;</font>
+<font color="red">  63.     code = co.co_code</font>
+<font color="red">  64.     labels = findlabels(code)</font>
+<font color="red">  65.     linestarts = dict(findlinestarts(co))</font>
+<font color="red">  66.     n = len(code)</font>
+<font color="red">  67.     i = 0</font>
+<font color="red">  68.     extended_arg = 0</font>
+<font color="red">  69.     free = None</font>
+<font color="red">  70.     while i &lt; n:</font>
+<font color="red">  71.         c = code[i]</font>
+<font color="red">  72.         op = ord(c)</font>
+<font color="red">  73.         if i in linestarts:</font>
+<font color="red">  74.             if i &gt; 0:</font>
+<font color="red">  75.                 print</font>
+<font color="red">  76.             print &quot;%3d&quot; % linestarts[i],</font>
+<font color="black">  77.         else:</font>
+<font color="red">  78.             print '   ',</font>
+<font color="black">  79. </font>
+<font color="red">  80.         if i == lasti: print '--&gt;',</font>
+<font color="red">  81.         else: print '   ',</font>
+<font color="red">  82.         if i in labels: print '&gt;&gt;',</font>
+<font color="red">  83.         else: print '  ',</font>
+<font color="red">  84.         print repr(i).rjust(4),</font>
+<font color="red">  85.         print opname[op].ljust(20),</font>
+<font color="red">  86.         i = i+1</font>
+<font color="red">  87.         if op &gt;= HAVE_ARGUMENT:</font>
+<font color="red">  88.             oparg = ord(code[i]) + ord(code[i+1])*256 + extended_arg</font>
+<font color="red">  89.             extended_arg = 0</font>
+<font color="red">  90.             i = i+2</font>
+<font color="red">  91.             if op == EXTENDED_ARG:</font>
+<font color="red">  92.                 extended_arg = oparg*65536L</font>
+<font color="red">  93.             print repr(oparg).rjust(5),</font>
+<font color="red">  94.             if op in hasconst:</font>
+<font color="red">  95.                 print '(' + repr(co.co_consts[oparg]) + ')',</font>
+<font color="red">  96.             elif op in hasname:</font>
+<font color="red">  97.                 print '(' + co.co_names[oparg] + ')',</font>
+<font color="red">  98.             elif op in hasjrel:</font>
+<font color="red">  99.                 print '(to ' + repr(i + oparg) + ')',</font>
+<font color="red"> 100.             elif op in haslocal:</font>
+<font color="red"> 101.                 print '(' + co.co_varnames[oparg] + ')',</font>
+<font color="red"> 102.             elif op in hascompare:</font>
+<font color="red"> 103.                 print '(' + cmp_op[oparg] + ')',</font>
+<font color="red"> 104.             elif op in hasfree:</font>
+<font color="red"> 105.                 if free is None:</font>
+<font color="red"> 106.                     free = co.co_cellvars + co.co_freevars</font>
+<font color="red"> 107.                 print '(' + free[oparg] + ')',</font>
+<font color="red"> 108.         print</font>
+<font color="black"> 109. </font>
+<font color="green"> 110. def disassemble_string(code, lasti=-1, varnames=None, names=None,</font>
+<font color="green"> 111.                        constants=None):</font>
+<font color="red"> 112.     labels = findlabels(code)</font>
+<font color="red"> 113.     n = len(code)</font>
+<font color="red"> 114.     i = 0</font>
+<font color="red"> 115.     while i &lt; n:</font>
+<font color="red"> 116.         c = code[i]</font>
+<font color="red"> 117.         op = ord(c)</font>
+<font color="red"> 118.         if i == lasti: print '--&gt;',</font>
+<font color="red"> 119.         else: print '   ',</font>
+<font color="red"> 120.         if i in labels: print '&gt;&gt;',</font>
+<font color="red"> 121.         else: print '  ',</font>
+<font color="red"> 122.         print repr(i).rjust(4),</font>
+<font color="red"> 123.         print opname[op].ljust(15),</font>
+<font color="red"> 124.         i = i+1</font>
+<font color="red"> 125.         if op &gt;= HAVE_ARGUMENT:</font>
+<font color="red"> 126.             oparg = ord(code[i]) + ord(code[i+1])*256</font>
+<font color="red"> 127.             i = i+2</font>
+<font color="red"> 128.             print repr(oparg).rjust(5),</font>
+<font color="red"> 129.             if op in hasconst:</font>
+<font color="red"> 130.                 if constants:</font>
+<font color="red"> 131.                     print '(' + repr(constants[oparg]) + ')',</font>
+<font color="black"> 132.                 else:</font>
+<font color="red"> 133.                     print '(%d)'%oparg,</font>
+<font color="red"> 134.             elif op in hasname:</font>
+<font color="red"> 135.                 if names is not None:</font>
+<font color="red"> 136.                     print '(' + names[oparg] + ')',</font>
+<font color="black"> 137.                 else:</font>
+<font color="red"> 138.                     print '(%d)'%oparg,</font>
+<font color="red"> 139.             elif op in hasjrel:</font>
+<font color="red"> 140.                 print '(to ' + repr(i + oparg) + ')',</font>
+<font color="red"> 141.             elif op in haslocal:</font>
+<font color="red"> 142.                 if varnames:</font>
+<font color="red"> 143.                     print '(' + varnames[oparg] + ')',</font>
+<font color="black"> 144.                 else:</font>
+<font color="red"> 145.                     print '(%d)' % oparg,</font>
+<font color="red"> 146.             elif op in hascompare:</font>
+<font color="red"> 147.                 print '(' + cmp_op[oparg] + ')',</font>
+<font color="red"> 148.         print</font>
+<font color="black"> 149. </font>
+<font color="green"> 150. disco = disassemble                     # XXX For backwards compatibility</font>
+<font color="black"> 151. </font>
+<font color="green"> 152. def findlabels(code):</font>
+<font color="black"> 153.     &quot;&quot;&quot;Detect all offsets in a byte code which are jump targets.</font>
+<font color="black"> 154. </font>
+<font color="black"> 155.     Return the list of offsets.</font>
+<font color="black"> 156. </font>
+<font color="black"> 157.     &quot;&quot;&quot;</font>
+<font color="red"> 158.     labels = []</font>
+<font color="red"> 159.     n = len(code)</font>
+<font color="red"> 160.     i = 0</font>
+<font color="red"> 161.     while i &lt; n:</font>
+<font color="red"> 162.         c = code[i]</font>
+<font color="red"> 163.         op = ord(c)</font>
+<font color="red"> 164.         i = i+1</font>
+<font color="red"> 165.         if op &gt;= HAVE_ARGUMENT:</font>
+<font color="red"> 166.             oparg = ord(code[i]) + ord(code[i+1])*256</font>
+<font color="red"> 167.             i = i+2</font>
+<font color="red"> 168.             label = -1</font>
+<font color="red"> 169.             if op in hasjrel:</font>
+<font color="red"> 170.                 label = i+oparg</font>
+<font color="red"> 171.             elif op in hasjabs:</font>
+<font color="red"> 172.                 label = oparg</font>
+<font color="red"> 173.             if label &gt;= 0:</font>
+<font color="red"> 174.                 if label not in labels:</font>
+<font color="red"> 175.                     labels.append(label)</font>
+<font color="red"> 176.     return labels</font>
+<font color="black"> 177. </font>
+<font color="green"> 178. def findlinestarts(code):</font>
+<font color="black"> 179.     &quot;&quot;&quot;Find the offsets in a byte code which are start of lines in the source.</font>
+<font color="black"> 180. </font>
+<font color="black"> 181.     Generate pairs (offset, lineno) as described in Python/compile.c.</font>
+<font color="black"> 182. </font>
+<font color="black"> 183.     &quot;&quot;&quot;</font>
+<font color="red"> 184.     byte_increments = [ord(c) for c in code.co_lnotab[0::2]]</font>
+<font color="red"> 185.     line_increments = [ord(c) for c in code.co_lnotab[1::2]]</font>
+<font color="black"> 186. </font>
+<font color="red"> 187.     lastlineno = None</font>
+<font color="red"> 188.     lineno = code.co_firstlineno</font>
+<font color="red"> 189.     addr = 0</font>
+<font color="red"> 190.     for byte_incr, line_incr in zip(byte_increments, line_increments):</font>
+<font color="red"> 191.         if byte_incr:</font>
+<font color="red"> 192.             if lineno != lastlineno:</font>
+<font color="red"> 193.                 yield (addr, lineno)</font>
+<font color="red"> 194.                 lastlineno = lineno</font>
+<font color="red"> 195.             addr += byte_incr</font>
+<font color="red"> 196.         lineno += line_incr</font>
+<font color="red"> 197.     if lineno != lastlineno:</font>
+<font color="red"> 198.         yield (addr, lineno)</font>
+<font color="black"> 199. </font>
+<font color="green"> 200. def _test():</font>
+<font color="black"> 201.     &quot;&quot;&quot;Simple test program to disassemble a file.&quot;&quot;&quot;</font>
+<font color="red"> 202.     if sys.argv[1:]:</font>
+<font color="red"> 203.         if sys.argv[2:]:</font>
+<font color="red"> 204.             sys.stderr.write(&quot;usage: python dis.py [-|file]\n&quot;)</font>
+<font color="red"> 205.             sys.exit(2)</font>
+<font color="red"> 206.         fn = sys.argv[1]</font>
+<font color="red"> 207.         if not fn or fn == &quot;-&quot;:</font>
+<font color="red"> 208.             fn = None</font>
+<font color="black"> 209.     else:</font>
+<font color="red"> 210.         fn = None</font>
+<font color="red"> 211.     if fn is None:</font>
+<font color="red"> 212.         f = sys.stdin</font>
+<font color="black"> 213.     else:</font>
+<font color="red"> 214.         f = open(fn)</font>
+<font color="red"> 215.     source = f.read()</font>
+<font color="red"> 216.     if fn is not None:</font>
+<font color="red"> 217.         f.close()</font>
+<font color="black"> 218.     else:</font>
+<font color="red"> 219.         fn = &quot;&lt;stdin&gt;&quot;</font>
+<font color="red"> 220.     code = compile(source, fn, &quot;exec&quot;)</font>
+<font color="red"> 221.     dis(code)</font>
+<font color="black"> 222. </font>
+<font color="green"> 223. if __name__ == &quot;__main__&quot;:</font>
+<font color="red"> 224.     _test()</font>
+</pre>
+

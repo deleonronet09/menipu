@@ -1,0 +1,76 @@
+source file: <b>/root/buildbot/djangogirls/calculator.py</b><br>
+
+
+file stats: <b>50 lines, 32 executed: 64.0% covered</b>
+<pre>
+<font color="black">   1. </font>
+<font color="black">   2. </font>
+<font color="green">   3. def add(input1,input2):</font>
+<font color="green">   4.   return input1+input2</font>
+<font color="black">   5. </font>
+<font color="green">   6. def subtract(input1,input2):</font>
+<font color="green">   7.   return input1-input2</font>
+<font color="black">   8. </font>
+<font color="green">   9. def multiply(input1,input2):</font>
+<font color="green">  10.   return input1*input2</font>
+<font color="black">  11. </font>
+<font color="green">  12. def divide(input1,input2):</font>
+<font color="green">  13.   return input1/input2</font>
+<font color="black">  14. </font>
+<font color="green">  15. def operator(num1,op,num2):</font>
+<font color="green">  16.   functions = {'+':add, '-':subtract, '*':multiply, '/':divide}</font>
+<font color="green">  17.   func = functions.get(op, None)</font>
+<font color="green">  18.   if num1 == None or num2 == None:</font>
+<font color="red">  19.     return None</font>
+<font color="green">  20.   elif op == &quot;/&quot; and num2 == 0:</font>
+<font color="red">  21.     return '{} can not be {} by {}'.format(num1,op,num2)</font>
+<font color="black">  22.   else:</font>
+<font color="green">  23.     if func:</font>
+<font color="green">  24.       return func(num1,num2)</font>
+<font color="green">  25.     return None</font>
+<font color="black">  26. </font>
+<font color="green">  27. def input1(input=input):</font>
+<font color="green">  28.   input1 = input(&quot;Enter first number: &quot;)</font>
+<font color="green">  29.   if isinstance(input1,int):</font>
+<font color="green">  30.     return input1</font>
+<font color="red">  31.   elif not isinstance(input1,int):</font>
+<font color="red">  32.     if input1.isdigit():</font>
+<font color="red">  33.       return int(input1)</font>
+<font color="black">  34.   else:</font>
+<font color="red">  35.     return None</font>
+<font color="black">  36. </font>
+<font color="green">  37. def input2(input=input):</font>
+<font color="green">  38.   input2 = input(&quot;Enter first number: &quot;)</font>
+<font color="green">  39.   if isinstance(input2,int):</font>
+<font color="green">  40.     return input2</font>
+<font color="red">  41.   elif not isinstance(input2,int):</font>
+<font color="red">  42.     if input2.isdigit():</font>
+<font color="red">  43.       return int(input2)</font>
+<font color="black">  44.   else:</font>
+<font color="red">  45.     return None</font>
+<font color="black">  46. </font>
+<font color="green">  47. def inputop(input=input):</font>
+<font color="green">  48.   return input(&quot;Enter operation: &quot;)</font>
+<font color="black">  49. </font>
+<font color="green">  50. def output(num1,op,num2,ans):</font>
+<font color="green">  51.   if num1 == None or num2 == None or ans == None:</font>
+<font color="red">  52.     return &quot;You must input an integer.&quot;</font>
+<font color="green">  53.   elif op == &quot;/&quot; and num2 == 0:</font>
+<font color="red">  54.     return '{} can not be {} by {}'.format(num1,op,num2)</font>
+<font color="black">  55.   else:</font>
+<font color="green">  56.     return '{} {} {} = {}'.format(num1,op,num2,ans)</font>
+<font color="black">  57. </font>
+<font color="green">  58. def main():</font>
+<font color="red">  59.   num1 = input1()</font>
+<font color="red">  60.   op = inputop()</font>
+<font color="red">  61.   num2 = input2()</font>
+<font color="red">  62.   ans = operator(num1,op,num2)</font>
+<font color="black">  63. </font>
+<font color="red">  64.   print(output(num1,op,num2,ans))</font>
+<font color="black">  65. </font>
+<font color="green">  66. if __name__ == &quot;__main__&quot;:</font>
+<font color="red">  67.     main()</font>
+<font color="black">  68. </font>
+<font color="black">  69. </font>
+</pre>
+

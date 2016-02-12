@@ -1,0 +1,106 @@
+source file: <b>/usr/lib/python2.7/xml/dom/domreg.py</b><br>
+
+
+file stats: <b>56 lines, 10 executed: 17.9% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Registration facilities for DOM. This module should not be used</font>
+<font color="black">   2. directly. Instead, the functions getDOMImplementation and</font>
+<font color="green">   3. registerDOMImplementation should be imported from xml.dom.&quot;&quot;&quot;</font>
+<font color="black">   4. </font>
+<font color="green">   5. from xml.dom.minicompat import *  # isinstance, StringTypes</font>
+<font color="black">   6. </font>
+<font color="black">   7. # This is a list of well-known implementations.  Well-known names</font>
+<font color="black">   8. # should be published by posting to xml-sig@python.org, and are</font>
+<font color="black">   9. # subsequently recorded in this file.</font>
+<font color="black">  10. </font>
+<font color="green">  11. well_known_implementations = {</font>
+<font color="green">  12.     'minidom':'xml.dom.minidom',</font>
+<font color="green">  13.     '4DOM': 'xml.dom.DOMImplementation',</font>
+<font color="black">  14.     }</font>
+<font color="black">  15. </font>
+<font color="black">  16. # DOM implementations not officially registered should register</font>
+<font color="black">  17. # themselves with their</font>
+<font color="black">  18. </font>
+<font color="green">  19. registered = {}</font>
+<font color="black">  20. </font>
+<font color="green">  21. def registerDOMImplementation(name, factory):</font>
+<font color="black">  22.     &quot;&quot;&quot;registerDOMImplementation(name, factory)</font>
+<font color="black">  23. </font>
+<font color="black">  24.     Register the factory function with the name. The factory function</font>
+<font color="black">  25.     should return an object which implements the DOMImplementation</font>
+<font color="black">  26.     interface. The factory function can either return the same object,</font>
+<font color="black">  27.     or a new one (e.g. if that implementation supports some</font>
+<font color="black">  28.     customization).&quot;&quot;&quot;</font>
+<font color="black">  29. </font>
+<font color="red">  30.     registered[name] = factory</font>
+<font color="black">  31. </font>
+<font color="green">  32. def _good_enough(dom, features):</font>
+<font color="black">  33.     &quot;_good_enough(dom, features) -&gt; Return 1 if the dom offers the features&quot;</font>
+<font color="red">  34.     for f,v in features:</font>
+<font color="red">  35.         if not dom.hasFeature(f,v):</font>
+<font color="red">  36.             return 0</font>
+<font color="red">  37.     return 1</font>
+<font color="black">  38. </font>
+<font color="green">  39. def getDOMImplementation(name = None, features = ()):</font>
+<font color="black">  40.     &quot;&quot;&quot;getDOMImplementation(name = None, features = ()) -&gt; DOM implementation.</font>
+<font color="black">  41. </font>
+<font color="black">  42.     Return a suitable DOM implementation. The name is either</font>
+<font color="black">  43.     well-known, the module name of a DOM implementation, or None. If</font>
+<font color="black">  44.     it is not None, imports the corresponding module and returns</font>
+<font color="black">  45.     DOMImplementation object if the import succeeds.</font>
+<font color="black">  46. </font>
+<font color="black">  47.     If name is not given, consider the available implementations to</font>
+<font color="black">  48.     find one with the required feature set. If no implementation can</font>
+<font color="black">  49.     be found, raise an ImportError. The features list must be a sequence</font>
+<font color="black">  50.     of (feature, version) pairs which are passed to hasFeature.&quot;&quot;&quot;</font>
+<font color="black">  51. </font>
+<font color="red">  52.     import os</font>
+<font color="red">  53.     creator = None</font>
+<font color="red">  54.     mod = well_known_implementations.get(name)</font>
+<font color="red">  55.     if mod:</font>
+<font color="red">  56.         mod = __import__(mod, {}, {}, ['getDOMImplementation'])</font>
+<font color="red">  57.         return mod.getDOMImplementation()</font>
+<font color="red">  58.     elif name:</font>
+<font color="red">  59.         return registered[name]()</font>
+<font color="red">  60.     elif &quot;PYTHON_DOM&quot; in os.environ:</font>
+<font color="red">  61.         return getDOMImplementation(name = os.environ[&quot;PYTHON_DOM&quot;])</font>
+<font color="black">  62. </font>
+<font color="black">  63.     # User did not specify a name, try implementations in arbitrary</font>
+<font color="black">  64.     # order, returning the one that has the required features</font>
+<font color="red">  65.     if isinstance(features, StringTypes):</font>
+<font color="red">  66.         features = _parse_feature_string(features)</font>
+<font color="red">  67.     for creator in registered.values():</font>
+<font color="red">  68.         dom = creator()</font>
+<font color="red">  69.         if _good_enough(dom, features):</font>
+<font color="red">  70.             return dom</font>
+<font color="black">  71. </font>
+<font color="red">  72.     for creator in well_known_implementations.keys():</font>
+<font color="red">  73.         try:</font>
+<font color="red">  74.             dom = getDOMImplementation(name = creator)</font>
+<font color="red">  75.         except StandardError: # typically ImportError, or AttributeError</font>
+<font color="red">  76.             continue</font>
+<font color="red">  77.         if _good_enough(dom, features):</font>
+<font color="red">  78.             return dom</font>
+<font color="black">  79. </font>
+<font color="red">  80.     raise ImportError,&quot;no suitable DOM implementation found&quot;</font>
+<font color="black">  81. </font>
+<font color="green">  82. def _parse_feature_string(s):</font>
+<font color="red">  83.     features = []</font>
+<font color="red">  84.     parts = s.split()</font>
+<font color="red">  85.     i = 0</font>
+<font color="red">  86.     length = len(parts)</font>
+<font color="red">  87.     while i &lt; length:</font>
+<font color="red">  88.         feature = parts[i]</font>
+<font color="red">  89.         if feature[0] in &quot;0123456789&quot;:</font>
+<font color="red">  90.             raise ValueError, &quot;bad feature name: %r&quot; % (feature,)</font>
+<font color="red">  91.         i = i + 1</font>
+<font color="red">  92.         version = None</font>
+<font color="red">  93.         if i &lt; length:</font>
+<font color="red">  94.             v = parts[i]</font>
+<font color="red">  95.             if v[0] in &quot;0123456789&quot;:</font>
+<font color="red">  96.                 i = i + 1</font>
+<font color="red">  97.                 version = v</font>
+<font color="red">  98.         features.append((feature, version))</font>
+<font color="red">  99.     return tuple(features)</font>
+</pre>
+

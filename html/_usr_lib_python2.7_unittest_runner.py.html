@@ -1,0 +1,203 @@
+source file: <b>/usr/lib/python2.7/unittest/runner.py</b><br>
+
+
+file stats: <b>156 lines, 116 executed: 74.4% covered</b>
+<pre>
+<font color="green">   1. &quot;&quot;&quot;Running tests&quot;&quot;&quot;</font>
+<font color="black">   2. </font>
+<font color="green">   3. import sys</font>
+<font color="green">   4. import time</font>
+<font color="black">   5. </font>
+<font color="green">   6. from . import result</font>
+<font color="green">   7. from .signals import registerResult</font>
+<font color="black">   8. </font>
+<font color="green">   9. __unittest = True</font>
+<font color="black">  10. </font>
+<font color="black">  11. </font>
+<font color="green">  12. class _WritelnDecorator(object):</font>
+<font color="green">  13.     &quot;&quot;&quot;Used to decorate file-like objects with a handy 'writeln' method&quot;&quot;&quot;</font>
+<font color="green">  14.     def __init__(self,stream):</font>
+<font color="green">  15.         self.stream = stream</font>
+<font color="black">  16. </font>
+<font color="green">  17.     def __getattr__(self, attr):</font>
+<font color="green">  18.         if attr in ('stream', '__getstate__'):</font>
+<font color="red">  19.             raise AttributeError(attr)</font>
+<font color="green">  20.         return getattr(self.stream,attr)</font>
+<font color="black">  21. </font>
+<font color="green">  22.     def writeln(self, arg=None):</font>
+<font color="green">  23.         if arg:</font>
+<font color="green">  24.             self.write(arg)</font>
+<font color="green">  25.         self.write('\n') # text-mode streams translate to \r\n if needed</font>
+<font color="black">  26. </font>
+<font color="black">  27. </font>
+<font color="green">  28. class TextTestResult(result.TestResult):</font>
+<font color="black">  29.     &quot;&quot;&quot;A test result class that can print formatted text results to a stream.</font>
+<font color="black">  30. </font>
+<font color="black">  31.     Used by TextTestRunner.</font>
+<font color="green">  32.     &quot;&quot;&quot;</font>
+<font color="green">  33.     separator1 = '=' * 70</font>
+<font color="green">  34.     separator2 = '-' * 70</font>
+<font color="black">  35. </font>
+<font color="green">  36.     def __init__(self, stream, descriptions, verbosity):</font>
+<font color="green">  37.         super(TextTestResult, self).__init__(stream, descriptions, verbosity)</font>
+<font color="green">  38.         self.stream = stream</font>
+<font color="green">  39.         self.showAll = verbosity &gt; 1</font>
+<font color="green">  40.         self.dots = verbosity == 1</font>
+<font color="green">  41.         self.descriptions = descriptions</font>
+<font color="black">  42. </font>
+<font color="green">  43.     def getDescription(self, test):</font>
+<font color="green">  44.         doc_first_line = test.shortDescription()</font>
+<font color="green">  45.         if self.descriptions and doc_first_line:</font>
+<font color="red">  46.             return '\n'.join((str(test), doc_first_line))</font>
+<font color="black">  47.         else:</font>
+<font color="green">  48.             return str(test)</font>
+<font color="black">  49. </font>
+<font color="green">  50.     def startTest(self, test):</font>
+<font color="green">  51.         super(TextTestResult, self).startTest(test)</font>
+<font color="green">  52.         if self.showAll:</font>
+<font color="red">  53.             self.stream.write(self.getDescription(test))</font>
+<font color="red">  54.             self.stream.write(&quot; ... &quot;)</font>
+<font color="red">  55.             self.stream.flush()</font>
+<font color="black">  56. </font>
+<font color="green">  57.     def addSuccess(self, test):</font>
+<font color="green">  58.         super(TextTestResult, self).addSuccess(test)</font>
+<font color="green">  59.         if self.showAll:</font>
+<font color="red">  60.             self.stream.writeln(&quot;ok&quot;)</font>
+<font color="green">  61.         elif self.dots:</font>
+<font color="green">  62.             self.stream.write('.')</font>
+<font color="green">  63.             self.stream.flush()</font>
+<font color="black">  64. </font>
+<font color="green">  65.     def addError(self, test, err):</font>
+<font color="red">  66.         super(TextTestResult, self).addError(test, err)</font>
+<font color="red">  67.         if self.showAll:</font>
+<font color="red">  68.             self.stream.writeln(&quot;ERROR&quot;)</font>
+<font color="red">  69.         elif self.dots:</font>
+<font color="red">  70.             self.stream.write('E')</font>
+<font color="red">  71.             self.stream.flush()</font>
+<font color="black">  72. </font>
+<font color="green">  73.     def addFailure(self, test, err):</font>
+<font color="green">  74.         super(TextTestResult, self).addFailure(test, err)</font>
+<font color="green">  75.         if self.showAll:</font>
+<font color="red">  76.             self.stream.writeln(&quot;FAIL&quot;)</font>
+<font color="green">  77.         elif self.dots:</font>
+<font color="green">  78.             self.stream.write('F')</font>
+<font color="green">  79.             self.stream.flush()</font>
+<font color="black">  80. </font>
+<font color="green">  81.     def addSkip(self, test, reason):</font>
+<font color="red">  82.         super(TextTestResult, self).addSkip(test, reason)</font>
+<font color="red">  83.         if self.showAll:</font>
+<font color="red">  84.             self.stream.writeln(&quot;skipped {0!r}&quot;.format(reason))</font>
+<font color="red">  85.         elif self.dots:</font>
+<font color="red">  86.             self.stream.write(&quot;s&quot;)</font>
+<font color="red">  87.             self.stream.flush()</font>
+<font color="black">  88. </font>
+<font color="green">  89.     def addExpectedFailure(self, test, err):</font>
+<font color="red">  90.         super(TextTestResult, self).addExpectedFailure(test, err)</font>
+<font color="red">  91.         if self.showAll:</font>
+<font color="red">  92.             self.stream.writeln(&quot;expected failure&quot;)</font>
+<font color="red">  93.         elif self.dots:</font>
+<font color="red">  94.             self.stream.write(&quot;x&quot;)</font>
+<font color="red">  95.             self.stream.flush()</font>
+<font color="black">  96. </font>
+<font color="green">  97.     def addUnexpectedSuccess(self, test):</font>
+<font color="red">  98.         super(TextTestResult, self).addUnexpectedSuccess(test)</font>
+<font color="red">  99.         if self.showAll:</font>
+<font color="red"> 100.             self.stream.writeln(&quot;unexpected success&quot;)</font>
+<font color="red"> 101.         elif self.dots:</font>
+<font color="red"> 102.             self.stream.write(&quot;u&quot;)</font>
+<font color="red"> 103.             self.stream.flush()</font>
+<font color="black"> 104. </font>
+<font color="green"> 105.     def printErrors(self):</font>
+<font color="green"> 106.         if self.dots or self.showAll:</font>
+<font color="green"> 107.             self.stream.writeln()</font>
+<font color="green"> 108.         self.printErrorList('ERROR', self.errors)</font>
+<font color="green"> 109.         self.printErrorList('FAIL', self.failures)</font>
+<font color="black"> 110. </font>
+<font color="green"> 111.     def printErrorList(self, flavour, errors):</font>
+<font color="green"> 112.         for test, err in errors:</font>
+<font color="green"> 113.             self.stream.writeln(self.separator1)</font>
+<font color="green"> 114.             self.stream.writeln(&quot;%s: %s&quot; % (flavour,self.getDescription(test)))</font>
+<font color="green"> 115.             self.stream.writeln(self.separator2)</font>
+<font color="green"> 116.             self.stream.writeln(&quot;%s&quot; % err)</font>
+<font color="black"> 117. </font>
+<font color="black"> 118. </font>
+<font color="green"> 119. class TextTestRunner(object):</font>
+<font color="black"> 120.     &quot;&quot;&quot;A test runner class that displays results in textual form.</font>
+<font color="black"> 121. </font>
+<font color="black"> 122.     It prints out the names of tests as they are run, errors as they</font>
+<font color="black"> 123.     occur, and a summary of the results at the end of the test run.</font>
+<font color="green"> 124.     &quot;&quot;&quot;</font>
+<font color="green"> 125.     resultclass = TextTestResult</font>
+<font color="black"> 126. </font>
+<font color="green"> 127.     def __init__(self, stream=sys.stderr, descriptions=True, verbosity=1,</font>
+<font color="green"> 128.                  failfast=False, buffer=False, resultclass=None):</font>
+<font color="green"> 129.         self.stream = _WritelnDecorator(stream)</font>
+<font color="green"> 130.         self.descriptions = descriptions</font>
+<font color="green"> 131.         self.verbosity = verbosity</font>
+<font color="green"> 132.         self.failfast = failfast</font>
+<font color="green"> 133.         self.buffer = buffer</font>
+<font color="green"> 134.         if resultclass is not None:</font>
+<font color="red"> 135.             self.resultclass = resultclass</font>
+<font color="black"> 136. </font>
+<font color="green"> 137.     def _makeResult(self):</font>
+<font color="green"> 138.         return self.resultclass(self.stream, self.descriptions, self.verbosity)</font>
+<font color="black"> 139. </font>
+<font color="green"> 140.     def run(self, test):</font>
+<font color="black"> 141.         &quot;Run the given test case or test suite.&quot;</font>
+<font color="green"> 142.         result = self._makeResult()</font>
+<font color="green"> 143.         registerResult(result)</font>
+<font color="green"> 144.         result.failfast = self.failfast</font>
+<font color="green"> 145.         result.buffer = self.buffer</font>
+<font color="green"> 146.         startTime = time.time()</font>
+<font color="green"> 147.         startTestRun = getattr(result, 'startTestRun', None)</font>
+<font color="green"> 148.         if startTestRun is not None:</font>
+<font color="green"> 149.             startTestRun()</font>
+<font color="green"> 150.         try:</font>
+<font color="green"> 151.             test(result)</font>
+<font color="black"> 152.         finally:</font>
+<font color="green"> 153.             stopTestRun = getattr(result, 'stopTestRun', None)</font>
+<font color="green"> 154.             if stopTestRun is not None:</font>
+<font color="green"> 155.                 stopTestRun()</font>
+<font color="green"> 156.         stopTime = time.time()</font>
+<font color="green"> 157.         timeTaken = stopTime - startTime</font>
+<font color="green"> 158.         result.printErrors()</font>
+<font color="green"> 159.         if hasattr(result, 'separator2'):</font>
+<font color="green"> 160.             self.stream.writeln(result.separator2)</font>
+<font color="green"> 161.         run = result.testsRun</font>
+<font color="green"> 162.         self.stream.writeln(&quot;Ran %d test%s in %.3fs&quot; %</font>
+<font color="green"> 163.                             (run, run != 1 and &quot;s&quot; or &quot;&quot;, timeTaken))</font>
+<font color="green"> 164.         self.stream.writeln()</font>
+<font color="black"> 165. </font>
+<font color="green"> 166.         expectedFails = unexpectedSuccesses = skipped = 0</font>
+<font color="green"> 167.         try:</font>
+<font color="green"> 168.             results = map(len, (result.expectedFailures,</font>
+<font color="green"> 169.                                 result.unexpectedSuccesses,</font>
+<font color="green"> 170.                                 result.skipped))</font>
+<font color="red"> 171.         except AttributeError:</font>
+<font color="red"> 172.             pass</font>
+<font color="black"> 173.         else:</font>
+<font color="green"> 174.             expectedFails, unexpectedSuccesses, skipped = results</font>
+<font color="black"> 175. </font>
+<font color="green"> 176.         infos = []</font>
+<font color="green"> 177.         if not result.wasSuccessful():</font>
+<font color="green"> 178.             self.stream.write(&quot;FAILED&quot;)</font>
+<font color="green"> 179.             failed, errored = map(len, (result.failures, result.errors))</font>
+<font color="green"> 180.             if failed:</font>
+<font color="green"> 181.                 infos.append(&quot;failures=%d&quot; % failed)</font>
+<font color="green"> 182.             if errored:</font>
+<font color="red"> 183.                 infos.append(&quot;errors=%d&quot; % errored)</font>
+<font color="black"> 184.         else:</font>
+<font color="red"> 185.             self.stream.write(&quot;OK&quot;)</font>
+<font color="green"> 186.         if skipped:</font>
+<font color="red"> 187.             infos.append(&quot;skipped=%d&quot; % skipped)</font>
+<font color="green"> 188.         if expectedFails:</font>
+<font color="red"> 189.             infos.append(&quot;expected failures=%d&quot; % expectedFails)</font>
+<font color="green"> 190.         if unexpectedSuccesses:</font>
+<font color="red"> 191.             infos.append(&quot;unexpected successes=%d&quot; % unexpectedSuccesses)</font>
+<font color="green"> 192.         if infos:</font>
+<font color="green"> 193.             self.stream.writeln(&quot; (%s)&quot; % (&quot;, &quot;.join(infos),))</font>
+<font color="black"> 194.         else:</font>
+<font color="red"> 195.             self.stream.write(&quot;\n&quot;)</font>
+<font color="green"> 196.         return result</font>
+</pre>
+

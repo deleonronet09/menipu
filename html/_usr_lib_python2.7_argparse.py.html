@@ -1,0 +1,2370 @@
+source file: <b>/usr/lib/python2.7/argparse.py</b><br>
+
+
+file stats: <b>1389 lines, 601 executed: 43.3% covered</b>
+<pre>
+<font color="black">   1. # Author: Steven J. Bethard &lt;steven.bethard@gmail.com&gt;.</font>
+<font color="black">   2. </font>
+<font color="black">   3. &quot;&quot;&quot;Command-line parsing library</font>
+<font color="black">   4. </font>
+<font color="black">   5. This module is an optparse-inspired command-line parsing library that:</font>
+<font color="black">   6. </font>
+<font color="black">   7.     - handles both optional and positional arguments</font>
+<font color="black">   8.     - produces highly informative usage messages</font>
+<font color="black">   9.     - supports parsers that dispatch to sub-parsers</font>
+<font color="black">  10. </font>
+<font color="black">  11. The following is a simple usage example that sums integers from the</font>
+<font color="black">  12. command-line and writes the result to a file::</font>
+<font color="black">  13. </font>
+<font color="black">  14.     parser = argparse.ArgumentParser(</font>
+<font color="black">  15.         description='sum the integers at the command line')</font>
+<font color="black">  16.     parser.add_argument(</font>
+<font color="black">  17.         'integers', metavar='int', nargs='+', type=int,</font>
+<font color="black">  18.         help='an integer to be summed')</font>
+<font color="black">  19.     parser.add_argument(</font>
+<font color="black">  20.         '--log', default=sys.stdout, type=argparse.FileType('w'),</font>
+<font color="black">  21.         help='the file where the sum should be written')</font>
+<font color="black">  22.     args = parser.parse_args()</font>
+<font color="black">  23.     args.log.write('%s' % sum(args.integers))</font>
+<font color="black">  24.     args.log.close()</font>
+<font color="black">  25. </font>
+<font color="black">  26. The module contains the following public classes:</font>
+<font color="black">  27. </font>
+<font color="black">  28.     - ArgumentParser -- The main entry point for command-line parsing. As the</font>
+<font color="black">  29.         example above shows, the add_argument() method is used to populate</font>
+<font color="black">  30.         the parser with actions for optional and positional arguments. Then</font>
+<font color="black">  31.         the parse_args() method is invoked to convert the args at the</font>
+<font color="black">  32.         command-line into an object with attributes.</font>
+<font color="black">  33. </font>
+<font color="black">  34.     - ArgumentError -- The exception raised by ArgumentParser objects when</font>
+<font color="black">  35.         there are errors with the parser's actions. Errors raised while</font>
+<font color="black">  36.         parsing the command-line are caught by ArgumentParser and emitted</font>
+<font color="black">  37.         as command-line messages.</font>
+<font color="black">  38. </font>
+<font color="black">  39.     - FileType -- A factory for defining types of files to be created. As the</font>
+<font color="black">  40.         example above shows, instances of FileType are typically passed as</font>
+<font color="black">  41.         the type= argument of add_argument() calls.</font>
+<font color="black">  42. </font>
+<font color="black">  43.     - Action -- The base class for parser actions. Typically actions are</font>
+<font color="black">  44.         selected by passing strings like 'store_true' or 'append_const' to</font>
+<font color="black">  45.         the action= argument of add_argument(). However, for greater</font>
+<font color="black">  46.         customization of ArgumentParser actions, subclasses of Action may</font>
+<font color="black">  47.         be defined and passed as the action= argument.</font>
+<font color="black">  48. </font>
+<font color="black">  49.     - HelpFormatter, RawDescriptionHelpFormatter, RawTextHelpFormatter,</font>
+<font color="black">  50.         ArgumentDefaultsHelpFormatter -- Formatter classes which</font>
+<font color="black">  51.         may be passed as the formatter_class= argument to the</font>
+<font color="black">  52.         ArgumentParser constructor. HelpFormatter is the default,</font>
+<font color="black">  53.         RawDescriptionHelpFormatter and RawTextHelpFormatter tell the parser</font>
+<font color="black">  54.         not to change the formatting for help text, and</font>
+<font color="black">  55.         ArgumentDefaultsHelpFormatter adds information about argument defaults</font>
+<font color="black">  56.         to the help.</font>
+<font color="black">  57. </font>
+<font color="black">  58. All other classes in this module are considered implementation details.</font>
+<font color="black">  59. (Also note that HelpFormatter and RawDescriptionHelpFormatter are only</font>
+<font color="black">  60. considered public as object names -- the API of the formatter objects is</font>
+<font color="black">  61. still considered an implementation detail.)</font>
+<font color="green">  62. &quot;&quot;&quot;</font>
+<font color="black">  63. </font>
+<font color="green">  64. __version__ = '1.1'</font>
+<font color="black">  65. __all__ = [</font>
+<font color="green">  66.     'ArgumentParser',</font>
+<font color="green">  67.     'ArgumentError',</font>
+<font color="green">  68.     'ArgumentTypeError',</font>
+<font color="green">  69.     'FileType',</font>
+<font color="green">  70.     'HelpFormatter',</font>
+<font color="green">  71.     'ArgumentDefaultsHelpFormatter',</font>
+<font color="green">  72.     'RawDescriptionHelpFormatter',</font>
+<font color="green">  73.     'RawTextHelpFormatter',</font>
+<font color="green">  74.     'Namespace',</font>
+<font color="green">  75.     'Action',</font>
+<font color="green">  76.     'ONE_OR_MORE',</font>
+<font color="green">  77.     'OPTIONAL',</font>
+<font color="green">  78.     'PARSER',</font>
+<font color="green">  79.     'REMAINDER',</font>
+<font color="green">  80.     'SUPPRESS',</font>
+<font color="green">  81.     'ZERO_OR_MORE',</font>
+<font color="black">  82. ]</font>
+<font color="black">  83. </font>
+<font color="black">  84. </font>
+<font color="green">  85. import collections as _collections</font>
+<font color="green">  86. import copy as _copy</font>
+<font color="green">  87. import os as _os</font>
+<font color="green">  88. import re as _re</font>
+<font color="green">  89. import sys as _sys</font>
+<font color="green">  90. import textwrap as _textwrap</font>
+<font color="black">  91. </font>
+<font color="green">  92. from gettext import gettext as _</font>
+<font color="black">  93. </font>
+<font color="black">  94. </font>
+<font color="green">  95. def _callable(obj):</font>
+<font color="green">  96.     return hasattr(obj, '__call__') or hasattr(obj, '__bases__')</font>
+<font color="black">  97. </font>
+<font color="black">  98. </font>
+<font color="green">  99. SUPPRESS = '==SUPPRESS=='</font>
+<font color="black"> 100. </font>
+<font color="green"> 101. OPTIONAL = '?'</font>
+<font color="green"> 102. ZERO_OR_MORE = '*'</font>
+<font color="green"> 103. ONE_OR_MORE = '+'</font>
+<font color="green"> 104. PARSER = 'A...'</font>
+<font color="green"> 105. REMAINDER = '...'</font>
+<font color="green"> 106. _UNRECOGNIZED_ARGS_ATTR = '_unrecognized_args'</font>
+<font color="black"> 107. </font>
+<font color="black"> 108. # =============================</font>
+<font color="black"> 109. # Utility functions and classes</font>
+<font color="black"> 110. # =============================</font>
+<font color="black"> 111. </font>
+<font color="green"> 112. class _AttributeHolder(object):</font>
+<font color="black"> 113.     &quot;&quot;&quot;Abstract base class that provides __repr__.</font>
+<font color="black"> 114. </font>
+<font color="black"> 115.     The __repr__ method returns a string in the format::</font>
+<font color="black"> 116.         ClassName(attr=name, attr=name, ...)</font>
+<font color="black"> 117.     The attributes are determined either by a class-level attribute,</font>
+<font color="black"> 118.     '_kwarg_names', or by inspecting the instance __dict__.</font>
+<font color="green"> 119.     &quot;&quot;&quot;</font>
+<font color="black"> 120. </font>
+<font color="green"> 121.     def __repr__(self):</font>
+<font color="red"> 122.         type_name = type(self).__name__</font>
+<font color="red"> 123.         arg_strings = []</font>
+<font color="red"> 124.         for arg in self._get_args():</font>
+<font color="red"> 125.             arg_strings.append(repr(arg))</font>
+<font color="red"> 126.         for name, value in self._get_kwargs():</font>
+<font color="red"> 127.             arg_strings.append('%s=%r' % (name, value))</font>
+<font color="red"> 128.         return '%s(%s)' % (type_name, ', '.join(arg_strings))</font>
+<font color="black"> 129. </font>
+<font color="green"> 130.     def _get_kwargs(self):</font>
+<font color="green"> 131.         return sorted(self.__dict__.items())</font>
+<font color="black"> 132. </font>
+<font color="green"> 133.     def _get_args(self):</font>
+<font color="red"> 134.         return []</font>
+<font color="black"> 135. </font>
+<font color="black"> 136. </font>
+<font color="green"> 137. def _ensure_value(namespace, name, value):</font>
+<font color="red"> 138.     if getattr(namespace, name, None) is None:</font>
+<font color="red"> 139.         setattr(namespace, name, value)</font>
+<font color="red"> 140.     return getattr(namespace, name)</font>
+<font color="black"> 141. </font>
+<font color="black"> 142. </font>
+<font color="black"> 143. # ===============</font>
+<font color="black"> 144. # Formatting Help</font>
+<font color="black"> 145. # ===============</font>
+<font color="black"> 146. </font>
+<font color="green"> 147. class HelpFormatter(object):</font>
+<font color="black"> 148.     &quot;&quot;&quot;Formatter for generating usage messages and argument help strings.</font>
+<font color="black"> 149. </font>
+<font color="black"> 150.     Only the name of this class is considered a public API. All the methods</font>
+<font color="black"> 151.     provided by the class are considered an implementation detail.</font>
+<font color="green"> 152.     &quot;&quot;&quot;</font>
+<font color="black"> 153. </font>
+<font color="black"> 154.     def __init__(self,</font>
+<font color="black"> 155.                  prog,</font>
+<font color="green"> 156.                  indent_increment=2,</font>
+<font color="green"> 157.                  max_help_position=24,</font>
+<font color="green"> 158.                  width=None):</font>
+<font color="black"> 159. </font>
+<font color="black"> 160.         # default setting for width</font>
+<font color="green"> 161.         if width is None:</font>
+<font color="green"> 162.             try:</font>
+<font color="green"> 163.                 width = int(_os.environ['COLUMNS'])</font>
+<font color="green"> 164.             except (KeyError, ValueError):</font>
+<font color="green"> 165.                 width = 80</font>
+<font color="green"> 166.             width -= 2</font>
+<font color="black"> 167. </font>
+<font color="green"> 168.         self._prog = prog</font>
+<font color="green"> 169.         self._indent_increment = indent_increment</font>
+<font color="green"> 170.         self._max_help_position = max_help_position</font>
+<font color="green"> 171.         self._max_help_position = min(max_help_position,</font>
+<font color="green"> 172.                                       max(width - 20, indent_increment * 2))</font>
+<font color="green"> 173.         self._width = width</font>
+<font color="black"> 174. </font>
+<font color="green"> 175.         self._current_indent = 0</font>
+<font color="green"> 176.         self._level = 0</font>
+<font color="green"> 177.         self._action_max_length = 0</font>
+<font color="black"> 178. </font>
+<font color="green"> 179.         self._root_section = self._Section(self, None)</font>
+<font color="green"> 180.         self._current_section = self._root_section</font>
+<font color="black"> 181. </font>
+<font color="green"> 182.         self._whitespace_matcher = _re.compile(r'\s+')</font>
+<font color="green"> 183.         self._long_break_matcher = _re.compile(r'\n\n\n+')</font>
+<font color="black"> 184. </font>
+<font color="black"> 185.     # ===============================</font>
+<font color="black"> 186.     # Section and indentation methods</font>
+<font color="black"> 187.     # ===============================</font>
+<font color="green"> 188.     def _indent(self):</font>
+<font color="red"> 189.         self._current_indent += self._indent_increment</font>
+<font color="red"> 190.         self._level += 1</font>
+<font color="black"> 191. </font>
+<font color="green"> 192.     def _dedent(self):</font>
+<font color="red"> 193.         self._current_indent -= self._indent_increment</font>
+<font color="red"> 194.         assert self._current_indent &gt;= 0, 'Indent decreased below 0.'</font>
+<font color="red"> 195.         self._level -= 1</font>
+<font color="black"> 196. </font>
+<font color="green"> 197.     class _Section(object):</font>
+<font color="black"> 198. </font>
+<font color="green"> 199.         def __init__(self, formatter, parent, heading=None):</font>
+<font color="green"> 200.             self.formatter = formatter</font>
+<font color="green"> 201.             self.parent = parent</font>
+<font color="green"> 202.             self.heading = heading</font>
+<font color="green"> 203.             self.items = []</font>
+<font color="black"> 204. </font>
+<font color="green"> 205.         def format_help(self):</font>
+<font color="black"> 206.             # format the indented section</font>
+<font color="red"> 207.             if self.parent is not None:</font>
+<font color="red"> 208.                 self.formatter._indent()</font>
+<font color="red"> 209.             join = self.formatter._join_parts</font>
+<font color="red"> 210.             for func, args in self.items:</font>
+<font color="red"> 211.                 func(*args)</font>
+<font color="red"> 212.             item_help = join([func(*args) for func, args in self.items])</font>
+<font color="red"> 213.             if self.parent is not None:</font>
+<font color="red"> 214.                 self.formatter._dedent()</font>
+<font color="black"> 215. </font>
+<font color="black"> 216.             # return nothing if the section was empty</font>
+<font color="red"> 217.             if not item_help:</font>
+<font color="red"> 218.                 return ''</font>
+<font color="black"> 219. </font>
+<font color="black"> 220.             # add the heading if the section was non-empty</font>
+<font color="red"> 221.             if self.heading is not SUPPRESS and self.heading is not None:</font>
+<font color="red"> 222.                 current_indent = self.formatter._current_indent</font>
+<font color="red"> 223.                 heading = '%*s%s:\n' % (current_indent, '', self.heading)</font>
+<font color="black"> 224.             else:</font>
+<font color="red"> 225.                 heading = ''</font>
+<font color="black"> 226. </font>
+<font color="black"> 227.             # join the section-initial newline, the heading and the help</font>
+<font color="red"> 228.             return join(['\n', heading, item_help, '\n'])</font>
+<font color="black"> 229. </font>
+<font color="green"> 230.     def _add_item(self, func, args):</font>
+<font color="red"> 231.         self._current_section.items.append((func, args))</font>
+<font color="black"> 232. </font>
+<font color="black"> 233.     # ========================</font>
+<font color="black"> 234.     # Message building methods</font>
+<font color="black"> 235.     # ========================</font>
+<font color="green"> 236.     def start_section(self, heading):</font>
+<font color="red"> 237.         self._indent()</font>
+<font color="red"> 238.         section = self._Section(self, self._current_section, heading)</font>
+<font color="red"> 239.         self._add_item(section.format_help, [])</font>
+<font color="red"> 240.         self._current_section = section</font>
+<font color="black"> 241. </font>
+<font color="green"> 242.     def end_section(self):</font>
+<font color="red"> 243.         self._current_section = self._current_section.parent</font>
+<font color="red"> 244.         self._dedent()</font>
+<font color="black"> 245. </font>
+<font color="green"> 246.     def add_text(self, text):</font>
+<font color="red"> 247.         if text is not SUPPRESS and text is not None:</font>
+<font color="red"> 248.             self._add_item(self._format_text, [text])</font>
+<font color="black"> 249. </font>
+<font color="green"> 250.     def add_usage(self, usage, actions, groups, prefix=None):</font>
+<font color="red"> 251.         if usage is not SUPPRESS:</font>
+<font color="red"> 252.             args = usage, actions, groups, prefix</font>
+<font color="red"> 253.             self._add_item(self._format_usage, args)</font>
+<font color="black"> 254. </font>
+<font color="green"> 255.     def add_argument(self, action):</font>
+<font color="red"> 256.         if action.help is not SUPPRESS:</font>
+<font color="black"> 257. </font>
+<font color="black"> 258.             # find all invocations</font>
+<font color="red"> 259.             get_invocation = self._format_action_invocation</font>
+<font color="red"> 260.             invocations = [get_invocation(action)]</font>
+<font color="red"> 261.             for subaction in self._iter_indented_subactions(action):</font>
+<font color="red"> 262.                 invocations.append(get_invocation(subaction))</font>
+<font color="black"> 263. </font>
+<font color="black"> 264.             # update the maximum item length</font>
+<font color="red"> 265.             invocation_length = max([len(s) for s in invocations])</font>
+<font color="red"> 266.             action_length = invocation_length + self._current_indent</font>
+<font color="red"> 267.             self._action_max_length = max(self._action_max_length,</font>
+<font color="red"> 268.                                           action_length)</font>
+<font color="black"> 269. </font>
+<font color="black"> 270.             # add the item to the list</font>
+<font color="red"> 271.             self._add_item(self._format_action, [action])</font>
+<font color="black"> 272. </font>
+<font color="green"> 273.     def add_arguments(self, actions):</font>
+<font color="red"> 274.         for action in actions:</font>
+<font color="red"> 275.             self.add_argument(action)</font>
+<font color="black"> 276. </font>
+<font color="black"> 277.     # =======================</font>
+<font color="black"> 278.     # Help-formatting methods</font>
+<font color="black"> 279.     # =======================</font>
+<font color="green"> 280.     def format_help(self):</font>
+<font color="red"> 281.         help = self._root_section.format_help()</font>
+<font color="red"> 282.         if help:</font>
+<font color="red"> 283.             help = self._long_break_matcher.sub('\n\n', help)</font>
+<font color="red"> 284.             help = help.strip('\n') + '\n'</font>
+<font color="red"> 285.         return help</font>
+<font color="black"> 286. </font>
+<font color="green"> 287.     def _join_parts(self, part_strings):</font>
+<font color="red"> 288.         return ''.join([part</font>
+<font color="red"> 289.                         for part in part_strings</font>
+<font color="red"> 290.                         if part and part is not SUPPRESS])</font>
+<font color="black"> 291. </font>
+<font color="green"> 292.     def _format_usage(self, usage, actions, groups, prefix):</font>
+<font color="red"> 293.         if prefix is None:</font>
+<font color="red"> 294.             prefix = _('usage: ')</font>
+<font color="black"> 295. </font>
+<font color="black"> 296.         # if usage is specified, use that</font>
+<font color="red"> 297.         if usage is not None:</font>
+<font color="red"> 298.             usage = usage % dict(prog=self._prog)</font>
+<font color="black"> 299. </font>
+<font color="black"> 300.         # if no optionals or positionals are available, usage is just prog</font>
+<font color="red"> 301.         elif usage is None and not actions:</font>
+<font color="red"> 302.             usage = '%(prog)s' % dict(prog=self._prog)</font>
+<font color="black"> 303. </font>
+<font color="black"> 304.         # if optionals and positionals are available, calculate usage</font>
+<font color="red"> 305.         elif usage is None:</font>
+<font color="red"> 306.             prog = '%(prog)s' % dict(prog=self._prog)</font>
+<font color="black"> 307. </font>
+<font color="black"> 308.             # split optionals from positionals</font>
+<font color="red"> 309.             optionals = []</font>
+<font color="red"> 310.             positionals = []</font>
+<font color="red"> 311.             for action in actions:</font>
+<font color="red"> 312.                 if action.option_strings:</font>
+<font color="red"> 313.                     optionals.append(action)</font>
+<font color="black"> 314.                 else:</font>
+<font color="red"> 315.                     positionals.append(action)</font>
+<font color="black"> 316. </font>
+<font color="black"> 317.             # build full usage string</font>
+<font color="red"> 318.             format = self._format_actions_usage</font>
+<font color="red"> 319.             action_usage = format(optionals + positionals, groups)</font>
+<font color="red"> 320.             usage = ' '.join([s for s in [prog, action_usage] if s])</font>
+<font color="black"> 321. </font>
+<font color="black"> 322.             # wrap the usage parts if it's too long</font>
+<font color="red"> 323.             text_width = self._width - self._current_indent</font>
+<font color="red"> 324.             if len(prefix) + len(usage) &gt; text_width:</font>
+<font color="black"> 325. </font>
+<font color="black"> 326.                 # break usage into wrappable parts</font>
+<font color="red"> 327.                 part_regexp = r'\(.*?\)+|\[.*?\]+|\S+'</font>
+<font color="red"> 328.                 opt_usage = format(optionals, groups)</font>
+<font color="red"> 329.                 pos_usage = format(positionals, groups)</font>
+<font color="red"> 330.                 opt_parts = _re.findall(part_regexp, opt_usage)</font>
+<font color="red"> 331.                 pos_parts = _re.findall(part_regexp, pos_usage)</font>
+<font color="red"> 332.                 assert ' '.join(opt_parts) == opt_usage</font>
+<font color="red"> 333.                 assert ' '.join(pos_parts) == pos_usage</font>
+<font color="black"> 334. </font>
+<font color="black"> 335.                 # helper for wrapping lines</font>
+<font color="red"> 336.                 def get_lines(parts, indent, prefix=None):</font>
+<font color="red"> 337.                     lines = []</font>
+<font color="red"> 338.                     line = []</font>
+<font color="red"> 339.                     if prefix is not None:</font>
+<font color="red"> 340.                         line_len = len(prefix) - 1</font>
+<font color="black"> 341.                     else:</font>
+<font color="red"> 342.                         line_len = len(indent) - 1</font>
+<font color="red"> 343.                     for part in parts:</font>
+<font color="red"> 344.                         if line_len + 1 + len(part) &gt; text_width and line:</font>
+<font color="red"> 345.                             lines.append(indent + ' '.join(line))</font>
+<font color="red"> 346.                             line = []</font>
+<font color="red"> 347.                             line_len = len(indent) - 1</font>
+<font color="red"> 348.                         line.append(part)</font>
+<font color="red"> 349.                         line_len += len(part) + 1</font>
+<font color="red"> 350.                     if line:</font>
+<font color="red"> 351.                         lines.append(indent + ' '.join(line))</font>
+<font color="red"> 352.                     if prefix is not None:</font>
+<font color="red"> 353.                         lines[0] = lines[0][len(indent):]</font>
+<font color="red"> 354.                     return lines</font>
+<font color="black"> 355. </font>
+<font color="black"> 356.                 # if prog is short, follow it with optionals or positionals</font>
+<font color="red"> 357.                 if len(prefix) + len(prog) &lt;= 0.75 * text_width:</font>
+<font color="red"> 358.                     indent = ' ' * (len(prefix) + len(prog) + 1)</font>
+<font color="red"> 359.                     if opt_parts:</font>
+<font color="red"> 360.                         lines = get_lines([prog] + opt_parts, indent, prefix)</font>
+<font color="red"> 361.                         lines.extend(get_lines(pos_parts, indent))</font>
+<font color="red"> 362.                     elif pos_parts:</font>
+<font color="red"> 363.                         lines = get_lines([prog] + pos_parts, indent, prefix)</font>
+<font color="black"> 364.                     else:</font>
+<font color="red"> 365.                         lines = [prog]</font>
+<font color="black"> 366. </font>
+<font color="black"> 367.                 # if prog is long, put it on its own line</font>
+<font color="black"> 368.                 else:</font>
+<font color="red"> 369.                     indent = ' ' * len(prefix)</font>
+<font color="red"> 370.                     parts = opt_parts + pos_parts</font>
+<font color="red"> 371.                     lines = get_lines(parts, indent)</font>
+<font color="red"> 372.                     if len(lines) &gt; 1:</font>
+<font color="red"> 373.                         lines = []</font>
+<font color="red"> 374.                         lines.extend(get_lines(opt_parts, indent))</font>
+<font color="red"> 375.                         lines.extend(get_lines(pos_parts, indent))</font>
+<font color="red"> 376.                     lines = [prog] + lines</font>
+<font color="black"> 377. </font>
+<font color="black"> 378.                 # join lines into usage</font>
+<font color="red"> 379.                 usage = '\n'.join(lines)</font>
+<font color="black"> 380. </font>
+<font color="black"> 381.         # prefix with 'usage:'</font>
+<font color="red"> 382.         return '%s%s\n\n' % (prefix, usage)</font>
+<font color="black"> 383. </font>
+<font color="green"> 384.     def _format_actions_usage(self, actions, groups):</font>
+<font color="black"> 385.         # find group indices and identify actions in groups</font>
+<font color="red"> 386.         group_actions = set()</font>
+<font color="red"> 387.         inserts = {}</font>
+<font color="red"> 388.         for group in groups:</font>
+<font color="red"> 389.             try:</font>
+<font color="red"> 390.                 start = actions.index(group._group_actions[0])</font>
+<font color="red"> 391.             except ValueError:</font>
+<font color="red"> 392.                 continue</font>
+<font color="black"> 393.             else:</font>
+<font color="red"> 394.                 end = start + len(group._group_actions)</font>
+<font color="red"> 395.                 if actions[start:end] == group._group_actions:</font>
+<font color="red"> 396.                     for action in group._group_actions:</font>
+<font color="red"> 397.                         group_actions.add(action)</font>
+<font color="red"> 398.                     if not group.required:</font>
+<font color="red"> 399.                         if start in inserts:</font>
+<font color="red"> 400.                             inserts[start] += ' ['</font>
+<font color="black"> 401.                         else:</font>
+<font color="red"> 402.                             inserts[start] = '['</font>
+<font color="red"> 403.                         inserts[end] = ']'</font>
+<font color="black"> 404.                     else:</font>
+<font color="red"> 405.                         if start in inserts:</font>
+<font color="red"> 406.                             inserts[start] += ' ('</font>
+<font color="black"> 407.                         else:</font>
+<font color="red"> 408.                             inserts[start] = '('</font>
+<font color="red"> 409.                         inserts[end] = ')'</font>
+<font color="red"> 410.                     for i in range(start + 1, end):</font>
+<font color="red"> 411.                         inserts[i] = '|'</font>
+<font color="black"> 412. </font>
+<font color="black"> 413.         # collect all actions format strings</font>
+<font color="red"> 414.         parts = []</font>
+<font color="red"> 415.         for i, action in enumerate(actions):</font>
+<font color="black"> 416. </font>
+<font color="black"> 417.             # suppressed arguments are marked with None</font>
+<font color="black"> 418.             # remove | separators for suppressed arguments</font>
+<font color="red"> 419.             if action.help is SUPPRESS:</font>
+<font color="red"> 420.                 parts.append(None)</font>
+<font color="red"> 421.                 if inserts.get(i) == '|':</font>
+<font color="red"> 422.                     inserts.pop(i)</font>
+<font color="red"> 423.                 elif inserts.get(i + 1) == '|':</font>
+<font color="red"> 424.                     inserts.pop(i + 1)</font>
+<font color="black"> 425. </font>
+<font color="black"> 426.             # produce all arg strings</font>
+<font color="red"> 427.             elif not action.option_strings:</font>
+<font color="red"> 428.                 part = self._format_args(action, action.dest)</font>
+<font color="black"> 429. </font>
+<font color="black"> 430.                 # if it's in a group, strip the outer []</font>
+<font color="red"> 431.                 if action in group_actions:</font>
+<font color="red"> 432.                     if part[0] == '[' and part[-1] == ']':</font>
+<font color="red"> 433.                         part = part[1:-1]</font>
+<font color="black"> 434. </font>
+<font color="black"> 435.                 # add the action string to the list</font>
+<font color="red"> 436.                 parts.append(part)</font>
+<font color="black"> 437. </font>
+<font color="black"> 438.             # produce the first way to invoke the option in brackets</font>
+<font color="black"> 439.             else:</font>
+<font color="red"> 440.                 option_string = action.option_strings[0]</font>
+<font color="black"> 441. </font>
+<font color="black"> 442.                 # if the Optional doesn't take a value, format is:</font>
+<font color="black"> 443.                 #    -s or --long</font>
+<font color="red"> 444.                 if action.nargs == 0:</font>
+<font color="red"> 445.                     part = '%s' % option_string</font>
+<font color="black"> 446. </font>
+<font color="black"> 447.                 # if the Optional takes a value, format is:</font>
+<font color="black"> 448.                 #    -s ARGS or --long ARGS</font>
+<font color="black"> 449.                 else:</font>
+<font color="red"> 450.                     default = action.dest.upper()</font>
+<font color="red"> 451.                     args_string = self._format_args(action, default)</font>
+<font color="red"> 452.                     part = '%s %s' % (option_string, args_string)</font>
+<font color="black"> 453. </font>
+<font color="black"> 454.                 # make it look optional if it's not required or in a group</font>
+<font color="red"> 455.                 if not action.required and action not in group_actions:</font>
+<font color="red"> 456.                     part = '[%s]' % part</font>
+<font color="black"> 457. </font>
+<font color="black"> 458.                 # add the action string to the list</font>
+<font color="red"> 459.                 parts.append(part)</font>
+<font color="black"> 460. </font>
+<font color="black"> 461.         # insert things at the necessary indices</font>
+<font color="red"> 462.         for i in sorted(inserts, reverse=True):</font>
+<font color="red"> 463.             parts[i:i] = [inserts[i]]</font>
+<font color="black"> 464. </font>
+<font color="black"> 465.         # join all the action items with spaces</font>
+<font color="red"> 466.         text = ' '.join([item for item in parts if item is not None])</font>
+<font color="black"> 467. </font>
+<font color="black"> 468.         # clean up separators for mutually exclusive groups</font>
+<font color="red"> 469.         open = r'[\[(]'</font>
+<font color="red"> 470.         close = r'[\])]'</font>
+<font color="red"> 471.         text = _re.sub(r'(%s) ' % open, r'\1', text)</font>
+<font color="red"> 472.         text = _re.sub(r' (%s)' % close, r'\1', text)</font>
+<font color="red"> 473.         text = _re.sub(r'%s *%s' % (open, close), r'', text)</font>
+<font color="red"> 474.         text = _re.sub(r'\(([^|]*)\)', r'\1', text)</font>
+<font color="red"> 475.         text = text.strip()</font>
+<font color="black"> 476. </font>
+<font color="black"> 477.         # return the text</font>
+<font color="red"> 478.         return text</font>
+<font color="black"> 479. </font>
+<font color="green"> 480.     def _format_text(self, text):</font>
+<font color="red"> 481.         if '%(prog)' in text:</font>
+<font color="red"> 482.             text = text % dict(prog=self._prog)</font>
+<font color="red"> 483.         text_width = max(self._width - self._current_indent, 11)</font>
+<font color="red"> 484.         indent = ' ' * self._current_indent</font>
+<font color="red"> 485.         return self._fill_text(text, text_width, indent) + '\n\n'</font>
+<font color="black"> 486. </font>
+<font color="green"> 487.     def _format_action(self, action):</font>
+<font color="black"> 488.         # determine the required width and the entry label</font>
+<font color="red"> 489.         help_position = min(self._action_max_length + 2,</font>
+<font color="red"> 490.                             self._max_help_position)</font>
+<font color="red"> 491.         help_width = max(self._width - help_position, 11)</font>
+<font color="red"> 492.         action_width = help_position - self._current_indent - 2</font>
+<font color="red"> 493.         action_header = self._format_action_invocation(action)</font>
+<font color="black"> 494. </font>
+<font color="black"> 495.         # ho nelp; start on same line and add a final newline</font>
+<font color="red"> 496.         if not action.help:</font>
+<font color="red"> 497.             tup = self._current_indent, '', action_header</font>
+<font color="red"> 498.             action_header = '%*s%s\n' % tup</font>
+<font color="black"> 499. </font>
+<font color="black"> 500.         # short action name; start on the same line and pad two spaces</font>
+<font color="red"> 501.         elif len(action_header) &lt;= action_width:</font>
+<font color="red"> 502.             tup = self._current_indent, '', action_width, action_header</font>
+<font color="red"> 503.             action_header = '%*s%-*s  ' % tup</font>
+<font color="red"> 504.             indent_first = 0</font>
+<font color="black"> 505. </font>
+<font color="black"> 506.         # long action name; start on the next line</font>
+<font color="black"> 507.         else:</font>
+<font color="red"> 508.             tup = self._current_indent, '', action_header</font>
+<font color="red"> 509.             action_header = '%*s%s\n' % tup</font>
+<font color="red"> 510.             indent_first = help_position</font>
+<font color="black"> 511. </font>
+<font color="black"> 512.         # collect the pieces of the action help</font>
+<font color="red"> 513.         parts = [action_header]</font>
+<font color="black"> 514. </font>
+<font color="black"> 515.         # if there was help for the action, add lines of help text</font>
+<font color="red"> 516.         if action.help:</font>
+<font color="red"> 517.             help_text = self._expand_help(action)</font>
+<font color="red"> 518.             help_lines = self._split_lines(help_text, help_width)</font>
+<font color="red"> 519.             parts.append('%*s%s\n' % (indent_first, '', help_lines[0]))</font>
+<font color="red"> 520.             for line in help_lines[1:]:</font>
+<font color="red"> 521.                 parts.append('%*s%s\n' % (help_position, '', line))</font>
+<font color="black"> 522. </font>
+<font color="black"> 523.         # or add a newline if the description doesn't end with one</font>
+<font color="red"> 524.         elif not action_header.endswith('\n'):</font>
+<font color="red"> 525.             parts.append('\n')</font>
+<font color="black"> 526. </font>
+<font color="black"> 527.         # if there are any sub-actions, add their help as well</font>
+<font color="red"> 528.         for subaction in self._iter_indented_subactions(action):</font>
+<font color="red"> 529.             parts.append(self._format_action(subaction))</font>
+<font color="black"> 530. </font>
+<font color="black"> 531.         # return a single string</font>
+<font color="red"> 532.         return self._join_parts(parts)</font>
+<font color="black"> 533. </font>
+<font color="green"> 534.     def _format_action_invocation(self, action):</font>
+<font color="red"> 535.         if not action.option_strings:</font>
+<font color="red"> 536.             metavar, = self._metavar_formatter(action, action.dest)(1)</font>
+<font color="red"> 537.             return metavar</font>
+<font color="black"> 538. </font>
+<font color="black"> 539.         else:</font>
+<font color="red"> 540.             parts = []</font>
+<font color="black"> 541. </font>
+<font color="black"> 542.             # if the Optional doesn't take a value, format is:</font>
+<font color="black"> 543.             #    -s, --long</font>
+<font color="red"> 544.             if action.nargs == 0:</font>
+<font color="red"> 545.                 parts.extend(action.option_strings)</font>
+<font color="black"> 546. </font>
+<font color="black"> 547.             # if the Optional takes a value, format is:</font>
+<font color="black"> 548.             #    -s ARGS, --long ARGS</font>
+<font color="black"> 549.             else:</font>
+<font color="red"> 550.                 default = action.dest.upper()</font>
+<font color="red"> 551.                 args_string = self._format_args(action, default)</font>
+<font color="red"> 552.                 for option_string in action.option_strings:</font>
+<font color="red"> 553.                     parts.append('%s %s' % (option_string, args_string))</font>
+<font color="black"> 554. </font>
+<font color="red"> 555.             return ', '.join(parts)</font>
+<font color="black"> 556. </font>
+<font color="green"> 557.     def _metavar_formatter(self, action, default_metavar):</font>
+<font color="green"> 558.         if action.metavar is not None:</font>
+<font color="green"> 559.             result = action.metavar</font>
+<font color="green"> 560.         elif action.choices is not None:</font>
+<font color="green"> 561.             choice_strs = [str(choice) for choice in action.choices]</font>
+<font color="green"> 562.             result = '{%s}' % ','.join(choice_strs)</font>
+<font color="black"> 563.         else:</font>
+<font color="green"> 564.             result = default_metavar</font>
+<font color="black"> 565. </font>
+<font color="green"> 566.         def format(tuple_size):</font>
+<font color="green"> 567.             if isinstance(result, tuple):</font>
+<font color="red"> 568.                 return result</font>
+<font color="black"> 569.             else:</font>
+<font color="green"> 570.                 return (result, ) * tuple_size</font>
+<font color="green"> 571.         return format</font>
+<font color="black"> 572. </font>
+<font color="green"> 573.     def _format_args(self, action, default_metavar):</font>
+<font color="green"> 574.         get_metavar = self._metavar_formatter(action, default_metavar)</font>
+<font color="green"> 575.         if action.nargs is None:</font>
+<font color="green"> 576.             result = '%s' % get_metavar(1)</font>
+<font color="green"> 577.         elif action.nargs == OPTIONAL:</font>
+<font color="green"> 578.             result = '[%s]' % get_metavar(1)</font>
+<font color="green"> 579.         elif action.nargs == ZERO_OR_MORE:</font>
+<font color="green"> 580.             result = '[%s [%s ...]]' % get_metavar(2)</font>
+<font color="green"> 581.         elif action.nargs == ONE_OR_MORE:</font>
+<font color="red"> 582.             result = '%s [%s ...]' % get_metavar(2)</font>
+<font color="green"> 583.         elif action.nargs == REMAINDER:</font>
+<font color="red"> 584.             result = '...'</font>
+<font color="green"> 585.         elif action.nargs == PARSER:</font>
+<font color="red"> 586.             result = '%s ...' % get_metavar(1)</font>
+<font color="black"> 587.         else:</font>
+<font color="green"> 588.             formats = ['%s' for _ in range(action.nargs)]</font>
+<font color="green"> 589.             result = ' '.join(formats) % get_metavar(action.nargs)</font>
+<font color="green"> 590.         return result</font>
+<font color="black"> 591. </font>
+<font color="green"> 592.     def _expand_help(self, action):</font>
+<font color="red"> 593.         params = dict(vars(action), prog=self._prog)</font>
+<font color="red"> 594.         for name in list(params):</font>
+<font color="red"> 595.             if params[name] is SUPPRESS:</font>
+<font color="red"> 596.                 del params[name]</font>
+<font color="red"> 597.         for name in list(params):</font>
+<font color="red"> 598.             if hasattr(params[name], '__name__'):</font>
+<font color="red"> 599.                 params[name] = params[name].__name__</font>
+<font color="red"> 600.         if params.get('choices') is not None:</font>
+<font color="red"> 601.             choices_str = ', '.join([str(c) for c in params['choices']])</font>
+<font color="red"> 602.             params['choices'] = choices_str</font>
+<font color="red"> 603.         return self._get_help_string(action) % params</font>
+<font color="black"> 604. </font>
+<font color="green"> 605.     def _iter_indented_subactions(self, action):</font>
+<font color="red"> 606.         try:</font>
+<font color="red"> 607.             get_subactions = action._get_subactions</font>
+<font color="red"> 608.         except AttributeError:</font>
+<font color="red"> 609.             pass</font>
+<font color="black"> 610.         else:</font>
+<font color="red"> 611.             self._indent()</font>
+<font color="red"> 612.             for subaction in get_subactions():</font>
+<font color="red"> 613.                 yield subaction</font>
+<font color="red"> 614.             self._dedent()</font>
+<font color="black"> 615. </font>
+<font color="green"> 616.     def _split_lines(self, text, width):</font>
+<font color="red"> 617.         text = self._whitespace_matcher.sub(' ', text).strip()</font>
+<font color="red"> 618.         return _textwrap.wrap(text, width)</font>
+<font color="black"> 619. </font>
+<font color="green"> 620.     def _fill_text(self, text, width, indent):</font>
+<font color="red"> 621.         text = self._whitespace_matcher.sub(' ', text).strip()</font>
+<font color="red"> 622.         return _textwrap.fill(text, width, initial_indent=indent,</font>
+<font color="red"> 623.                                            subsequent_indent=indent)</font>
+<font color="black"> 624. </font>
+<font color="green"> 625.     def _get_help_string(self, action):</font>
+<font color="red"> 626.         return action.help</font>
+<font color="black"> 627. </font>
+<font color="black"> 628. </font>
+<font color="green"> 629. class RawDescriptionHelpFormatter(HelpFormatter):</font>
+<font color="black"> 630.     &quot;&quot;&quot;Help message formatter which retains any formatting in descriptions.</font>
+<font color="black"> 631. </font>
+<font color="black"> 632.     Only the name of this class is considered a public API. All the methods</font>
+<font color="black"> 633.     provided by the class are considered an implementation detail.</font>
+<font color="green"> 634.     &quot;&quot;&quot;</font>
+<font color="black"> 635. </font>
+<font color="green"> 636.     def _fill_text(self, text, width, indent):</font>
+<font color="red"> 637.         return ''.join([indent + line for line in text.splitlines(True)])</font>
+<font color="black"> 638. </font>
+<font color="black"> 639. </font>
+<font color="green"> 640. class RawTextHelpFormatter(RawDescriptionHelpFormatter):</font>
+<font color="black"> 641.     &quot;&quot;&quot;Help message formatter which retains formatting of all help text.</font>
+<font color="black"> 642. </font>
+<font color="black"> 643.     Only the name of this class is considered a public API. All the methods</font>
+<font color="black"> 644.     provided by the class are considered an implementation detail.</font>
+<font color="green"> 645.     &quot;&quot;&quot;</font>
+<font color="black"> 646. </font>
+<font color="green"> 647.     def _split_lines(self, text, width):</font>
+<font color="red"> 648.         return text.splitlines()</font>
+<font color="black"> 649. </font>
+<font color="black"> 650. </font>
+<font color="green"> 651. class ArgumentDefaultsHelpFormatter(HelpFormatter):</font>
+<font color="black"> 652.     &quot;&quot;&quot;Help message formatter which adds default values to argument help.</font>
+<font color="black"> 653. </font>
+<font color="black"> 654.     Only the name of this class is considered a public API. All the methods</font>
+<font color="black"> 655.     provided by the class are considered an implementation detail.</font>
+<font color="green"> 656.     &quot;&quot;&quot;</font>
+<font color="black"> 657. </font>
+<font color="green"> 658.     def _get_help_string(self, action):</font>
+<font color="red"> 659.         help = action.help</font>
+<font color="red"> 660.         if '%(default)' not in action.help:</font>
+<font color="red"> 661.             if action.default is not SUPPRESS:</font>
+<font color="red"> 662.                 defaulting_nargs = [OPTIONAL, ZERO_OR_MORE]</font>
+<font color="red"> 663.                 if action.option_strings or action.nargs in defaulting_nargs:</font>
+<font color="red"> 664.                     help += ' (default: %(default)s)'</font>
+<font color="red"> 665.         return help</font>
+<font color="black"> 666. </font>
+<font color="black"> 667. </font>
+<font color="black"> 668. # =====================</font>
+<font color="black"> 669. # Options and Arguments</font>
+<font color="black"> 670. # =====================</font>
+<font color="black"> 671. </font>
+<font color="green"> 672. def _get_action_name(argument):</font>
+<font color="red"> 673.     if argument is None:</font>
+<font color="red"> 674.         return None</font>
+<font color="red"> 675.     elif argument.option_strings:</font>
+<font color="red"> 676.         return  '/'.join(argument.option_strings)</font>
+<font color="red"> 677.     elif argument.metavar not in (None, SUPPRESS):</font>
+<font color="red"> 678.         return argument.metavar</font>
+<font color="red"> 679.     elif argument.dest not in (None, SUPPRESS):</font>
+<font color="red"> 680.         return argument.dest</font>
+<font color="black"> 681.     else:</font>
+<font color="red"> 682.         return None</font>
+<font color="black"> 683. </font>
+<font color="black"> 684. </font>
+<font color="green"> 685. class ArgumentError(Exception):</font>
+<font color="black"> 686.     &quot;&quot;&quot;An error from creating or using an argument (optional or positional).</font>
+<font color="black"> 687. </font>
+<font color="black"> 688.     The string value of this exception is the message, augmented with</font>
+<font color="black"> 689.     information about the argument that caused it.</font>
+<font color="green"> 690.     &quot;&quot;&quot;</font>
+<font color="black"> 691. </font>
+<font color="green"> 692.     def __init__(self, argument, message):</font>
+<font color="red"> 693.         self.argument_name = _get_action_name(argument)</font>
+<font color="red"> 694.         self.message = message</font>
+<font color="black"> 695. </font>
+<font color="green"> 696.     def __str__(self):</font>
+<font color="red"> 697.         if self.argument_name is None:</font>
+<font color="red"> 698.             format = '%(message)s'</font>
+<font color="black"> 699.         else:</font>
+<font color="red"> 700.             format = 'argument %(argument_name)s: %(message)s'</font>
+<font color="red"> 701.         return format % dict(message=self.message,</font>
+<font color="red"> 702.                              argument_name=self.argument_name)</font>
+<font color="black"> 703. </font>
+<font color="black"> 704. </font>
+<font color="green"> 705. class ArgumentTypeError(Exception):</font>
+<font color="green"> 706.     &quot;&quot;&quot;An error from trying to convert a command line string to a type.&quot;&quot;&quot;</font>
+<font color="green"> 707.     pass</font>
+<font color="black"> 708. </font>
+<font color="black"> 709. </font>
+<font color="black"> 710. # ==============</font>
+<font color="black"> 711. # Action classes</font>
+<font color="black"> 712. # ==============</font>
+<font color="black"> 713. </font>
+<font color="green"> 714. class Action(_AttributeHolder):</font>
+<font color="black"> 715.     &quot;&quot;&quot;Information about how to convert command line strings to Python objects.</font>
+<font color="black"> 716. </font>
+<font color="black"> 717.     Action objects are used by an ArgumentParser to represent the information</font>
+<font color="black"> 718.     needed to parse a single argument from one or more strings from the</font>
+<font color="black"> 719.     command line. The keyword arguments to the Action constructor are also</font>
+<font color="black"> 720.     all attributes of Action instances.</font>
+<font color="black"> 721. </font>
+<font color="black"> 722.     Keyword Arguments:</font>
+<font color="black"> 723. </font>
+<font color="black"> 724.         - option_strings -- A list of command-line option strings which</font>
+<font color="black"> 725.             should be associated with this action.</font>
+<font color="black"> 726. </font>
+<font color="black"> 727.         - dest -- The name of the attribute to hold the created object(s)</font>
+<font color="black"> 728. </font>
+<font color="black"> 729.         - nargs -- The number of command-line arguments that should be</font>
+<font color="black"> 730.             consumed. By default, one argument will be consumed and a single</font>
+<font color="black"> 731.             value will be produced.  Other values include:</font>
+<font color="black"> 732.                 - N (an integer) consumes N arguments (and produces a list)</font>
+<font color="black"> 733.                 - '?' consumes zero or one arguments</font>
+<font color="black"> 734.                 - '*' consumes zero or more arguments (and produces a list)</font>
+<font color="black"> 735.                 - '+' consumes one or more arguments (and produces a list)</font>
+<font color="black"> 736.             Note that the difference between the default and nargs=1 is that</font>
+<font color="black"> 737.             with the default, a single value will be produced, while with</font>
+<font color="black"> 738.             nargs=1, a list containing a single value will be produced.</font>
+<font color="black"> 739. </font>
+<font color="black"> 740.         - const -- The value to be produced if the option is specified and the</font>
+<font color="black"> 741.             option uses an action that takes no values.</font>
+<font color="black"> 742. </font>
+<font color="black"> 743.         - default -- The value to be produced if the option is not specified.</font>
+<font color="black"> 744. </font>
+<font color="black"> 745.         - type -- A callable that accepts a single string argument, and</font>
+<font color="black"> 746.             returns the converted value.  The standard Python types str, int,</font>
+<font color="black"> 747.             float, and complex are useful examples of such callables.  If None,</font>
+<font color="black"> 748.             str is used.</font>
+<font color="black"> 749. </font>
+<font color="black"> 750.         - choices -- A container of values that should be allowed. If not None,</font>
+<font color="black"> 751.             after a command-line argument has been converted to the appropriate</font>
+<font color="black"> 752.             type, an exception will be raised if it is not a member of this</font>
+<font color="black"> 753.             collection.</font>
+<font color="black"> 754. </font>
+<font color="black"> 755.         - required -- True if the action must always be specified at the</font>
+<font color="black"> 756.             command line. This is only meaningful for optional command-line</font>
+<font color="black"> 757.             arguments.</font>
+<font color="black"> 758. </font>
+<font color="black"> 759.         - help -- The help string describing the argument.</font>
+<font color="black"> 760. </font>
+<font color="black"> 761.         - metavar -- The name to be used for the option's argument with the</font>
+<font color="black"> 762.             help string. If None, the 'dest' value will be used as the name.</font>
+<font color="green"> 763.     &quot;&quot;&quot;</font>
+<font color="black"> 764. </font>
+<font color="black"> 765.     def __init__(self,</font>
+<font color="black"> 766.                  option_strings,</font>
+<font color="black"> 767.                  dest,</font>
+<font color="green"> 768.                  nargs=None,</font>
+<font color="green"> 769.                  const=None,</font>
+<font color="green"> 770.                  default=None,</font>
+<font color="green"> 771.                  type=None,</font>
+<font color="green"> 772.                  choices=None,</font>
+<font color="green"> 773.                  required=False,</font>
+<font color="green"> 774.                  help=None,</font>
+<font color="green"> 775.                  metavar=None):</font>
+<font color="green"> 776.         self.option_strings = option_strings</font>
+<font color="green"> 777.         self.dest = dest</font>
+<font color="green"> 778.         self.nargs = nargs</font>
+<font color="green"> 779.         self.const = const</font>
+<font color="green"> 780.         self.default = default</font>
+<font color="green"> 781.         self.type = type</font>
+<font color="green"> 782.         self.choices = choices</font>
+<font color="green"> 783.         self.required = required</font>
+<font color="green"> 784.         self.help = help</font>
+<font color="green"> 785.         self.metavar = metavar</font>
+<font color="black"> 786. </font>
+<font color="green"> 787.     def _get_kwargs(self):</font>
+<font color="black"> 788.         names = [</font>
+<font color="red"> 789.             'option_strings',</font>
+<font color="red"> 790.             'dest',</font>
+<font color="red"> 791.             'nargs',</font>
+<font color="red"> 792.             'const',</font>
+<font color="red"> 793.             'default',</font>
+<font color="red"> 794.             'type',</font>
+<font color="red"> 795.             'choices',</font>
+<font color="red"> 796.             'help',</font>
+<font color="red"> 797.             'metavar',</font>
+<font color="black"> 798.         ]</font>
+<font color="red"> 799.         return [(name, getattr(self, name)) for name in names]</font>
+<font color="black"> 800. </font>
+<font color="green"> 801.     def __call__(self, parser, namespace, values, option_string=None):</font>
+<font color="red"> 802.         raise NotImplementedError(_('.__call__() not defined'))</font>
+<font color="black"> 803. </font>
+<font color="black"> 804. </font>
+<font color="green"> 805. class _StoreAction(Action):</font>
+<font color="black"> 806. </font>
+<font color="black"> 807.     def __init__(self,</font>
+<font color="black"> 808.                  option_strings,</font>
+<font color="black"> 809.                  dest,</font>
+<font color="green"> 810.                  nargs=None,</font>
+<font color="green"> 811.                  const=None,</font>
+<font color="green"> 812.                  default=None,</font>
+<font color="green"> 813.                  type=None,</font>
+<font color="green"> 814.                  choices=None,</font>
+<font color="green"> 815.                  required=False,</font>
+<font color="green"> 816.                  help=None,</font>
+<font color="green"> 817.                  metavar=None):</font>
+<font color="green"> 818.         if nargs == 0:</font>
+<font color="red"> 819.             raise ValueError('nargs for store actions must be &gt; 0; if you '</font>
+<font color="black"> 820.                              'have nothing to store, actions such as store '</font>
+<font color="black"> 821.                              'true or store const may be more appropriate')</font>
+<font color="green"> 822.         if const is not None and nargs != OPTIONAL:</font>
+<font color="red"> 823.             raise ValueError('nargs must be %r to supply const' % OPTIONAL)</font>
+<font color="green"> 824.         super(_StoreAction, self).__init__(</font>
+<font color="green"> 825.             option_strings=option_strings,</font>
+<font color="green"> 826.             dest=dest,</font>
+<font color="green"> 827.             nargs=nargs,</font>
+<font color="green"> 828.             const=const,</font>
+<font color="green"> 829.             default=default,</font>
+<font color="green"> 830.             type=type,</font>
+<font color="green"> 831.             choices=choices,</font>
+<font color="green"> 832.             required=required,</font>
+<font color="green"> 833.             help=help,</font>
+<font color="green"> 834.             metavar=metavar)</font>
+<font color="black"> 835. </font>
+<font color="green"> 836.     def __call__(self, parser, namespace, values, option_string=None):</font>
+<font color="green"> 837.         setattr(namespace, self.dest, values)</font>
+<font color="black"> 838. </font>
+<font color="black"> 839. </font>
+<font color="green"> 840. class _StoreConstAction(Action):</font>
+<font color="black"> 841. </font>
+<font color="black"> 842.     def __init__(self,</font>
+<font color="black"> 843.                  option_strings,</font>
+<font color="black"> 844.                  dest,</font>
+<font color="black"> 845.                  const,</font>
+<font color="green"> 846.                  default=None,</font>
+<font color="green"> 847.                  required=False,</font>
+<font color="green"> 848.                  help=None,</font>
+<font color="green"> 849.                  metavar=None):</font>
+<font color="green"> 850.         super(_StoreConstAction, self).__init__(</font>
+<font color="green"> 851.             option_strings=option_strings,</font>
+<font color="green"> 852.             dest=dest,</font>
+<font color="green"> 853.             nargs=0,</font>
+<font color="green"> 854.             const=const,</font>
+<font color="green"> 855.             default=default,</font>
+<font color="green"> 856.             required=required,</font>
+<font color="green"> 857.             help=help)</font>
+<font color="black"> 858. </font>
+<font color="green"> 859.     def __call__(self, parser, namespace, values, option_string=None):</font>
+<font color="red"> 860.         setattr(namespace, self.dest, self.const)</font>
+<font color="black"> 861. </font>
+<font color="black"> 862. </font>
+<font color="green"> 863. class _StoreTrueAction(_StoreConstAction):</font>
+<font color="black"> 864. </font>
+<font color="black"> 865.     def __init__(self,</font>
+<font color="black"> 866.                  option_strings,</font>
+<font color="black"> 867.                  dest,</font>
+<font color="green"> 868.                  default=False,</font>
+<font color="green"> 869.                  required=False,</font>
+<font color="green"> 870.                  help=None):</font>
+<font color="green"> 871.         super(_StoreTrueAction, self).__init__(</font>
+<font color="green"> 872.             option_strings=option_strings,</font>
+<font color="green"> 873.             dest=dest,</font>
+<font color="green"> 874.             const=True,</font>
+<font color="green"> 875.             default=default,</font>
+<font color="green"> 876.             required=required,</font>
+<font color="green"> 877.             help=help)</font>
+<font color="black"> 878. </font>
+<font color="black"> 879. </font>
+<font color="green"> 880. class _StoreFalseAction(_StoreConstAction):</font>
+<font color="black"> 881. </font>
+<font color="black"> 882.     def __init__(self,</font>
+<font color="black"> 883.                  option_strings,</font>
+<font color="black"> 884.                  dest,</font>
+<font color="green"> 885.                  default=True,</font>
+<font color="green"> 886.                  required=False,</font>
+<font color="green"> 887.                  help=None):</font>
+<font color="green"> 888.         super(_StoreFalseAction, self).__init__(</font>
+<font color="green"> 889.             option_strings=option_strings,</font>
+<font color="green"> 890.             dest=dest,</font>
+<font color="green"> 891.             const=False,</font>
+<font color="green"> 892.             default=default,</font>
+<font color="green"> 893.             required=required,</font>
+<font color="green"> 894.             help=help)</font>
+<font color="black"> 895. </font>
+<font color="black"> 896. </font>
+<font color="green"> 897. class _AppendAction(Action):</font>
+<font color="black"> 898. </font>
+<font color="black"> 899.     def __init__(self,</font>
+<font color="black"> 900.                  option_strings,</font>
+<font color="black"> 901.                  dest,</font>
+<font color="green"> 902.                  nargs=None,</font>
+<font color="green"> 903.                  const=None,</font>
+<font color="green"> 904.                  default=None,</font>
+<font color="green"> 905.                  type=None,</font>
+<font color="green"> 906.                  choices=None,</font>
+<font color="green"> 907.                  required=False,</font>
+<font color="green"> 908.                  help=None,</font>
+<font color="green"> 909.                  metavar=None):</font>
+<font color="red"> 910.         if nargs == 0:</font>
+<font color="red"> 911.             raise ValueError('nargs for append actions must be &gt; 0; if arg '</font>
+<font color="black"> 912.                              'strings are not supplying the value to append, '</font>
+<font color="black"> 913.                              'the append const action may be more appropriate')</font>
+<font color="red"> 914.         if const is not None and nargs != OPTIONAL:</font>
+<font color="red"> 915.             raise ValueError('nargs must be %r to supply const' % OPTIONAL)</font>
+<font color="red"> 916.         super(_AppendAction, self).__init__(</font>
+<font color="red"> 917.             option_strings=option_strings,</font>
+<font color="red"> 918.             dest=dest,</font>
+<font color="red"> 919.             nargs=nargs,</font>
+<font color="red"> 920.             const=const,</font>
+<font color="red"> 921.             default=default,</font>
+<font color="red"> 922.             type=type,</font>
+<font color="red"> 923.             choices=choices,</font>
+<font color="red"> 924.             required=required,</font>
+<font color="red"> 925.             help=help,</font>
+<font color="red"> 926.             metavar=metavar)</font>
+<font color="black"> 927. </font>
+<font color="green"> 928.     def __call__(self, parser, namespace, values, option_string=None):</font>
+<font color="red"> 929.         items = _copy.copy(_ensure_value(namespace, self.dest, []))</font>
+<font color="red"> 930.         items.append(values)</font>
+<font color="red"> 931.         setattr(namespace, self.dest, items)</font>
+<font color="black"> 932. </font>
+<font color="black"> 933. </font>
+<font color="green"> 934. class _AppendConstAction(Action):</font>
+<font color="black"> 935. </font>
+<font color="black"> 936.     def __init__(self,</font>
+<font color="black"> 937.                  option_strings,</font>
+<font color="black"> 938.                  dest,</font>
+<font color="black"> 939.                  const,</font>
+<font color="green"> 940.                  default=None,</font>
+<font color="green"> 941.                  required=False,</font>
+<font color="green"> 942.                  help=None,</font>
+<font color="green"> 943.                  metavar=None):</font>
+<font color="red"> 944.         super(_AppendConstAction, self).__init__(</font>
+<font color="red"> 945.             option_strings=option_strings,</font>
+<font color="red"> 946.             dest=dest,</font>
+<font color="red"> 947.             nargs=0,</font>
+<font color="red"> 948.             const=const,</font>
+<font color="red"> 949.             default=default,</font>
+<font color="red"> 950.             required=required,</font>
+<font color="red"> 951.             help=help,</font>
+<font color="red"> 952.             metavar=metavar)</font>
+<font color="black"> 953. </font>
+<font color="green"> 954.     def __call__(self, parser, namespace, values, option_string=None):</font>
+<font color="red"> 955.         items = _copy.copy(_ensure_value(namespace, self.dest, []))</font>
+<font color="red"> 956.         items.append(self.const)</font>
+<font color="red"> 957.         setattr(namespace, self.dest, items)</font>
+<font color="black"> 958. </font>
+<font color="black"> 959. </font>
+<font color="green"> 960. class _CountAction(Action):</font>
+<font color="black"> 961. </font>
+<font color="black"> 962.     def __init__(self,</font>
+<font color="black"> 963.                  option_strings,</font>
+<font color="black"> 964.                  dest,</font>
+<font color="green"> 965.                  default=None,</font>
+<font color="green"> 966.                  required=False,</font>
+<font color="green"> 967.                  help=None):</font>
+<font color="red"> 968.         super(_CountAction, self).__init__(</font>
+<font color="red"> 969.             option_strings=option_strings,</font>
+<font color="red"> 970.             dest=dest,</font>
+<font color="red"> 971.             nargs=0,</font>
+<font color="red"> 972.             default=default,</font>
+<font color="red"> 973.             required=required,</font>
+<font color="red"> 974.             help=help)</font>
+<font color="black"> 975. </font>
+<font color="green"> 976.     def __call__(self, parser, namespace, values, option_string=None):</font>
+<font color="red"> 977.         new_count = _ensure_value(namespace, self.dest, 0) + 1</font>
+<font color="red"> 978.         setattr(namespace, self.dest, new_count)</font>
+<font color="black"> 979. </font>
+<font color="black"> 980. </font>
+<font color="green"> 981. class _HelpAction(Action):</font>
+<font color="black"> 982. </font>
+<font color="black"> 983.     def __init__(self,</font>
+<font color="black"> 984.                  option_strings,</font>
+<font color="green"> 985.                  dest=SUPPRESS,</font>
+<font color="green"> 986.                  default=SUPPRESS,</font>
+<font color="green"> 987.                  help=None):</font>
+<font color="green"> 988.         super(_HelpAction, self).__init__(</font>
+<font color="green"> 989.             option_strings=option_strings,</font>
+<font color="green"> 990.             dest=dest,</font>
+<font color="green"> 991.             default=default,</font>
+<font color="green"> 992.             nargs=0,</font>
+<font color="green"> 993.             help=help)</font>
+<font color="black"> 994. </font>
+<font color="green"> 995.     def __call__(self, parser, namespace, values, option_string=None):</font>
+<font color="red"> 996.         parser.print_help()</font>
+<font color="red"> 997.         parser.exit()</font>
+<font color="black"> 998. </font>
+<font color="black"> 999. </font>
+<font color="green">1000. class _VersionAction(Action):</font>
+<font color="black">1001. </font>
+<font color="black">1002.     def __init__(self,</font>
+<font color="black">1003.                  option_strings,</font>
+<font color="green">1004.                  version=None,</font>
+<font color="green">1005.                  dest=SUPPRESS,</font>
+<font color="green">1006.                  default=SUPPRESS,</font>
+<font color="green">1007.                  help=&quot;show program's version number and exit&quot;):</font>
+<font color="green">1008.         super(_VersionAction, self).__init__(</font>
+<font color="green">1009.             option_strings=option_strings,</font>
+<font color="green">1010.             dest=dest,</font>
+<font color="green">1011.             default=default,</font>
+<font color="green">1012.             nargs=0,</font>
+<font color="green">1013.             help=help)</font>
+<font color="green">1014.         self.version = version</font>
+<font color="black">1015. </font>
+<font color="green">1016.     def __call__(self, parser, namespace, values, option_string=None):</font>
+<font color="red">1017.         version = self.version</font>
+<font color="red">1018.         if version is None:</font>
+<font color="red">1019.             version = parser.version</font>
+<font color="red">1020.         formatter = parser._get_formatter()</font>
+<font color="red">1021.         formatter.add_text(version)</font>
+<font color="red">1022.         parser.exit(message=formatter.format_help())</font>
+<font color="black">1023. </font>
+<font color="black">1024. </font>
+<font color="green">1025. class _SubParsersAction(Action):</font>
+<font color="black">1026. </font>
+<font color="green">1027.     class _ChoicesPseudoAction(Action):</font>
+<font color="black">1028. </font>
+<font color="green">1029.         def __init__(self, name, help):</font>
+<font color="red">1030.             sup = super(_SubParsersAction._ChoicesPseudoAction, self)</font>
+<font color="red">1031.             sup.__init__(option_strings=[], dest=name, help=help)</font>
+<font color="black">1032. </font>
+<font color="black">1033.     def __init__(self,</font>
+<font color="black">1034.                  option_strings,</font>
+<font color="black">1035.                  prog,</font>
+<font color="black">1036.                  parser_class,</font>
+<font color="green">1037.                  dest=SUPPRESS,</font>
+<font color="green">1038.                  help=None,</font>
+<font color="green">1039.                  metavar=None):</font>
+<font color="black">1040. </font>
+<font color="red">1041.         self._prog_prefix = prog</font>
+<font color="red">1042.         self._parser_class = parser_class</font>
+<font color="red">1043.         self._name_parser_map = _collections.OrderedDict()</font>
+<font color="red">1044.         self._choices_actions = []</font>
+<font color="black">1045. </font>
+<font color="red">1046.         super(_SubParsersAction, self).__init__(</font>
+<font color="red">1047.             option_strings=option_strings,</font>
+<font color="red">1048.             dest=dest,</font>
+<font color="red">1049.             nargs=PARSER,</font>
+<font color="red">1050.             choices=self._name_parser_map,</font>
+<font color="red">1051.             help=help,</font>
+<font color="red">1052.             metavar=metavar)</font>
+<font color="black">1053. </font>
+<font color="green">1054.     def add_parser(self, name, **kwargs):</font>
+<font color="black">1055.         # set prog from the existing prefix</font>
+<font color="red">1056.         if kwargs.get('prog') is None:</font>
+<font color="red">1057.             kwargs['prog'] = '%s %s' % (self._prog_prefix, name)</font>
+<font color="black">1058. </font>
+<font color="black">1059.         # create a pseudo-action to hold the choice help</font>
+<font color="red">1060.         if 'help' in kwargs:</font>
+<font color="red">1061.             help = kwargs.pop('help')</font>
+<font color="red">1062.             choice_action = self._ChoicesPseudoAction(name, help)</font>
+<font color="red">1063.             self._choices_actions.append(choice_action)</font>
+<font color="black">1064. </font>
+<font color="black">1065.         # create the parser and add it to the map</font>
+<font color="red">1066.         parser = self._parser_class(**kwargs)</font>
+<font color="red">1067.         self._name_parser_map[name] = parser</font>
+<font color="red">1068.         return parser</font>
+<font color="black">1069. </font>
+<font color="green">1070.     def _get_subactions(self):</font>
+<font color="red">1071.         return self._choices_actions</font>
+<font color="black">1072. </font>
+<font color="green">1073.     def __call__(self, parser, namespace, values, option_string=None):</font>
+<font color="red">1074.         parser_name = values[0]</font>
+<font color="red">1075.         arg_strings = values[1:]</font>
+<font color="black">1076. </font>
+<font color="black">1077.         # set the parser name if requested</font>
+<font color="red">1078.         if self.dest is not SUPPRESS:</font>
+<font color="red">1079.             setattr(namespace, self.dest, parser_name)</font>
+<font color="black">1080. </font>
+<font color="black">1081.         # select the parser</font>
+<font color="red">1082.         try:</font>
+<font color="red">1083.             parser = self._name_parser_map[parser_name]</font>
+<font color="red">1084.         except KeyError:</font>
+<font color="red">1085.             tup = parser_name, ', '.join(self._name_parser_map)</font>
+<font color="red">1086.             msg = _('unknown parser %r (choices: %s)') % tup</font>
+<font color="red">1087.             raise ArgumentError(self, msg)</font>
+<font color="black">1088. </font>
+<font color="black">1089.         # parse all the remaining options into the namespace</font>
+<font color="black">1090.         # store any unrecognized options on the object, so that the top</font>
+<font color="black">1091.         # level parser can decide what to do with them</font>
+<font color="red">1092.         namespace, arg_strings = parser.parse_known_args(arg_strings, namespace)</font>
+<font color="red">1093.         if arg_strings:</font>
+<font color="red">1094.             vars(namespace).setdefault(_UNRECOGNIZED_ARGS_ATTR, [])</font>
+<font color="red">1095.             getattr(namespace, _UNRECOGNIZED_ARGS_ATTR).extend(arg_strings)</font>
+<font color="black">1096. </font>
+<font color="black">1097. </font>
+<font color="black">1098. # ==============</font>
+<font color="black">1099. # Type classes</font>
+<font color="black">1100. # ==============</font>
+<font color="black">1101. </font>
+<font color="green">1102. class FileType(object):</font>
+<font color="black">1103.     &quot;&quot;&quot;Factory for creating file object types</font>
+<font color="black">1104. </font>
+<font color="black">1105.     Instances of FileType are typically passed as type= arguments to the</font>
+<font color="black">1106.     ArgumentParser add_argument() method.</font>
+<font color="black">1107. </font>
+<font color="black">1108.     Keyword Arguments:</font>
+<font color="black">1109.         - mode -- A string indicating how the file is to be opened. Accepts the</font>
+<font color="black">1110.             same values as the builtin open() function.</font>
+<font color="black">1111.         - bufsize -- The file's desired buffer size. Accepts the same values as</font>
+<font color="black">1112.             the builtin open() function.</font>
+<font color="green">1113.     &quot;&quot;&quot;</font>
+<font color="black">1114. </font>
+<font color="green">1115.     def __init__(self, mode='r', bufsize=-1):</font>
+<font color="red">1116.         self._mode = mode</font>
+<font color="red">1117.         self._bufsize = bufsize</font>
+<font color="black">1118. </font>
+<font color="green">1119.     def __call__(self, string):</font>
+<font color="black">1120.         # the special argument &quot;-&quot; means sys.std{in,out}</font>
+<font color="red">1121.         if string == '-':</font>
+<font color="red">1122.             if 'r' in self._mode:</font>
+<font color="red">1123.                 return _sys.stdin</font>
+<font color="red">1124.             elif 'w' in self._mode:</font>
+<font color="red">1125.                 return _sys.stdout</font>
+<font color="black">1126.             else:</font>
+<font color="red">1127.                 msg = _('argument &quot;-&quot; with mode %r') % self._mode</font>
+<font color="red">1128.                 raise ValueError(msg)</font>
+<font color="black">1129. </font>
+<font color="black">1130.         # all other arguments are used as file names</font>
+<font color="red">1131.         try:</font>
+<font color="red">1132.             return open(string, self._mode, self._bufsize)</font>
+<font color="red">1133.         except IOError as e:</font>
+<font color="red">1134.             message = _(&quot;can't open '%s': %s&quot;)</font>
+<font color="red">1135.             raise ArgumentTypeError(message % (string, e))</font>
+<font color="black">1136. </font>
+<font color="green">1137.     def __repr__(self):</font>
+<font color="red">1138.         args = self._mode, self._bufsize</font>
+<font color="red">1139.         args_str = ', '.join(repr(arg) for arg in args if arg != -1)</font>
+<font color="red">1140.         return '%s(%s)' % (type(self).__name__, args_str)</font>
+<font color="black">1141. </font>
+<font color="black">1142. # ===========================</font>
+<font color="black">1143. # Optional and Positional Parsing</font>
+<font color="black">1144. # ===========================</font>
+<font color="black">1145. </font>
+<font color="green">1146. class Namespace(_AttributeHolder):</font>
+<font color="black">1147.     &quot;&quot;&quot;Simple object for storing attributes.</font>
+<font color="black">1148. </font>
+<font color="black">1149.     Implements equality by attribute names and values, and provides a simple</font>
+<font color="black">1150.     string representation.</font>
+<font color="green">1151.     &quot;&quot;&quot;</font>
+<font color="black">1152. </font>
+<font color="green">1153.     def __init__(self, **kwargs):</font>
+<font color="green">1154.         for name in kwargs:</font>
+<font color="red">1155.             setattr(self, name, kwargs[name])</font>
+<font color="black">1156. </font>
+<font color="green">1157.     __hash__ = None</font>
+<font color="black">1158. </font>
+<font color="green">1159.     def __eq__(self, other):</font>
+<font color="red">1160.         return vars(self) == vars(other)</font>
+<font color="black">1161. </font>
+<font color="green">1162.     def __ne__(self, other):</font>
+<font color="red">1163.         return not (self == other)</font>
+<font color="black">1164. </font>
+<font color="green">1165.     def __contains__(self, key):</font>
+<font color="red">1166.         return key in self.__dict__</font>
+<font color="black">1167. </font>
+<font color="black">1168. </font>
+<font color="green">1169. class _ActionsContainer(object):</font>
+<font color="black">1170. </font>
+<font color="green">1171.     def __init__(self,</font>
+<font color="black">1172.                  description,</font>
+<font color="black">1173.                  prefix_chars,</font>
+<font color="black">1174.                  argument_default,</font>
+<font color="black">1175.                  conflict_handler):</font>
+<font color="green">1176.         super(_ActionsContainer, self).__init__()</font>
+<font color="black">1177. </font>
+<font color="green">1178.         self.description = description</font>
+<font color="green">1179.         self.argument_default = argument_default</font>
+<font color="green">1180.         self.prefix_chars = prefix_chars</font>
+<font color="green">1181.         self.conflict_handler = conflict_handler</font>
+<font color="black">1182. </font>
+<font color="black">1183.         # set up registries</font>
+<font color="green">1184.         self._registries = {}</font>
+<font color="black">1185. </font>
+<font color="black">1186.         # register actions</font>
+<font color="green">1187.         self.register('action', None, _StoreAction)</font>
+<font color="green">1188.         self.register('action', 'store', _StoreAction)</font>
+<font color="green">1189.         self.register('action', 'store_const', _StoreConstAction)</font>
+<font color="green">1190.         self.register('action', 'store_true', _StoreTrueAction)</font>
+<font color="green">1191.         self.register('action', 'store_false', _StoreFalseAction)</font>
+<font color="green">1192.         self.register('action', 'append', _AppendAction)</font>
+<font color="green">1193.         self.register('action', 'append_const', _AppendConstAction)</font>
+<font color="green">1194.         self.register('action', 'count', _CountAction)</font>
+<font color="green">1195.         self.register('action', 'help', _HelpAction)</font>
+<font color="green">1196.         self.register('action', 'version', _VersionAction)</font>
+<font color="green">1197.         self.register('action', 'parsers', _SubParsersAction)</font>
+<font color="black">1198. </font>
+<font color="black">1199.         # raise an exception if the conflict handler is invalid</font>
+<font color="green">1200.         self._get_handler()</font>
+<font color="black">1201. </font>
+<font color="black">1202.         # action storage</font>
+<font color="green">1203.         self._actions = []</font>
+<font color="green">1204.         self._option_string_actions = {}</font>
+<font color="black">1205. </font>
+<font color="black">1206.         # groups</font>
+<font color="green">1207.         self._action_groups = []</font>
+<font color="green">1208.         self._mutually_exclusive_groups = []</font>
+<font color="black">1209. </font>
+<font color="black">1210.         # defaults storage</font>
+<font color="green">1211.         self._defaults = {}</font>
+<font color="black">1212. </font>
+<font color="black">1213.         # determines whether an &quot;option&quot; looks like a negative number</font>
+<font color="green">1214.         self._negative_number_matcher = _re.compile(r'^-\d+$|^-\d*\.\d+$')</font>
+<font color="black">1215. </font>
+<font color="black">1216.         # whether or not there are any optionals that look like negative</font>
+<font color="black">1217.         # numbers -- uses a list so it can be shared and edited</font>
+<font color="green">1218.         self._has_negative_number_optionals = []</font>
+<font color="black">1219. </font>
+<font color="black">1220.     # ====================</font>
+<font color="black">1221.     # Registration methods</font>
+<font color="black">1222.     # ====================</font>
+<font color="green">1223.     def register(self, registry_name, value, object):</font>
+<font color="green">1224.         registry = self._registries.setdefault(registry_name, {})</font>
+<font color="green">1225.         registry[value] = object</font>
+<font color="black">1226. </font>
+<font color="green">1227.     def _registry_get(self, registry_name, value, default=None):</font>
+<font color="green">1228.         return self._registries[registry_name].get(value, default)</font>
+<font color="black">1229. </font>
+<font color="black">1230.     # ==================================</font>
+<font color="black">1231.     # Namespace default accessor methods</font>
+<font color="black">1232.     # ==================================</font>
+<font color="green">1233.     def set_defaults(self, **kwargs):</font>
+<font color="red">1234.         self._defaults.update(kwargs)</font>
+<font color="black">1235. </font>
+<font color="black">1236.         # if these defaults match any existing arguments, replace</font>
+<font color="black">1237.         # the previous default on the object with the new one</font>
+<font color="red">1238.         for action in self._actions:</font>
+<font color="red">1239.             if action.dest in kwargs:</font>
+<font color="red">1240.                 action.default = kwargs[action.dest]</font>
+<font color="black">1241. </font>
+<font color="green">1242.     def get_default(self, dest):</font>
+<font color="red">1243.         for action in self._actions:</font>
+<font color="red">1244.             if action.dest == dest and action.default is not None:</font>
+<font color="red">1245.                 return action.default</font>
+<font color="red">1246.         return self._defaults.get(dest, None)</font>
+<font color="black">1247. </font>
+<font color="black">1248. </font>
+<font color="black">1249.     # =======================</font>
+<font color="black">1250.     # Adding argument actions</font>
+<font color="black">1251.     # =======================</font>
+<font color="green">1252.     def add_argument(self, *args, **kwargs):</font>
+<font color="black">1253.         &quot;&quot;&quot;</font>
+<font color="black">1254.         add_argument(dest, ..., name=value, ...)</font>
+<font color="black">1255.         add_argument(option_string, option_string, ..., name=value, ...)</font>
+<font color="black">1256.         &quot;&quot;&quot;</font>
+<font color="black">1257. </font>
+<font color="black">1258.         # if no positional args are supplied or only one is supplied and</font>
+<font color="black">1259.         # it doesn't look like an option string, parse a positional</font>
+<font color="black">1260.         # argument</font>
+<font color="green">1261.         chars = self.prefix_chars</font>
+<font color="green">1262.         if not args or len(args) == 1 and args[0][0] not in chars:</font>
+<font color="green">1263.             if args and 'dest' in kwargs:</font>
+<font color="red">1264.                 raise ValueError('dest supplied twice for positional argument')</font>
+<font color="green">1265.             kwargs = self._get_positional_kwargs(*args, **kwargs)</font>
+<font color="black">1266. </font>
+<font color="black">1267.         # otherwise, we're adding an optional argument</font>
+<font color="black">1268.         else:</font>
+<font color="green">1269.             kwargs = self._get_optional_kwargs(*args, **kwargs)</font>
+<font color="black">1270. </font>
+<font color="black">1271.         # if no default was supplied, use the parser-level default</font>
+<font color="green">1272.         if 'default' not in kwargs:</font>
+<font color="green">1273.             dest = kwargs['dest']</font>
+<font color="green">1274.             if dest in self._defaults:</font>
+<font color="red">1275.                 kwargs['default'] = self._defaults[dest]</font>
+<font color="green">1276.             elif self.argument_default is not None:</font>
+<font color="red">1277.                 kwargs['default'] = self.argument_default</font>
+<font color="black">1278. </font>
+<font color="black">1279.         # create the action object, and add it to the parser</font>
+<font color="green">1280.         action_class = self._pop_action_class(kwargs)</font>
+<font color="green">1281.         if not _callable(action_class):</font>
+<font color="red">1282.             raise ValueError('unknown action &quot;%s&quot;' % (action_class,))</font>
+<font color="green">1283.         action = action_class(**kwargs)</font>
+<font color="black">1284. </font>
+<font color="black">1285.         # raise an error if the action type is not callable</font>
+<font color="green">1286.         type_func = self._registry_get('type', action.type, action.type)</font>
+<font color="green">1287.         if not _callable(type_func):</font>
+<font color="red">1288.             raise ValueError('%r is not callable' % (type_func,))</font>
+<font color="black">1289. </font>
+<font color="black">1290.         # raise an error if the metavar does not match the type</font>
+<font color="green">1291.         if hasattr(self, &quot;_get_formatter&quot;):</font>
+<font color="green">1292.             try:</font>
+<font color="green">1293.                 self._get_formatter()._format_args(action, None)</font>
+<font color="red">1294.             except TypeError:</font>
+<font color="red">1295.                 raise ValueError(&quot;length of metavar tuple does not match nargs&quot;)</font>
+<font color="black">1296. </font>
+<font color="green">1297.         return self._add_action(action)</font>
+<font color="black">1298. </font>
+<font color="green">1299.     def add_argument_group(self, *args, **kwargs):</font>
+<font color="green">1300.         group = _ArgumentGroup(self, *args, **kwargs)</font>
+<font color="green">1301.         self._action_groups.append(group)</font>
+<font color="green">1302.         return group</font>
+<font color="black">1303. </font>
+<font color="green">1304.     def add_mutually_exclusive_group(self, **kwargs):</font>
+<font color="red">1305.         group = _MutuallyExclusiveGroup(self, **kwargs)</font>
+<font color="red">1306.         self._mutually_exclusive_groups.append(group)</font>
+<font color="red">1307.         return group</font>
+<font color="black">1308. </font>
+<font color="green">1309.     def _add_action(self, action):</font>
+<font color="black">1310.         # resolve any conflicts</font>
+<font color="green">1311.         self._check_conflict(action)</font>
+<font color="black">1312. </font>
+<font color="black">1313.         # add to actions list</font>
+<font color="green">1314.         self._actions.append(action)</font>
+<font color="green">1315.         action.container = self</font>
+<font color="black">1316. </font>
+<font color="black">1317.         # index the action by any option strings it has</font>
+<font color="green">1318.         for option_string in action.option_strings:</font>
+<font color="green">1319.             self._option_string_actions[option_string] = action</font>
+<font color="black">1320. </font>
+<font color="black">1321.         # set the flag if any option strings look like negative numbers</font>
+<font color="green">1322.         for option_string in action.option_strings:</font>
+<font color="green">1323.             if self._negative_number_matcher.match(option_string):</font>
+<font color="red">1324.                 if not self._has_negative_number_optionals:</font>
+<font color="red">1325.                     self._has_negative_number_optionals.append(True)</font>
+<font color="black">1326. </font>
+<font color="black">1327.         # return the created action</font>
+<font color="green">1328.         return action</font>
+<font color="black">1329. </font>
+<font color="green">1330.     def _remove_action(self, action):</font>
+<font color="red">1331.         self._actions.remove(action)</font>
+<font color="black">1332. </font>
+<font color="green">1333.     def _add_container_actions(self, container):</font>
+<font color="black">1334.         # collect groups by titles</font>
+<font color="red">1335.         title_group_map = {}</font>
+<font color="red">1336.         for group in self._action_groups:</font>
+<font color="red">1337.             if group.title in title_group_map:</font>
+<font color="red">1338.                 msg = _('cannot merge actions - two groups are named %r')</font>
+<font color="red">1339.                 raise ValueError(msg % (group.title))</font>
+<font color="red">1340.             title_group_map[group.title] = group</font>
+<font color="black">1341. </font>
+<font color="black">1342.         # map each action to its group</font>
+<font color="red">1343.         group_map = {}</font>
+<font color="red">1344.         for group in container._action_groups:</font>
+<font color="black">1345. </font>
+<font color="black">1346.             # if a group with the title exists, use that, otherwise</font>
+<font color="black">1347.             # create a new group matching the container's group</font>
+<font color="red">1348.             if group.title not in title_group_map:</font>
+<font color="red">1349.                 title_group_map[group.title] = self.add_argument_group(</font>
+<font color="red">1350.                     title=group.title,</font>
+<font color="red">1351.                     description=group.description,</font>
+<font color="red">1352.                     conflict_handler=group.conflict_handler)</font>
+<font color="black">1353. </font>
+<font color="black">1354.             # map the actions to their new group</font>
+<font color="red">1355.             for action in group._group_actions:</font>
+<font color="red">1356.                 group_map[action] = title_group_map[group.title]</font>
+<font color="black">1357. </font>
+<font color="black">1358.         # add container's mutually exclusive groups</font>
+<font color="black">1359.         # NOTE: if add_mutually_exclusive_group ever gains title= and</font>
+<font color="black">1360.         # description= then this code will need to be expanded as above</font>
+<font color="red">1361.         for group in container._mutually_exclusive_groups:</font>
+<font color="red">1362.             mutex_group = self.add_mutually_exclusive_group(</font>
+<font color="red">1363.                 required=group.required)</font>
+<font color="black">1364. </font>
+<font color="black">1365.             # map the actions to their new mutex group</font>
+<font color="red">1366.             for action in group._group_actions:</font>
+<font color="red">1367.                 group_map[action] = mutex_group</font>
+<font color="black">1368. </font>
+<font color="black">1369.         # add all actions to this container or their group</font>
+<font color="red">1370.         for action in container._actions:</font>
+<font color="red">1371.             group_map.get(action, self)._add_action(action)</font>
+<font color="black">1372. </font>
+<font color="green">1373.     def _get_positional_kwargs(self, dest, **kwargs):</font>
+<font color="black">1374.         # make sure required is not specified</font>
+<font color="green">1375.         if 'required' in kwargs:</font>
+<font color="red">1376.             msg = _(&quot;'required' is an invalid argument for positionals&quot;)</font>
+<font color="red">1377.             raise TypeError(msg)</font>
+<font color="black">1378. </font>
+<font color="black">1379.         # mark positional arguments as required if at least one is</font>
+<font color="black">1380.         # always required</font>
+<font color="green">1381.         if kwargs.get('nargs') not in [OPTIONAL, ZERO_OR_MORE]:</font>
+<font color="red">1382.             kwargs['required'] = True</font>
+<font color="green">1383.         if kwargs.get('nargs') == ZERO_OR_MORE and 'default' not in kwargs:</font>
+<font color="green">1384.             kwargs['required'] = True</font>
+<font color="black">1385. </font>
+<font color="black">1386.         # return the keyword arguments with no option strings</font>
+<font color="green">1387.         return dict(kwargs, dest=dest, option_strings=[])</font>
+<font color="black">1388. </font>
+<font color="green">1389.     def _get_optional_kwargs(self, *args, **kwargs):</font>
+<font color="black">1390.         # determine short and long option strings</font>
+<font color="green">1391.         option_strings = []</font>
+<font color="green">1392.         long_option_strings = []</font>
+<font color="green">1393.         for option_string in args:</font>
+<font color="black">1394.             # error on strings that don't start with an appropriate prefix</font>
+<font color="green">1395.             if not option_string[0] in self.prefix_chars:</font>
+<font color="red">1396.                 msg = _('invalid option string %r: '</font>
+<font color="black">1397.                         'must start with a character %r')</font>
+<font color="red">1398.                 tup = option_string, self.prefix_chars</font>
+<font color="red">1399.                 raise ValueError(msg % tup)</font>
+<font color="black">1400. </font>
+<font color="black">1401.             # strings starting with two prefix characters are long options</font>
+<font color="green">1402.             option_strings.append(option_string)</font>
+<font color="green">1403.             if option_string[0] in self.prefix_chars:</font>
+<font color="green">1404.                 if len(option_string) &gt; 1:</font>
+<font color="green">1405.                     if option_string[1] in self.prefix_chars:</font>
+<font color="green">1406.                         long_option_strings.append(option_string)</font>
+<font color="black">1407. </font>
+<font color="black">1408.         # infer destination, '--foo-bar' -&gt; 'foo_bar' and '-x' -&gt; 'x'</font>
+<font color="green">1409.         dest = kwargs.pop('dest', None)</font>
+<font color="green">1410.         if dest is None:</font>
+<font color="green">1411.             if long_option_strings:</font>
+<font color="green">1412.                 dest_option_string = long_option_strings[0]</font>
+<font color="black">1413.             else:</font>
+<font color="red">1414.                 dest_option_string = option_strings[0]</font>
+<font color="green">1415.             dest = dest_option_string.lstrip(self.prefix_chars)</font>
+<font color="green">1416.             if not dest:</font>
+<font color="red">1417.                 msg = _('dest= is required for options like %r')</font>
+<font color="red">1418.                 raise ValueError(msg % option_string)</font>
+<font color="green">1419.             dest = dest.replace('-', '_')</font>
+<font color="black">1420. </font>
+<font color="black">1421.         # return the updated keyword arguments</font>
+<font color="green">1422.         return dict(kwargs, dest=dest, option_strings=option_strings)</font>
+<font color="black">1423. </font>
+<font color="green">1424.     def _pop_action_class(self, kwargs, default=None):</font>
+<font color="green">1425.         action = kwargs.pop('action', default)</font>
+<font color="green">1426.         return self._registry_get('action', action, action)</font>
+<font color="black">1427. </font>
+<font color="green">1428.     def _get_handler(self):</font>
+<font color="black">1429.         # determine function from conflict handler string</font>
+<font color="green">1430.         handler_func_name = '_handle_conflict_%s' % self.conflict_handler</font>
+<font color="green">1431.         try:</font>
+<font color="green">1432.             return getattr(self, handler_func_name)</font>
+<font color="red">1433.         except AttributeError:</font>
+<font color="red">1434.             msg = _('invalid conflict_resolution value: %r')</font>
+<font color="red">1435.             raise ValueError(msg % self.conflict_handler)</font>
+<font color="black">1436. </font>
+<font color="green">1437.     def _check_conflict(self, action):</font>
+<font color="black">1438. </font>
+<font color="black">1439.         # find all options that conflict with this option</font>
+<font color="green">1440.         confl_optionals = []</font>
+<font color="green">1441.         for option_string in action.option_strings:</font>
+<font color="green">1442.             if option_string in self._option_string_actions:</font>
+<font color="red">1443.                 confl_optional = self._option_string_actions[option_string]</font>
+<font color="red">1444.                 confl_optionals.append((option_string, confl_optional))</font>
+<font color="black">1445. </font>
+<font color="black">1446.         # resolve any conflicts</font>
+<font color="green">1447.         if confl_optionals:</font>
+<font color="red">1448.             conflict_handler = self._get_handler()</font>
+<font color="red">1449.             conflict_handler(action, confl_optionals)</font>
+<font color="black">1450. </font>
+<font color="green">1451.     def _handle_conflict_error(self, action, conflicting_actions):</font>
+<font color="red">1452.         message = _('conflicting option string(s): %s')</font>
+<font color="red">1453.         conflict_string = ', '.join([option_string</font>
+<font color="black">1454.                                      for option_string, action</font>
+<font color="red">1455.                                      in conflicting_actions])</font>
+<font color="red">1456.         raise ArgumentError(action, message % conflict_string)</font>
+<font color="black">1457. </font>
+<font color="green">1458.     def _handle_conflict_resolve(self, action, conflicting_actions):</font>
+<font color="black">1459. </font>
+<font color="black">1460.         # remove all conflicting options</font>
+<font color="red">1461.         for option_string, action in conflicting_actions:</font>
+<font color="black">1462. </font>
+<font color="black">1463.             # remove the conflicting option</font>
+<font color="red">1464.             action.option_strings.remove(option_string)</font>
+<font color="red">1465.             self._option_string_actions.pop(option_string, None)</font>
+<font color="black">1466. </font>
+<font color="black">1467.             # if the option now has no option string, remove it from the</font>
+<font color="black">1468.             # container holding it</font>
+<font color="red">1469.             if not action.option_strings:</font>
+<font color="red">1470.                 action.container._remove_action(action)</font>
+<font color="black">1471. </font>
+<font color="black">1472. </font>
+<font color="green">1473. class _ArgumentGroup(_ActionsContainer):</font>
+<font color="black">1474. </font>
+<font color="green">1475.     def __init__(self, container, title=None, description=None, **kwargs):</font>
+<font color="black">1476.         # add any missing keyword arguments by checking the container</font>
+<font color="green">1477.         update = kwargs.setdefault</font>
+<font color="green">1478.         update('conflict_handler', container.conflict_handler)</font>
+<font color="green">1479.         update('prefix_chars', container.prefix_chars)</font>
+<font color="green">1480.         update('argument_default', container.argument_default)</font>
+<font color="green">1481.         super_init = super(_ArgumentGroup, self).__init__</font>
+<font color="green">1482.         super_init(description=description, **kwargs)</font>
+<font color="black">1483. </font>
+<font color="black">1484.         # group attributes</font>
+<font color="green">1485.         self.title = title</font>
+<font color="green">1486.         self._group_actions = []</font>
+<font color="black">1487. </font>
+<font color="black">1488.         # share most attributes with the container</font>
+<font color="green">1489.         self._registries = container._registries</font>
+<font color="green">1490.         self._actions = container._actions</font>
+<font color="green">1491.         self._option_string_actions = container._option_string_actions</font>
+<font color="green">1492.         self._defaults = container._defaults</font>
+<font color="black">1493.         self._has_negative_number_optionals = \</font>
+<font color="green">1494.             container._has_negative_number_optionals</font>
+<font color="green">1495.         self._mutually_exclusive_groups = container._mutually_exclusive_groups</font>
+<font color="black">1496. </font>
+<font color="green">1497.     def _add_action(self, action):</font>
+<font color="green">1498.         action = super(_ArgumentGroup, self)._add_action(action)</font>
+<font color="green">1499.         self._group_actions.append(action)</font>
+<font color="green">1500.         return action</font>
+<font color="black">1501. </font>
+<font color="green">1502.     def _remove_action(self, action):</font>
+<font color="red">1503.         super(_ArgumentGroup, self)._remove_action(action)</font>
+<font color="red">1504.         self._group_actions.remove(action)</font>
+<font color="black">1505. </font>
+<font color="black">1506. </font>
+<font color="green">1507. class _MutuallyExclusiveGroup(_ArgumentGroup):</font>
+<font color="black">1508. </font>
+<font color="green">1509.     def __init__(self, container, required=False):</font>
+<font color="red">1510.         super(_MutuallyExclusiveGroup, self).__init__(container)</font>
+<font color="red">1511.         self.required = required</font>
+<font color="red">1512.         self._container = container</font>
+<font color="black">1513. </font>
+<font color="green">1514.     def _add_action(self, action):</font>
+<font color="red">1515.         if action.required:</font>
+<font color="red">1516.             msg = _('mutually exclusive arguments must be optional')</font>
+<font color="red">1517.             raise ValueError(msg)</font>
+<font color="red">1518.         action = self._container._add_action(action)</font>
+<font color="red">1519.         self._group_actions.append(action)</font>
+<font color="red">1520.         return action</font>
+<font color="black">1521. </font>
+<font color="green">1522.     def _remove_action(self, action):</font>
+<font color="red">1523.         self._container._remove_action(action)</font>
+<font color="red">1524.         self._group_actions.remove(action)</font>
+<font color="black">1525. </font>
+<font color="black">1526. </font>
+<font color="green">1527. class ArgumentParser(_AttributeHolder, _ActionsContainer):</font>
+<font color="black">1528.     &quot;&quot;&quot;Object for parsing command line strings into Python objects.</font>
+<font color="black">1529. </font>
+<font color="black">1530.     Keyword Arguments:</font>
+<font color="black">1531.         - prog -- The name of the program (default: sys.argv[0])</font>
+<font color="black">1532.         - usage -- A usage message (default: auto-generated from arguments)</font>
+<font color="black">1533.         - description -- A description of what the program does</font>
+<font color="black">1534.         - epilog -- Text following the argument descriptions</font>
+<font color="black">1535.         - parents -- Parsers whose arguments should be copied into this one</font>
+<font color="black">1536.         - formatter_class -- HelpFormatter class for printing help messages</font>
+<font color="black">1537.         - prefix_chars -- Characters that prefix optional arguments</font>
+<font color="black">1538.         - fromfile_prefix_chars -- Characters that prefix files containing</font>
+<font color="black">1539.             additional arguments</font>
+<font color="black">1540.         - argument_default -- The default value for all arguments</font>
+<font color="black">1541.         - conflict_handler -- String indicating how to handle conflicts</font>
+<font color="black">1542.         - add_help -- Add a -h/-help option</font>
+<font color="green">1543.     &quot;&quot;&quot;</font>
+<font color="black">1544. </font>
+<font color="black">1545.     def __init__(self,</font>
+<font color="green">1546.                  prog=None,</font>
+<font color="green">1547.                  usage=None,</font>
+<font color="green">1548.                  description=None,</font>
+<font color="green">1549.                  epilog=None,</font>
+<font color="green">1550.                  version=None,</font>
+<font color="green">1551.                  parents=[],</font>
+<font color="green">1552.                  formatter_class=HelpFormatter,</font>
+<font color="green">1553.                  prefix_chars='-',</font>
+<font color="green">1554.                  fromfile_prefix_chars=None,</font>
+<font color="green">1555.                  argument_default=None,</font>
+<font color="green">1556.                  conflict_handler='error',</font>
+<font color="green">1557.                  add_help=True):</font>
+<font color="black">1558. </font>
+<font color="green">1559.         if version is not None:</font>
+<font color="red">1560.             import warnings</font>
+<font color="red">1561.             warnings.warn(</font>
+<font color="red">1562.                 &quot;&quot;&quot;The &quot;version&quot; argument to ArgumentParser is deprecated. &quot;&quot;&quot;</font>
+<font color="black">1563.                 &quot;&quot;&quot;Please use &quot;&quot;&quot;</font>
+<font color="black">1564.                 &quot;&quot;&quot;&quot;add_argument(..., action='version', version=&quot;N&quot;, ...)&quot; &quot;&quot;&quot;</font>
+<font color="red">1565.                 &quot;&quot;&quot;instead&quot;&quot;&quot;, DeprecationWarning)</font>
+<font color="black">1566. </font>
+<font color="green">1567.         superinit = super(ArgumentParser, self).__init__</font>
+<font color="green">1568.         superinit(description=description,</font>
+<font color="green">1569.                   prefix_chars=prefix_chars,</font>
+<font color="green">1570.                   argument_default=argument_default,</font>
+<font color="green">1571.                   conflict_handler=conflict_handler)</font>
+<font color="black">1572. </font>
+<font color="black">1573.         # default setting for prog</font>
+<font color="green">1574.         if prog is None:</font>
+<font color="green">1575.             prog = _os.path.basename(_sys.argv[0])</font>
+<font color="black">1576. </font>
+<font color="green">1577.         self.prog = prog</font>
+<font color="green">1578.         self.usage = usage</font>
+<font color="green">1579.         self.epilog = epilog</font>
+<font color="green">1580.         self.version = version</font>
+<font color="green">1581.         self.formatter_class = formatter_class</font>
+<font color="green">1582.         self.fromfile_prefix_chars = fromfile_prefix_chars</font>
+<font color="green">1583.         self.add_help = add_help</font>
+<font color="black">1584. </font>
+<font color="green">1585.         add_group = self.add_argument_group</font>
+<font color="green">1586.         self._positionals = add_group(_('positional arguments'))</font>
+<font color="green">1587.         self._optionals = add_group(_('optional arguments'))</font>
+<font color="green">1588.         self._subparsers = None</font>
+<font color="black">1589. </font>
+<font color="black">1590.         # register types</font>
+<font color="green">1591.         def identity(string):</font>
+<font color="green">1592.             return string</font>
+<font color="green">1593.         self.register('type', None, identity)</font>
+<font color="black">1594. </font>
+<font color="black">1595.         # add help and version arguments if necessary</font>
+<font color="black">1596.         # (using explicit default to override global argument_default)</font>
+<font color="green">1597.         default_prefix = '-' if '-' in prefix_chars else prefix_chars[0]</font>
+<font color="green">1598.         if self.add_help:</font>
+<font color="green">1599.             self.add_argument(</font>
+<font color="green">1600.                 default_prefix+'h', default_prefix*2+'help',</font>
+<font color="green">1601.                 action='help', default=SUPPRESS,</font>
+<font color="green">1602.                 help=_('show this help message and exit'))</font>
+<font color="green">1603.         if self.version:</font>
+<font color="red">1604.             self.add_argument(</font>
+<font color="red">1605.                 default_prefix+'v', default_prefix*2+'version',</font>
+<font color="red">1606.                 action='version', default=SUPPRESS,</font>
+<font color="red">1607.                 version=self.version,</font>
+<font color="red">1608.                 help=_(&quot;show program's version number and exit&quot;))</font>
+<font color="black">1609. </font>
+<font color="black">1610.         # add parent arguments and defaults</font>
+<font color="green">1611.         for parent in parents:</font>
+<font color="red">1612.             self._add_container_actions(parent)</font>
+<font color="red">1613.             try:</font>
+<font color="red">1614.                 defaults = parent._defaults</font>
+<font color="red">1615.             except AttributeError:</font>
+<font color="red">1616.                 pass</font>
+<font color="black">1617.             else:</font>
+<font color="red">1618.                 self._defaults.update(defaults)</font>
+<font color="black">1619. </font>
+<font color="black">1620.     # =======================</font>
+<font color="black">1621.     # Pretty __repr__ methods</font>
+<font color="black">1622.     # =======================</font>
+<font color="green">1623.     def _get_kwargs(self):</font>
+<font color="black">1624.         names = [</font>
+<font color="red">1625.             'prog',</font>
+<font color="red">1626.             'usage',</font>
+<font color="red">1627.             'description',</font>
+<font color="red">1628.             'version',</font>
+<font color="red">1629.             'formatter_class',</font>
+<font color="red">1630.             'conflict_handler',</font>
+<font color="red">1631.             'add_help',</font>
+<font color="black">1632.         ]</font>
+<font color="red">1633.         return [(name, getattr(self, name)) for name in names]</font>
+<font color="black">1634. </font>
+<font color="black">1635.     # ==================================</font>
+<font color="black">1636.     # Optional/Positional adding methods</font>
+<font color="black">1637.     # ==================================</font>
+<font color="green">1638.     def add_subparsers(self, **kwargs):</font>
+<font color="red">1639.         if self._subparsers is not None:</font>
+<font color="red">1640.             self.error(_('cannot have multiple subparser arguments'))</font>
+<font color="black">1641. </font>
+<font color="black">1642.         # add the parser class to the arguments if it's not present</font>
+<font color="red">1643.         kwargs.setdefault('parser_class', type(self))</font>
+<font color="black">1644. </font>
+<font color="red">1645.         if 'title' in kwargs or 'description' in kwargs:</font>
+<font color="red">1646.             title = _(kwargs.pop('title', 'subcommands'))</font>
+<font color="red">1647.             description = _(kwargs.pop('description', None))</font>
+<font color="red">1648.             self._subparsers = self.add_argument_group(title, description)</font>
+<font color="black">1649.         else:</font>
+<font color="red">1650.             self._subparsers = self._positionals</font>
+<font color="black">1651. </font>
+<font color="black">1652.         # prog defaults to the usage message of this parser, skipping</font>
+<font color="black">1653.         # optional arguments and with no &quot;usage:&quot; prefix</font>
+<font color="red">1654.         if kwargs.get('prog') is None:</font>
+<font color="red">1655.             formatter = self._get_formatter()</font>
+<font color="red">1656.             positionals = self._get_positional_actions()</font>
+<font color="red">1657.             groups = self._mutually_exclusive_groups</font>
+<font color="red">1658.             formatter.add_usage(self.usage, positionals, groups, '')</font>
+<font color="red">1659.             kwargs['prog'] = formatter.format_help().strip()</font>
+<font color="black">1660. </font>
+<font color="black">1661.         # create the parsers action and add it to the positionals list</font>
+<font color="red">1662.         parsers_class = self._pop_action_class(kwargs, 'parsers')</font>
+<font color="red">1663.         action = parsers_class(option_strings=[], **kwargs)</font>
+<font color="red">1664.         self._subparsers._add_action(action)</font>
+<font color="black">1665. </font>
+<font color="black">1666.         # return the created parsers action</font>
+<font color="red">1667.         return action</font>
+<font color="black">1668. </font>
+<font color="green">1669.     def _add_action(self, action):</font>
+<font color="green">1670.         if action.option_strings:</font>
+<font color="green">1671.             self._optionals._add_action(action)</font>
+<font color="black">1672.         else:</font>
+<font color="green">1673.             self._positionals._add_action(action)</font>
+<font color="green">1674.         return action</font>
+<font color="black">1675. </font>
+<font color="green">1676.     def _get_optional_actions(self):</font>
+<font color="red">1677.         return [action</font>
+<font color="red">1678.                 for action in self._actions</font>
+<font color="red">1679.                 if action.option_strings]</font>
+<font color="black">1680. </font>
+<font color="green">1681.     def _get_positional_actions(self):</font>
+<font color="green">1682.         return [action</font>
+<font color="green">1683.                 for action in self._actions</font>
+<font color="green">1684.                 if not action.option_strings]</font>
+<font color="black">1685. </font>
+<font color="black">1686.     # =====================================</font>
+<font color="black">1687.     # Command line argument parsing methods</font>
+<font color="black">1688.     # =====================================</font>
+<font color="green">1689.     def parse_args(self, args=None, namespace=None):</font>
+<font color="green">1690.         args, argv = self.parse_known_args(args, namespace)</font>
+<font color="green">1691.         if argv:</font>
+<font color="red">1692.             msg = _('unrecognized arguments: %s')</font>
+<font color="red">1693.             self.error(msg % ' '.join(argv))</font>
+<font color="green">1694.         return args</font>
+<font color="black">1695. </font>
+<font color="green">1696.     def parse_known_args(self, args=None, namespace=None):</font>
+<font color="green">1697.         if args is None:</font>
+<font color="black">1698.             # args default to the system args</font>
+<font color="red">1699.             args = _sys.argv[1:]</font>
+<font color="black">1700.         else:</font>
+<font color="black">1701.             # make sure that args are mutable</font>
+<font color="green">1702.             args = list(args)</font>
+<font color="black">1703. </font>
+<font color="black">1704.         # default Namespace built from parser defaults</font>
+<font color="green">1705.         if namespace is None:</font>
+<font color="green">1706.             namespace = Namespace()</font>
+<font color="black">1707. </font>
+<font color="black">1708.         # add any action defaults that aren't present</font>
+<font color="green">1709.         for action in self._actions:</font>
+<font color="green">1710.             if action.dest is not SUPPRESS:</font>
+<font color="green">1711.                 if not hasattr(namespace, action.dest):</font>
+<font color="green">1712.                     if action.default is not SUPPRESS:</font>
+<font color="green">1713.                         setattr(namespace, action.dest, action.default)</font>
+<font color="black">1714. </font>
+<font color="black">1715.         # add any parser defaults that aren't present</font>
+<font color="green">1716.         for dest in self._defaults:</font>
+<font color="red">1717.             if not hasattr(namespace, dest):</font>
+<font color="red">1718.                 setattr(namespace, dest, self._defaults[dest])</font>
+<font color="black">1719. </font>
+<font color="black">1720.         # parse the arguments and exit if there are any errors</font>
+<font color="green">1721.         try:</font>
+<font color="green">1722.             namespace, args = self._parse_known_args(args, namespace)</font>
+<font color="green">1723.             if hasattr(namespace, _UNRECOGNIZED_ARGS_ATTR):</font>
+<font color="red">1724.                 args.extend(getattr(namespace, _UNRECOGNIZED_ARGS_ATTR))</font>
+<font color="red">1725.                 delattr(namespace, _UNRECOGNIZED_ARGS_ATTR)</font>
+<font color="green">1726.             return namespace, args</font>
+<font color="red">1727.         except ArgumentError:</font>
+<font color="red">1728.             err = _sys.exc_info()[1]</font>
+<font color="red">1729.             self.error(str(err))</font>
+<font color="black">1730. </font>
+<font color="green">1731.     def _parse_known_args(self, arg_strings, namespace):</font>
+<font color="black">1732.         # replace arg strings that are file references</font>
+<font color="green">1733.         if self.fromfile_prefix_chars is not None:</font>
+<font color="red">1734.             arg_strings = self._read_args_from_files(arg_strings)</font>
+<font color="black">1735. </font>
+<font color="black">1736.         # map all mutually exclusive arguments to the other arguments</font>
+<font color="black">1737.         # they can't occur with</font>
+<font color="green">1738.         action_conflicts = {}</font>
+<font color="green">1739.         for mutex_group in self._mutually_exclusive_groups:</font>
+<font color="red">1740.             group_actions = mutex_group._group_actions</font>
+<font color="red">1741.             for i, mutex_action in enumerate(mutex_group._group_actions):</font>
+<font color="red">1742.                 conflicts = action_conflicts.setdefault(mutex_action, [])</font>
+<font color="red">1743.                 conflicts.extend(group_actions[:i])</font>
+<font color="red">1744.                 conflicts.extend(group_actions[i + 1:])</font>
+<font color="black">1745. </font>
+<font color="black">1746.         # find all option indices, and determine the arg_string_pattern</font>
+<font color="black">1747.         # which has an 'O' if there is an option at an index,</font>
+<font color="black">1748.         # an 'A' if there is an argument, or a '-' if there is a '--'</font>
+<font color="green">1749.         option_string_indices = {}</font>
+<font color="green">1750.         arg_string_pattern_parts = []</font>
+<font color="green">1751.         arg_strings_iter = iter(arg_strings)</font>
+<font color="green">1752.         for i, arg_string in enumerate(arg_strings_iter):</font>
+<font color="black">1753. </font>
+<font color="black">1754.             # all args after -- are non-options</font>
+<font color="red">1755.             if arg_string == '--':</font>
+<font color="red">1756.                 arg_string_pattern_parts.append('-')</font>
+<font color="red">1757.                 for arg_string in arg_strings_iter:</font>
+<font color="red">1758.                     arg_string_pattern_parts.append('A')</font>
+<font color="black">1759. </font>
+<font color="black">1760.             # otherwise, add the arg to the arg strings</font>
+<font color="black">1761.             # and note the index if it was an option</font>
+<font color="black">1762.             else:</font>
+<font color="red">1763.                 option_tuple = self._parse_optional(arg_string)</font>
+<font color="red">1764.                 if option_tuple is None:</font>
+<font color="red">1765.                     pattern = 'A'</font>
+<font color="black">1766.                 else:</font>
+<font color="red">1767.                     option_string_indices[i] = option_tuple</font>
+<font color="red">1768.                     pattern = 'O'</font>
+<font color="red">1769.                 arg_string_pattern_parts.append(pattern)</font>
+<font color="black">1770. </font>
+<font color="black">1771.         # join the pieces together to form the pattern</font>
+<font color="green">1772.         arg_strings_pattern = ''.join(arg_string_pattern_parts)</font>
+<font color="black">1773. </font>
+<font color="black">1774.         # converts arg strings to the appropriate and then takes the action</font>
+<font color="green">1775.         seen_actions = set()</font>
+<font color="green">1776.         seen_non_default_actions = set()</font>
+<font color="black">1777. </font>
+<font color="green">1778.         def take_action(action, argument_strings, option_string=None):</font>
+<font color="green">1779.             seen_actions.add(action)</font>
+<font color="green">1780.             argument_values = self._get_values(action, argument_strings)</font>
+<font color="black">1781. </font>
+<font color="black">1782.             # error if this argument is not allowed with other previously</font>
+<font color="black">1783.             # seen arguments, assuming that actions that use the default</font>
+<font color="black">1784.             # value don't really count as &quot;present&quot;</font>
+<font color="green">1785.             if argument_values is not action.default:</font>
+<font color="green">1786.                 seen_non_default_actions.add(action)</font>
+<font color="green">1787.                 for conflict_action in action_conflicts.get(action, []):</font>
+<font color="red">1788.                     if conflict_action in seen_non_default_actions:</font>
+<font color="red">1789.                         msg = _('not allowed with argument %s')</font>
+<font color="red">1790.                         action_name = _get_action_name(conflict_action)</font>
+<font color="red">1791.                         raise ArgumentError(action, msg % action_name)</font>
+<font color="black">1792. </font>
+<font color="black">1793.             # take the action if we didn't receive a SUPPRESS value</font>
+<font color="black">1794.             # (e.g. from a default)</font>
+<font color="green">1795.             if argument_values is not SUPPRESS:</font>
+<font color="green">1796.                 action(self, namespace, argument_values, option_string)</font>
+<font color="black">1797. </font>
+<font color="black">1798.         # function to convert arg_strings into an optional action</font>
+<font color="green">1799.         def consume_optional(start_index):</font>
+<font color="black">1800. </font>
+<font color="black">1801.             # get the optional identified at this index</font>
+<font color="red">1802.             option_tuple = option_string_indices[start_index]</font>
+<font color="red">1803.             action, option_string, explicit_arg = option_tuple</font>
+<font color="black">1804. </font>
+<font color="black">1805.             # identify additional optionals in the same arg string</font>
+<font color="black">1806.             # (e.g. -xyz is the same as -x -y -z if no args are required)</font>
+<font color="red">1807.             match_argument = self._match_argument</font>
+<font color="red">1808.             action_tuples = []</font>
+<font color="red">1809.             while True:</font>
+<font color="black">1810. </font>
+<font color="black">1811.                 # if we found no optional action, skip it</font>
+<font color="red">1812.                 if action is None:</font>
+<font color="red">1813.                     extras.append(arg_strings[start_index])</font>
+<font color="red">1814.                     return start_index + 1</font>
+<font color="black">1815. </font>
+<font color="black">1816.                 # if there is an explicit argument, try to match the</font>
+<font color="black">1817.                 # optional's string arguments to only this</font>
+<font color="red">1818.                 if explicit_arg is not None:</font>
+<font color="red">1819.                     arg_count = match_argument(action, 'A')</font>
+<font color="black">1820. </font>
+<font color="black">1821.                     # if the action is a single-dash option and takes no</font>
+<font color="black">1822.                     # arguments, try to parse more single-dash options out</font>
+<font color="black">1823.                     # of the tail of the option string</font>
+<font color="red">1824.                     chars = self.prefix_chars</font>
+<font color="red">1825.                     if arg_count == 0 and option_string[1] not in chars:</font>
+<font color="red">1826.                         action_tuples.append((action, [], option_string))</font>
+<font color="red">1827.                         char = option_string[0]</font>
+<font color="red">1828.                         option_string = char + explicit_arg[0]</font>
+<font color="red">1829.                         new_explicit_arg = explicit_arg[1:] or None</font>
+<font color="red">1830.                         optionals_map = self._option_string_actions</font>
+<font color="red">1831.                         if option_string in optionals_map:</font>
+<font color="red">1832.                             action = optionals_map[option_string]</font>
+<font color="red">1833.                             explicit_arg = new_explicit_arg</font>
+<font color="black">1834.                         else:</font>
+<font color="red">1835.                             msg = _('ignored explicit argument %r')</font>
+<font color="red">1836.                             raise ArgumentError(action, msg % explicit_arg)</font>
+<font color="black">1837. </font>
+<font color="black">1838.                     # if the action expect exactly one argument, we've</font>
+<font color="black">1839.                     # successfully matched the option; exit the loop</font>
+<font color="red">1840.                     elif arg_count == 1:</font>
+<font color="red">1841.                         stop = start_index + 1</font>
+<font color="red">1842.                         args = [explicit_arg]</font>
+<font color="red">1843.                         action_tuples.append((action, args, option_string))</font>
+<font color="red">1844.                         break</font>
+<font color="black">1845. </font>
+<font color="black">1846.                     # error if a double-dash option did not use the</font>
+<font color="black">1847.                     # explicit argument</font>
+<font color="black">1848.                     else:</font>
+<font color="red">1849.                         msg = _('ignored explicit argument %r')</font>
+<font color="red">1850.                         raise ArgumentError(action, msg % explicit_arg)</font>
+<font color="black">1851. </font>
+<font color="black">1852.                 # if there is no explicit argument, try to match the</font>
+<font color="black">1853.                 # optional's string arguments with the following strings</font>
+<font color="black">1854.                 # if successful, exit the loop</font>
+<font color="black">1855.                 else:</font>
+<font color="red">1856.                     start = start_index + 1</font>
+<font color="red">1857.                     selected_patterns = arg_strings_pattern[start:]</font>
+<font color="red">1858.                     arg_count = match_argument(action, selected_patterns)</font>
+<font color="red">1859.                     stop = start + arg_count</font>
+<font color="red">1860.                     args = arg_strings[start:stop]</font>
+<font color="red">1861.                     action_tuples.append((action, args, option_string))</font>
+<font color="red">1862.                     break</font>
+<font color="black">1863. </font>
+<font color="black">1864.             # add the Optional to the list and return the index at which</font>
+<font color="black">1865.             # the Optional's string args stopped</font>
+<font color="red">1866.             assert action_tuples</font>
+<font color="red">1867.             for action, args, option_string in action_tuples:</font>
+<font color="red">1868.                 take_action(action, args, option_string)</font>
+<font color="red">1869.             return stop</font>
+<font color="black">1870. </font>
+<font color="black">1871.         # the list of Positionals left to be parsed; this is modified</font>
+<font color="black">1872.         # by consume_positionals()</font>
+<font color="green">1873.         positionals = self._get_positional_actions()</font>
+<font color="black">1874. </font>
+<font color="black">1875.         # function to convert arg_strings into positional actions</font>
+<font color="green">1876.         def consume_positionals(start_index):</font>
+<font color="black">1877.             # match as many Positionals as possible</font>
+<font color="green">1878.             match_partial = self._match_arguments_partial</font>
+<font color="green">1879.             selected_pattern = arg_strings_pattern[start_index:]</font>
+<font color="green">1880.             arg_counts = match_partial(positionals, selected_pattern)</font>
+<font color="black">1881. </font>
+<font color="black">1882.             # slice off the appropriate arg strings for each Positional</font>
+<font color="black">1883.             # and add the Positional and its args to the list</font>
+<font color="green">1884.             for action, arg_count in zip(positionals, arg_counts):</font>
+<font color="green">1885.                 args = arg_strings[start_index: start_index + arg_count]</font>
+<font color="green">1886.                 start_index += arg_count</font>
+<font color="green">1887.                 take_action(action, args)</font>
+<font color="black">1888. </font>
+<font color="black">1889.             # slice off the Positionals that we just parsed and return the</font>
+<font color="black">1890.             # index at which the Positionals' string args stopped</font>
+<font color="green">1891.             positionals[:] = positionals[len(arg_counts):]</font>
+<font color="green">1892.             return start_index</font>
+<font color="black">1893. </font>
+<font color="black">1894.         # consume Positionals and Optionals alternately, until we have</font>
+<font color="black">1895.         # passed the last option string</font>
+<font color="green">1896.         extras = []</font>
+<font color="green">1897.         start_index = 0</font>
+<font color="green">1898.         if option_string_indices:</font>
+<font color="red">1899.             max_option_string_index = max(option_string_indices)</font>
+<font color="black">1900.         else:</font>
+<font color="green">1901.             max_option_string_index = -1</font>
+<font color="green">1902.         while start_index &lt;= max_option_string_index:</font>
+<font color="black">1903. </font>
+<font color="black">1904.             # consume any Positionals preceding the next option</font>
+<font color="red">1905.             next_option_string_index = min([</font>
+<font color="red">1906.                 index</font>
+<font color="red">1907.                 for index in option_string_indices</font>
+<font color="red">1908.                 if index &gt;= start_index])</font>
+<font color="red">1909.             if start_index != next_option_string_index:</font>
+<font color="red">1910.                 positionals_end_index = consume_positionals(start_index)</font>
+<font color="black">1911. </font>
+<font color="black">1912.                 # only try to parse the next optional if we didn't consume</font>
+<font color="black">1913.                 # the option string during the positionals parsing</font>
+<font color="red">1914.                 if positionals_end_index &gt; start_index:</font>
+<font color="red">1915.                     start_index = positionals_end_index</font>
+<font color="red">1916.                     continue</font>
+<font color="black">1917.                 else:</font>
+<font color="red">1918.                     start_index = positionals_end_index</font>
+<font color="black">1919. </font>
+<font color="black">1920.             # if we consumed all the positionals we could and we're not</font>
+<font color="black">1921.             # at the index of an option string, there were extra arguments</font>
+<font color="red">1922.             if start_index not in option_string_indices:</font>
+<font color="red">1923.                 strings = arg_strings[start_index:next_option_string_index]</font>
+<font color="red">1924.                 extras.extend(strings)</font>
+<font color="red">1925.                 start_index = next_option_string_index</font>
+<font color="black">1926. </font>
+<font color="black">1927.             # consume the next optional and any arguments for it</font>
+<font color="red">1928.             start_index = consume_optional(start_index)</font>
+<font color="black">1929. </font>
+<font color="black">1930.         # consume any positionals following the last Optional</font>
+<font color="green">1931.         stop_index = consume_positionals(start_index)</font>
+<font color="black">1932. </font>
+<font color="black">1933.         # if we didn't consume all the argument strings, there were extras</font>
+<font color="green">1934.         extras.extend(arg_strings[stop_index:])</font>
+<font color="black">1935. </font>
+<font color="black">1936.         # if we didn't use all the Positional objects, there were too few</font>
+<font color="black">1937.         # arg strings supplied.</font>
+<font color="green">1938.         if positionals:</font>
+<font color="red">1939.             self.error(_('too few arguments'))</font>
+<font color="black">1940. </font>
+<font color="black">1941.         # make sure all required actions were present, and convert defaults.</font>
+<font color="green">1942.         for action in self._actions:</font>
+<font color="green">1943.             if action not in seen_actions:</font>
+<font color="green">1944.                 if action.required:</font>
+<font color="red">1945.                     name = _get_action_name(action)</font>
+<font color="red">1946.                     self.error(_('argument %s is required') % name)</font>
+<font color="black">1947.                 else:</font>
+<font color="black">1948.                     # Convert action default now instead of doing it before</font>
+<font color="black">1949.                     # parsing arguments to avoid calling convert functions</font>
+<font color="black">1950.                     # twice (which may fail) if the argument was given, but</font>
+<font color="black">1951.                     # only if it was defined already in the namespace</font>
+<font color="green">1952.                     if (action.default is not None and</font>
+<font color="green">1953.                             isinstance(action.default, basestring) and</font>
+<font color="green">1954.                             hasattr(namespace, action.dest) and</font>
+<font color="green">1955.                             action.default is getattr(namespace, action.dest)):</font>
+<font color="green">1956.                         setattr(namespace, action.dest,</font>
+<font color="green">1957.                                 self._get_value(action, action.default))</font>
+<font color="black">1958. </font>
+<font color="black">1959.         # make sure all required groups had one option present</font>
+<font color="green">1960.         for group in self._mutually_exclusive_groups:</font>
+<font color="red">1961.             if group.required:</font>
+<font color="red">1962.                 for action in group._group_actions:</font>
+<font color="red">1963.                     if action in seen_non_default_actions:</font>
+<font color="red">1964.                         break</font>
+<font color="black">1965. </font>
+<font color="black">1966.                 # if no actions were used, report the error</font>
+<font color="black">1967.                 else:</font>
+<font color="red">1968.                     names = [_get_action_name(action)</font>
+<font color="red">1969.                              for action in group._group_actions</font>
+<font color="red">1970.                              if action.help is not SUPPRESS]</font>
+<font color="red">1971.                     msg = _('one of the arguments %s is required')</font>
+<font color="red">1972.                     self.error(msg % ' '.join(names))</font>
+<font color="black">1973. </font>
+<font color="black">1974.         # return the updated namespace and the extra arguments</font>
+<font color="green">1975.         return namespace, extras</font>
+<font color="black">1976. </font>
+<font color="green">1977.     def _read_args_from_files(self, arg_strings):</font>
+<font color="black">1978.         # expand arguments referencing files</font>
+<font color="red">1979.         new_arg_strings = []</font>
+<font color="red">1980.         for arg_string in arg_strings:</font>
+<font color="black">1981. </font>
+<font color="black">1982.             # for regular arguments, just add them back into the list</font>
+<font color="red">1983.             if not arg_string or arg_string[0] not in self.fromfile_prefix_chars:</font>
+<font color="red">1984.                 new_arg_strings.append(arg_string)</font>
+<font color="black">1985. </font>
+<font color="black">1986.             # replace arguments referencing files with the file content</font>
+<font color="black">1987.             else:</font>
+<font color="red">1988.                 try:</font>
+<font color="red">1989.                     args_file = open(arg_string[1:])</font>
+<font color="red">1990.                     try:</font>
+<font color="red">1991.                         arg_strings = []</font>
+<font color="red">1992.                         for arg_line in args_file.read().splitlines():</font>
+<font color="red">1993.                             for arg in self.convert_arg_line_to_args(arg_line):</font>
+<font color="red">1994.                                 arg_strings.append(arg)</font>
+<font color="red">1995.                         arg_strings = self._read_args_from_files(arg_strings)</font>
+<font color="red">1996.                         new_arg_strings.extend(arg_strings)</font>
+<font color="black">1997.                     finally:</font>
+<font color="red">1998.                         args_file.close()</font>
+<font color="red">1999.                 except IOError:</font>
+<font color="red">2000.                     err = _sys.exc_info()[1]</font>
+<font color="red">2001.                     self.error(str(err))</font>
+<font color="black">2002. </font>
+<font color="black">2003.         # return the modified argument list</font>
+<font color="red">2004.         return new_arg_strings</font>
+<font color="black">2005. </font>
+<font color="green">2006.     def convert_arg_line_to_args(self, arg_line):</font>
+<font color="red">2007.         return [arg_line]</font>
+<font color="black">2008. </font>
+<font color="green">2009.     def _match_argument(self, action, arg_strings_pattern):</font>
+<font color="black">2010.         # match the pattern for this action to the arg strings</font>
+<font color="red">2011.         nargs_pattern = self._get_nargs_pattern(action)</font>
+<font color="red">2012.         match = _re.match(nargs_pattern, arg_strings_pattern)</font>
+<font color="black">2013. </font>
+<font color="black">2014.         # raise an exception if we weren't able to find a match</font>
+<font color="red">2015.         if match is None:</font>
+<font color="red">2016.             nargs_errors = {</font>
+<font color="red">2017.                 None: _('expected one argument'),</font>
+<font color="red">2018.                 OPTIONAL: _('expected at most one argument'),</font>
+<font color="red">2019.                 ONE_OR_MORE: _('expected at least one argument'),</font>
+<font color="black">2020.             }</font>
+<font color="red">2021.             default = _('expected %s argument(s)') % action.nargs</font>
+<font color="red">2022.             msg = nargs_errors.get(action.nargs, default)</font>
+<font color="red">2023.             raise ArgumentError(action, msg)</font>
+<font color="black">2024. </font>
+<font color="black">2025.         # return the number of arguments matched</font>
+<font color="red">2026.         return len(match.group(1))</font>
+<font color="black">2027. </font>
+<font color="green">2028.     def _match_arguments_partial(self, actions, arg_strings_pattern):</font>
+<font color="black">2029.         # progressively shorten the actions list by slicing off the</font>
+<font color="black">2030.         # final actions until we find a match</font>
+<font color="green">2031.         result = []</font>
+<font color="green">2032.         for i in range(len(actions), 0, -1):</font>
+<font color="green">2033.             actions_slice = actions[:i]</font>
+<font color="green">2034.             pattern = ''.join([self._get_nargs_pattern(action)</font>
+<font color="green">2035.                                for action in actions_slice])</font>
+<font color="green">2036.             match = _re.match(pattern, arg_strings_pattern)</font>
+<font color="green">2037.             if match is not None:</font>
+<font color="green">2038.                 result.extend([len(string) for string in match.groups()])</font>
+<font color="green">2039.                 break</font>
+<font color="black">2040. </font>
+<font color="black">2041.         # return the list of arg string counts</font>
+<font color="green">2042.         return result</font>
+<font color="black">2043. </font>
+<font color="green">2044.     def _parse_optional(self, arg_string):</font>
+<font color="black">2045.         # if it's an empty string, it was meant to be a positional</font>
+<font color="red">2046.         if not arg_string:</font>
+<font color="red">2047.             return None</font>
+<font color="black">2048. </font>
+<font color="black">2049.         # if it doesn't start with a prefix, it was meant to be positional</font>
+<font color="red">2050.         if not arg_string[0] in self.prefix_chars:</font>
+<font color="red">2051.             return None</font>
+<font color="black">2052. </font>
+<font color="black">2053.         # if the option string is present in the parser, return the action</font>
+<font color="red">2054.         if arg_string in self._option_string_actions:</font>
+<font color="red">2055.             action = self._option_string_actions[arg_string]</font>
+<font color="red">2056.             return action, arg_string, None</font>
+<font color="black">2057. </font>
+<font color="black">2058.         # if it's just a single character, it was meant to be positional</font>
+<font color="red">2059.         if len(arg_string) == 1:</font>
+<font color="red">2060.             return None</font>
+<font color="black">2061. </font>
+<font color="black">2062.         # if the option string before the &quot;=&quot; is present, return the action</font>
+<font color="red">2063.         if '=' in arg_string:</font>
+<font color="red">2064.             option_string, explicit_arg = arg_string.split('=', 1)</font>
+<font color="red">2065.             if option_string in self._option_string_actions:</font>
+<font color="red">2066.                 action = self._option_string_actions[option_string]</font>
+<font color="red">2067.                 return action, option_string, explicit_arg</font>
+<font color="black">2068. </font>
+<font color="black">2069.         # search through all possible prefixes of the option string</font>
+<font color="black">2070.         # and all actions in the parser for possible interpretations</font>
+<font color="red">2071.         option_tuples = self._get_option_tuples(arg_string)</font>
+<font color="black">2072. </font>
+<font color="black">2073.         # if multiple actions match, the option string was ambiguous</font>
+<font color="red">2074.         if len(option_tuples) &gt; 1:</font>
+<font color="red">2075.             options = ', '.join([option_string</font>
+<font color="red">2076.                 for action, option_string, explicit_arg in option_tuples])</font>
+<font color="red">2077.             tup = arg_string, options</font>
+<font color="red">2078.             self.error(_('ambiguous option: %s could match %s') % tup)</font>
+<font color="black">2079. </font>
+<font color="black">2080.         # if exactly one action matched, this segmentation is good,</font>
+<font color="black">2081.         # so return the parsed action</font>
+<font color="red">2082.         elif len(option_tuples) == 1:</font>
+<font color="red">2083.             option_tuple, = option_tuples</font>
+<font color="red">2084.             return option_tuple</font>
+<font color="black">2085. </font>
+<font color="black">2086.         # if it was not found as an option, but it looks like a negative</font>
+<font color="black">2087.         # number, it was meant to be positional</font>
+<font color="black">2088.         # unless there are negative-number-like options</font>
+<font color="red">2089.         if self._negative_number_matcher.match(arg_string):</font>
+<font color="red">2090.             if not self._has_negative_number_optionals:</font>
+<font color="red">2091.                 return None</font>
+<font color="black">2092. </font>
+<font color="black">2093.         # if it contains a space, it was meant to be a positional</font>
+<font color="red">2094.         if ' ' in arg_string:</font>
+<font color="red">2095.             return None</font>
+<font color="black">2096. </font>
+<font color="black">2097.         # it was meant to be an optional but there is no such option</font>
+<font color="black">2098.         # in this parser (though it might be a valid option in a subparser)</font>
+<font color="red">2099.         return None, arg_string, None</font>
+<font color="black">2100. </font>
+<font color="green">2101.     def _get_option_tuples(self, option_string):</font>
+<font color="red">2102.         result = []</font>
+<font color="black">2103. </font>
+<font color="black">2104.         # option strings starting with two prefix characters are only</font>
+<font color="black">2105.         # split at the '='</font>
+<font color="red">2106.         chars = self.prefix_chars</font>
+<font color="red">2107.         if option_string[0] in chars and option_string[1] in chars:</font>
+<font color="red">2108.             if '=' in option_string:</font>
+<font color="red">2109.                 option_prefix, explicit_arg = option_string.split('=', 1)</font>
+<font color="black">2110.             else:</font>
+<font color="red">2111.                 option_prefix = option_string</font>
+<font color="red">2112.                 explicit_arg = None</font>
+<font color="red">2113.             for option_string in self._option_string_actions:</font>
+<font color="red">2114.                 if option_string.startswith(option_prefix):</font>
+<font color="red">2115.                     action = self._option_string_actions[option_string]</font>
+<font color="red">2116.                     tup = action, option_string, explicit_arg</font>
+<font color="red">2117.                     result.append(tup)</font>
+<font color="black">2118. </font>
+<font color="black">2119.         # single character options can be concatenated with their arguments</font>
+<font color="black">2120.         # but multiple character options always have to have their argument</font>
+<font color="black">2121.         # separate</font>
+<font color="red">2122.         elif option_string[0] in chars and option_string[1] not in chars:</font>
+<font color="red">2123.             option_prefix = option_string</font>
+<font color="red">2124.             explicit_arg = None</font>
+<font color="red">2125.             short_option_prefix = option_string[:2]</font>
+<font color="red">2126.             short_explicit_arg = option_string[2:]</font>
+<font color="black">2127. </font>
+<font color="red">2128.             for option_string in self._option_string_actions:</font>
+<font color="red">2129.                 if option_string == short_option_prefix:</font>
+<font color="red">2130.                     action = self._option_string_actions[option_string]</font>
+<font color="red">2131.                     tup = action, option_string, short_explicit_arg</font>
+<font color="red">2132.                     result.append(tup)</font>
+<font color="red">2133.                 elif option_string.startswith(option_prefix):</font>
+<font color="red">2134.                     action = self._option_string_actions[option_string]</font>
+<font color="red">2135.                     tup = action, option_string, explicit_arg</font>
+<font color="red">2136.                     result.append(tup)</font>
+<font color="black">2137. </font>
+<font color="black">2138.         # shouldn't ever get here</font>
+<font color="black">2139.         else:</font>
+<font color="red">2140.             self.error(_('unexpected option string: %s') % option_string)</font>
+<font color="black">2141. </font>
+<font color="black">2142.         # return the collected option tuples</font>
+<font color="red">2143.         return result</font>
+<font color="black">2144. </font>
+<font color="green">2145.     def _get_nargs_pattern(self, action):</font>
+<font color="black">2146.         # in all examples below, we have to allow for '--' args</font>
+<font color="black">2147.         # which are represented as '-' in the pattern</font>
+<font color="green">2148.         nargs = action.nargs</font>
+<font color="black">2149. </font>
+<font color="black">2150.         # the default (None) is assumed to be a single argument</font>
+<font color="green">2151.         if nargs is None:</font>
+<font color="red">2152.             nargs_pattern = '(-*A-*)'</font>
+<font color="black">2153. </font>
+<font color="black">2154.         # allow zero or one arguments</font>
+<font color="green">2155.         elif nargs == OPTIONAL:</font>
+<font color="green">2156.             nargs_pattern = '(-*A?-*)'</font>
+<font color="black">2157. </font>
+<font color="black">2158.         # allow zero or more arguments</font>
+<font color="green">2159.         elif nargs == ZERO_OR_MORE:</font>
+<font color="green">2160.             nargs_pattern = '(-*[A-]*)'</font>
+<font color="black">2161. </font>
+<font color="black">2162.         # allow one or more arguments</font>
+<font color="red">2163.         elif nargs == ONE_OR_MORE:</font>
+<font color="red">2164.             nargs_pattern = '(-*A[A-]*)'</font>
+<font color="black">2165. </font>
+<font color="black">2166.         # allow any number of options or arguments</font>
+<font color="red">2167.         elif nargs == REMAINDER:</font>
+<font color="red">2168.             nargs_pattern = '([-AO]*)'</font>
+<font color="black">2169. </font>
+<font color="black">2170.         # allow one argument followed by any number of options or arguments</font>
+<font color="red">2171.         elif nargs == PARSER:</font>
+<font color="red">2172.             nargs_pattern = '(-*A[-AO]*)'</font>
+<font color="black">2173. </font>
+<font color="black">2174.         # all others should be integers</font>
+<font color="black">2175.         else:</font>
+<font color="red">2176.             nargs_pattern = '(-*%s-*)' % '-*'.join('A' * nargs)</font>
+<font color="black">2177. </font>
+<font color="black">2178.         # if this is an optional action, -- is not allowed</font>
+<font color="green">2179.         if action.option_strings:</font>
+<font color="red">2180.             nargs_pattern = nargs_pattern.replace('-*', '')</font>
+<font color="red">2181.             nargs_pattern = nargs_pattern.replace('-', '')</font>
+<font color="black">2182. </font>
+<font color="black">2183.         # return the pattern</font>
+<font color="green">2184.         return nargs_pattern</font>
+<font color="black">2185. </font>
+<font color="black">2186.     # ========================</font>
+<font color="black">2187.     # Value conversion methods</font>
+<font color="black">2188.     # ========================</font>
+<font color="green">2189.     def _get_values(self, action, arg_strings):</font>
+<font color="black">2190.         # for everything but PARSER, REMAINDER args, strip out first '--'</font>
+<font color="green">2191.         if action.nargs not in [PARSER, REMAINDER]:</font>
+<font color="green">2192.             try:</font>
+<font color="green">2193.                 arg_strings.remove('--')</font>
+<font color="green">2194.             except ValueError:</font>
+<font color="green">2195.                 pass</font>
+<font color="black">2196. </font>
+<font color="black">2197.         # optional argument produces a default when not present</font>
+<font color="green">2198.         if not arg_strings and action.nargs == OPTIONAL:</font>
+<font color="green">2199.             if action.option_strings:</font>
+<font color="red">2200.                 value = action.const</font>
+<font color="black">2201.             else:</font>
+<font color="green">2202.                 value = action.default</font>
+<font color="green">2203.             if isinstance(value, basestring):</font>
+<font color="red">2204.                 value = self._get_value(action, value)</font>
+<font color="red">2205.                 self._check_value(action, value)</font>
+<font color="black">2206. </font>
+<font color="black">2207.         # when nargs='*' on a positional, if there were no command-line</font>
+<font color="black">2208.         # args, use the default if it is anything other than None</font>
+<font color="green">2209.         elif (not arg_strings and action.nargs == ZERO_OR_MORE and</font>
+<font color="green">2210.               not action.option_strings):</font>
+<font color="green">2211.             if action.default is not None:</font>
+<font color="red">2212.                 value = action.default</font>
+<font color="black">2213.             else:</font>
+<font color="green">2214.                 value = arg_strings</font>
+<font color="green">2215.             self._check_value(action, value)</font>
+<font color="black">2216. </font>
+<font color="black">2217.         # single argument or optional argument produces a single value</font>
+<font color="red">2218.         elif len(arg_strings) == 1 and action.nargs in [None, OPTIONAL]:</font>
+<font color="red">2219.             arg_string, = arg_strings</font>
+<font color="red">2220.             value = self._get_value(action, arg_string)</font>
+<font color="red">2221.             self._check_value(action, value)</font>
+<font color="black">2222. </font>
+<font color="black">2223.         # REMAINDER arguments convert all values, checking none</font>
+<font color="red">2224.         elif action.nargs == REMAINDER:</font>
+<font color="red">2225.             value = [self._get_value(action, v) for v in arg_strings]</font>
+<font color="black">2226. </font>
+<font color="black">2227.         # PARSER arguments convert all values, but check only the first</font>
+<font color="red">2228.         elif action.nargs == PARSER:</font>
+<font color="red">2229.             value = [self._get_value(action, v) for v in arg_strings]</font>
+<font color="red">2230.             self._check_value(action, value[0])</font>
+<font color="black">2231. </font>
+<font color="black">2232.         # all other types of nargs produce a list</font>
+<font color="black">2233.         else:</font>
+<font color="red">2234.             value = [self._get_value(action, v) for v in arg_strings]</font>
+<font color="red">2235.             for v in value:</font>
+<font color="red">2236.                 self._check_value(action, v)</font>
+<font color="black">2237. </font>
+<font color="black">2238.         # return the converted value</font>
+<font color="green">2239.         return value</font>
+<font color="black">2240. </font>
+<font color="green">2241.     def _get_value(self, action, arg_string):</font>
+<font color="green">2242.         type_func = self._registry_get('type', action.type, action.type)</font>
+<font color="green">2243.         if not _callable(type_func):</font>
+<font color="red">2244.             msg = _('%r is not callable')</font>
+<font color="red">2245.             raise ArgumentError(action, msg % type_func)</font>
+<font color="black">2246. </font>
+<font color="black">2247.         # convert the value to the appropriate type</font>
+<font color="green">2248.         try:</font>
+<font color="green">2249.             result = type_func(arg_string)</font>
+<font color="black">2250. </font>
+<font color="black">2251.         # ArgumentTypeErrors indicate errors</font>
+<font color="red">2252.         except ArgumentTypeError:</font>
+<font color="red">2253.             name = getattr(action.type, '__name__', repr(action.type))</font>
+<font color="red">2254.             msg = str(_sys.exc_info()[1])</font>
+<font color="red">2255.             raise ArgumentError(action, msg)</font>
+<font color="black">2256. </font>
+<font color="black">2257.         # TypeErrors or ValueErrors also indicate errors</font>
+<font color="red">2258.         except (TypeError, ValueError):</font>
+<font color="red">2259.             name = getattr(action.type, '__name__', repr(action.type))</font>
+<font color="red">2260.             msg = _('invalid %s value: %r')</font>
+<font color="red">2261.             raise ArgumentError(action, msg % (name, arg_string))</font>
+<font color="black">2262. </font>
+<font color="black">2263.         # return the converted value</font>
+<font color="green">2264.         return result</font>
+<font color="black">2265. </font>
+<font color="green">2266.     def _check_value(self, action, value):</font>
+<font color="black">2267.         # converted value must be one of the choices (if specified)</font>
+<font color="green">2268.         if action.choices is not None and value not in action.choices:</font>
+<font color="red">2269.             tup = value, ', '.join(map(repr, action.choices))</font>
+<font color="red">2270.             msg = _('invalid choice: %r (choose from %s)') % tup</font>
+<font color="red">2271.             raise ArgumentError(action, msg)</font>
+<font color="black">2272. </font>
+<font color="black">2273.     # =======================</font>
+<font color="black">2274.     # Help-formatting methods</font>
+<font color="black">2275.     # =======================</font>
+<font color="green">2276.     def format_usage(self):</font>
+<font color="red">2277.         formatter = self._get_formatter()</font>
+<font color="red">2278.         formatter.add_usage(self.usage, self._actions,</font>
+<font color="red">2279.                             self._mutually_exclusive_groups)</font>
+<font color="red">2280.         return formatter.format_help()</font>
+<font color="black">2281. </font>
+<font color="green">2282.     def format_help(self):</font>
+<font color="red">2283.         formatter = self._get_formatter()</font>
+<font color="black">2284. </font>
+<font color="black">2285.         # usage</font>
+<font color="red">2286.         formatter.add_usage(self.usage, self._actions,</font>
+<font color="red">2287.                             self._mutually_exclusive_groups)</font>
+<font color="black">2288. </font>
+<font color="black">2289.         # description</font>
+<font color="red">2290.         formatter.add_text(self.description)</font>
+<font color="black">2291. </font>
+<font color="black">2292.         # positionals, optionals and user-defined groups</font>
+<font color="red">2293.         for action_group in self._action_groups:</font>
+<font color="red">2294.             formatter.start_section(action_group.title)</font>
+<font color="red">2295.             formatter.add_text(action_group.description)</font>
+<font color="red">2296.             formatter.add_arguments(action_group._group_actions)</font>
+<font color="red">2297.             formatter.end_section()</font>
+<font color="black">2298. </font>
+<font color="black">2299.         # epilog</font>
+<font color="red">2300.         formatter.add_text(self.epilog)</font>
+<font color="black">2301. </font>
+<font color="black">2302.         # determine help from format above</font>
+<font color="red">2303.         return formatter.format_help()</font>
+<font color="black">2304. </font>
+<font color="green">2305.     def format_version(self):</font>
+<font color="red">2306.         import warnings</font>
+<font color="red">2307.         warnings.warn(</font>
+<font color="red">2308.             'The format_version method is deprecated -- the &quot;version&quot; '</font>
+<font color="black">2309.             'argument to ArgumentParser is no longer supported.',</font>
+<font color="red">2310.             DeprecationWarning)</font>
+<font color="red">2311.         formatter = self._get_formatter()</font>
+<font color="red">2312.         formatter.add_text(self.version)</font>
+<font color="red">2313.         return formatter.format_help()</font>
+<font color="black">2314. </font>
+<font color="green">2315.     def _get_formatter(self):</font>
+<font color="green">2316.         return self.formatter_class(prog=self.prog)</font>
+<font color="black">2317. </font>
+<font color="black">2318.     # =====================</font>
+<font color="black">2319.     # Help-printing methods</font>
+<font color="black">2320.     # =====================</font>
+<font color="green">2321.     def print_usage(self, file=None):</font>
+<font color="red">2322.         if file is None:</font>
+<font color="red">2323.             file = _sys.stdout</font>
+<font color="red">2324.         self._print_message(self.format_usage(), file)</font>
+<font color="black">2325. </font>
+<font color="green">2326.     def print_help(self, file=None):</font>
+<font color="red">2327.         if file is None:</font>
+<font color="red">2328.             file = _sys.stdout</font>
+<font color="red">2329.         self._print_message(self.format_help(), file)</font>
+<font color="black">2330. </font>
+<font color="green">2331.     def print_version(self, file=None):</font>
+<font color="red">2332.         import warnings</font>
+<font color="red">2333.         warnings.warn(</font>
+<font color="red">2334.             'The print_version method is deprecated -- the &quot;version&quot; '</font>
+<font color="black">2335.             'argument to ArgumentParser is no longer supported.',</font>
+<font color="red">2336.             DeprecationWarning)</font>
+<font color="red">2337.         self._print_message(self.format_version(), file)</font>
+<font color="black">2338. </font>
+<font color="green">2339.     def _print_message(self, message, file=None):</font>
+<font color="red">2340.         if message:</font>
+<font color="red">2341.             if file is None:</font>
+<font color="red">2342.                 file = _sys.stderr</font>
+<font color="red">2343.             file.write(message)</font>
+<font color="black">2344. </font>
+<font color="black">2345.     # ===============</font>
+<font color="black">2346.     # Exiting methods</font>
+<font color="black">2347.     # ===============</font>
+<font color="green">2348.     def exit(self, status=0, message=None):</font>
+<font color="red">2349.         if message:</font>
+<font color="red">2350.             self._print_message(message, _sys.stderr)</font>
+<font color="red">2351.         _sys.exit(status)</font>
+<font color="black">2352. </font>
+<font color="green">2353.     def error(self, message):</font>
+<font color="black">2354.         &quot;&quot;&quot;error(message: string)</font>
+<font color="black">2355. </font>
+<font color="black">2356.         Prints a usage message incorporating the message to stderr and</font>
+<font color="black">2357.         exits.</font>
+<font color="black">2358. </font>
+<font color="black">2359.         If you override this in a subclass, it should not return -- it</font>
+<font color="black">2360.         should either exit or raise an exception.</font>
+<font color="black">2361.         &quot;&quot;&quot;</font>
+<font color="red">2362.         self.print_usage(_sys.stderr)</font>
+<font color="red">2363.         self.exit(2, _('%s: error: %s\n') % (self.prog, message))</font>
+</pre>
+

@@ -1,0 +1,504 @@
+source file: <b>/usr/lib/python2.7/email/_parseaddr.py</b><br>
+
+
+file stats: <b>315 lines, 48 executed: 15.2% covered</b>
+<pre>
+<font color="black">   1. # Copyright (C) 2002-2007 Python Software Foundation</font>
+<font color="black">   2. # Contact: email-sig@python.org</font>
+<font color="black">   3. </font>
+<font color="black">   4. &quot;&quot;&quot;Email address parsing code.</font>
+<font color="black">   5. </font>
+<font color="black">   6. Lifted directly from rfc822.py.  This should eventually be rewritten.</font>
+<font color="green">   7. &quot;&quot;&quot;</font>
+<font color="black">   8. </font>
+<font color="black">   9. __all__ = [</font>
+<font color="green">  10.     'mktime_tz',</font>
+<font color="green">  11.     'parsedate',</font>
+<font color="green">  12.     'parsedate_tz',</font>
+<font color="green">  13.     'quote',</font>
+<font color="black">  14.     ]</font>
+<font color="black">  15. </font>
+<font color="green">  16. import time, calendar</font>
+<font color="black">  17. </font>
+<font color="green">  18. SPACE = ' '</font>
+<font color="green">  19. EMPTYSTRING = ''</font>
+<font color="green">  20. COMMASPACE = ', '</font>
+<font color="black">  21. </font>
+<font color="black">  22. # Parse a date field</font>
+<font color="green">  23. _monthnames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul',</font>
+<font color="green">  24.                'aug', 'sep', 'oct', 'nov', 'dec',</font>
+<font color="green">  25.                'january', 'february', 'march', 'april', 'may', 'june', 'july',</font>
+<font color="green">  26.                'august', 'september', 'october', 'november', 'december']</font>
+<font color="black">  27. </font>
+<font color="green">  28. _daynames = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']</font>
+<font color="black">  29. </font>
+<font color="black">  30. # The timezone table does not include the military time zones defined</font>
+<font color="black">  31. # in RFC822, other than Z.  According to RFC1123, the description in</font>
+<font color="black">  32. # RFC822 gets the signs wrong, so we can't rely on any such time</font>
+<font color="black">  33. # zones.  RFC1123 recommends that numeric timezone indicators be used</font>
+<font color="black">  34. # instead of timezone names.</font>
+<font color="black">  35. </font>
+<font color="green">  36. _timezones = {'UT':0, 'UTC':0, 'GMT':0, 'Z':0,</font>
+<font color="green">  37.               'AST': -400, 'ADT': -300,  # Atlantic (used in Canada)</font>
+<font color="green">  38.               'EST': -500, 'EDT': -400,  # Eastern</font>
+<font color="green">  39.               'CST': -600, 'CDT': -500,  # Central</font>
+<font color="green">  40.               'MST': -700, 'MDT': -600,  # Mountain</font>
+<font color="green">  41.               'PST': -800, 'PDT': -700   # Pacific</font>
+<font color="black">  42.               }</font>
+<font color="black">  43. </font>
+<font color="black">  44. </font>
+<font color="green">  45. def parsedate_tz(data):</font>
+<font color="black">  46.     &quot;&quot;&quot;Convert a date string to a time tuple.</font>
+<font color="black">  47. </font>
+<font color="black">  48.     Accounts for military timezones.</font>
+<font color="black">  49.     &quot;&quot;&quot;</font>
+<font color="red">  50.     data = data.split()</font>
+<font color="black">  51.     # The FWS after the comma after the day-of-week is optional, so search and</font>
+<font color="black">  52.     # adjust for this.</font>
+<font color="red">  53.     if data[0].endswith(',') or data[0].lower() in _daynames:</font>
+<font color="black">  54.         # There's a dayname here. Skip it</font>
+<font color="red">  55.         del data[0]</font>
+<font color="black">  56.     else:</font>
+<font color="red">  57.         i = data[0].rfind(',')</font>
+<font color="red">  58.         if i &gt;= 0:</font>
+<font color="red">  59.             data[0] = data[0][i+1:]</font>
+<font color="red">  60.     if len(data) == 3: # RFC 850 date, deprecated</font>
+<font color="red">  61.         stuff = data[0].split('-')</font>
+<font color="red">  62.         if len(stuff) == 3:</font>
+<font color="red">  63.             data = stuff + data[1:]</font>
+<font color="red">  64.     if len(data) == 4:</font>
+<font color="red">  65.         s = data[3]</font>
+<font color="red">  66.         i = s.find('+')</font>
+<font color="red">  67.         if i &gt; 0:</font>
+<font color="red">  68.             data[3:] = [s[:i], s[i+1:]]</font>
+<font color="black">  69.         else:</font>
+<font color="red">  70.             data.append('') # Dummy tz</font>
+<font color="red">  71.     if len(data) &lt; 5:</font>
+<font color="red">  72.         return None</font>
+<font color="red">  73.     data = data[:5]</font>
+<font color="red">  74.     [dd, mm, yy, tm, tz] = data</font>
+<font color="red">  75.     mm = mm.lower()</font>
+<font color="red">  76.     if mm not in _monthnames:</font>
+<font color="red">  77.         dd, mm = mm, dd.lower()</font>
+<font color="red">  78.         if mm not in _monthnames:</font>
+<font color="red">  79.             return None</font>
+<font color="red">  80.     mm = _monthnames.index(mm) + 1</font>
+<font color="red">  81.     if mm &gt; 12:</font>
+<font color="red">  82.         mm -= 12</font>
+<font color="red">  83.     if dd[-1] == ',':</font>
+<font color="red">  84.         dd = dd[:-1]</font>
+<font color="red">  85.     i = yy.find(':')</font>
+<font color="red">  86.     if i &gt; 0:</font>
+<font color="red">  87.         yy, tm = tm, yy</font>
+<font color="red">  88.     if yy[-1] == ',':</font>
+<font color="red">  89.         yy = yy[:-1]</font>
+<font color="red">  90.     if not yy[0].isdigit():</font>
+<font color="red">  91.         yy, tz = tz, yy</font>
+<font color="red">  92.     if tm[-1] == ',':</font>
+<font color="red">  93.         tm = tm[:-1]</font>
+<font color="red">  94.     tm = tm.split(':')</font>
+<font color="red">  95.     if len(tm) == 2:</font>
+<font color="red">  96.         [thh, tmm] = tm</font>
+<font color="red">  97.         tss = '0'</font>
+<font color="red">  98.     elif len(tm) == 3:</font>
+<font color="red">  99.         [thh, tmm, tss] = tm</font>
+<font color="black"> 100.     else:</font>
+<font color="red"> 101.         return None</font>
+<font color="red"> 102.     try:</font>
+<font color="red"> 103.         yy = int(yy)</font>
+<font color="red"> 104.         dd = int(dd)</font>
+<font color="red"> 105.         thh = int(thh)</font>
+<font color="red"> 106.         tmm = int(tmm)</font>
+<font color="red"> 107.         tss = int(tss)</font>
+<font color="red"> 108.     except ValueError:</font>
+<font color="red"> 109.         return None</font>
+<font color="black"> 110.     # Check for a yy specified in two-digit format, then convert it to the</font>
+<font color="black"> 111.     # appropriate four-digit format, according to the POSIX standard. RFC 822</font>
+<font color="black"> 112.     # calls for a two-digit yy, but RFC 2822 (which obsoletes RFC 822)</font>
+<font color="black"> 113.     # mandates a 4-digit yy. For more information, see the documentation for</font>
+<font color="black"> 114.     # the time module.</font>
+<font color="red"> 115.     if yy &lt; 100:</font>
+<font color="black"> 116.         # The year is between 1969 and 1999 (inclusive).</font>
+<font color="red"> 117.         if yy &gt; 68:</font>
+<font color="red"> 118.             yy += 1900</font>
+<font color="black"> 119.         # The year is between 2000 and 2068 (inclusive).</font>
+<font color="black"> 120.         else:</font>
+<font color="red"> 121.             yy += 2000</font>
+<font color="red"> 122.     tzoffset = None</font>
+<font color="red"> 123.     tz = tz.upper()</font>
+<font color="red"> 124.     if tz in _timezones:</font>
+<font color="red"> 125.         tzoffset = _timezones[tz]</font>
+<font color="black"> 126.     else:</font>
+<font color="red"> 127.         try:</font>
+<font color="red"> 128.             tzoffset = int(tz)</font>
+<font color="red"> 129.         except ValueError:</font>
+<font color="red"> 130.             pass</font>
+<font color="black"> 131.     # Convert a timezone offset into seconds ; -0500 -&gt; -18000</font>
+<font color="red"> 132.     if tzoffset:</font>
+<font color="red"> 133.         if tzoffset &lt; 0:</font>
+<font color="red"> 134.             tzsign = -1</font>
+<font color="red"> 135.             tzoffset = -tzoffset</font>
+<font color="black"> 136.         else:</font>
+<font color="red"> 137.             tzsign = 1</font>
+<font color="red"> 138.         tzoffset = tzsign * ( (tzoffset//100)*3600 + (tzoffset % 100)*60)</font>
+<font color="black"> 139.     # Daylight Saving Time flag is set to -1, since DST is unknown.</font>
+<font color="red"> 140.     return yy, mm, dd, thh, tmm, tss, 0, 1, -1, tzoffset</font>
+<font color="black"> 141. </font>
+<font color="black"> 142. </font>
+<font color="green"> 143. def parsedate(data):</font>
+<font color="black"> 144.     &quot;&quot;&quot;Convert a time string to a time tuple.&quot;&quot;&quot;</font>
+<font color="red"> 145.     t = parsedate_tz(data)</font>
+<font color="red"> 146.     if isinstance(t, tuple):</font>
+<font color="red"> 147.         return t[:9]</font>
+<font color="black"> 148.     else:</font>
+<font color="red"> 149.         return t</font>
+<font color="black"> 150. </font>
+<font color="black"> 151. </font>
+<font color="green"> 152. def mktime_tz(data):</font>
+<font color="black"> 153.     &quot;&quot;&quot;Turn a 10-tuple as returned by parsedate_tz() into a POSIX timestamp.&quot;&quot;&quot;</font>
+<font color="red"> 154.     if data[9] is None:</font>
+<font color="black"> 155.         # No zone info, so localtime is better assumption than GMT</font>
+<font color="red"> 156.         return time.mktime(data[:8] + (-1,))</font>
+<font color="black"> 157.     else:</font>
+<font color="red"> 158.         t = calendar.timegm(data)</font>
+<font color="red"> 159.         return t - data[9]</font>
+<font color="black"> 160. </font>
+<font color="black"> 161. </font>
+<font color="green"> 162. def quote(str):</font>
+<font color="black"> 163.     &quot;&quot;&quot;Prepare string to be used in a quoted string.</font>
+<font color="black"> 164. </font>
+<font color="black"> 165.     Turns backslash and double quote characters into quoted pairs.  These</font>
+<font color="black"> 166.     are the only characters that need to be quoted inside a quoted string.</font>
+<font color="black"> 167.     Does not add the surrounding double quotes.</font>
+<font color="black"> 168.     &quot;&quot;&quot;</font>
+<font color="red"> 169.     return str.replace('\\', '\\\\').replace('&quot;', '\\&quot;')</font>
+<font color="black"> 170. </font>
+<font color="black"> 171. </font>
+<font color="green"> 172. class AddrlistClass:</font>
+<font color="black"> 173.     &quot;&quot;&quot;Address parser class by Ben Escoto.</font>
+<font color="black"> 174. </font>
+<font color="black"> 175.     To understand what this class does, it helps to have a copy of RFC 2822 in</font>
+<font color="black"> 176.     front of you.</font>
+<font color="black"> 177. </font>
+<font color="black"> 178.     Note: this class interface is deprecated and may be removed in the future.</font>
+<font color="black"> 179.     Use rfc822.AddressList instead.</font>
+<font color="green"> 180.     &quot;&quot;&quot;</font>
+<font color="black"> 181. </font>
+<font color="green"> 182.     def __init__(self, field):</font>
+<font color="black"> 183.         &quot;&quot;&quot;Initialize a new instance.</font>
+<font color="black"> 184. </font>
+<font color="black"> 185.         `field' is an unparsed address header field, containing</font>
+<font color="black"> 186.         one or more addresses.</font>
+<font color="black"> 187.         &quot;&quot;&quot;</font>
+<font color="red"> 188.         self.specials = '()&lt;&gt;@,:;.\&quot;[]'</font>
+<font color="red"> 189.         self.pos = 0</font>
+<font color="red"> 190.         self.LWS = ' \t'</font>
+<font color="red"> 191.         self.CR = '\r\n'</font>
+<font color="red"> 192.         self.FWS = self.LWS + self.CR</font>
+<font color="red"> 193.         self.atomends = self.specials + self.LWS + self.CR</font>
+<font color="black"> 194.         # Note that RFC 2822 now specifies `.' as obs-phrase, meaning that it</font>
+<font color="black"> 195.         # is obsolete syntax.  RFC 2822 requires that we recognize obsolete</font>
+<font color="black"> 196.         # syntax, so allow dots in phrases.</font>
+<font color="red"> 197.         self.phraseends = self.atomends.replace('.', '')</font>
+<font color="red"> 198.         self.field = field</font>
+<font color="red"> 199.         self.commentlist = []</font>
+<font color="black"> 200. </font>
+<font color="green"> 201.     def gotonext(self):</font>
+<font color="black"> 202.         &quot;&quot;&quot;Parse up to the start of the next address.&quot;&quot;&quot;</font>
+<font color="red"> 203.         while self.pos &lt; len(self.field):</font>
+<font color="red"> 204.             if self.field[self.pos] in self.LWS + '\n\r':</font>
+<font color="red"> 205.                 self.pos += 1</font>
+<font color="red"> 206.             elif self.field[self.pos] == '(':</font>
+<font color="red"> 207.                 self.commentlist.append(self.getcomment())</font>
+<font color="black"> 208.             else:</font>
+<font color="red"> 209.                 break</font>
+<font color="black"> 210. </font>
+<font color="green"> 211.     def getaddrlist(self):</font>
+<font color="black"> 212.         &quot;&quot;&quot;Parse all addresses.</font>
+<font color="black"> 213. </font>
+<font color="black"> 214.         Returns a list containing all of the addresses.</font>
+<font color="black"> 215.         &quot;&quot;&quot;</font>
+<font color="red"> 216.         result = []</font>
+<font color="red"> 217.         while self.pos &lt; len(self.field):</font>
+<font color="red"> 218.             ad = self.getaddress()</font>
+<font color="red"> 219.             if ad:</font>
+<font color="red"> 220.                 result += ad</font>
+<font color="black"> 221.             else:</font>
+<font color="red"> 222.                 result.append(('', ''))</font>
+<font color="red"> 223.         return result</font>
+<font color="black"> 224. </font>
+<font color="green"> 225.     def getaddress(self):</font>
+<font color="black"> 226.         &quot;&quot;&quot;Parse the next address.&quot;&quot;&quot;</font>
+<font color="red"> 227.         self.commentlist = []</font>
+<font color="red"> 228.         self.gotonext()</font>
+<font color="black"> 229. </font>
+<font color="red"> 230.         oldpos = self.pos</font>
+<font color="red"> 231.         oldcl = self.commentlist</font>
+<font color="red"> 232.         plist = self.getphraselist()</font>
+<font color="black"> 233. </font>
+<font color="red"> 234.         self.gotonext()</font>
+<font color="red"> 235.         returnlist = []</font>
+<font color="black"> 236. </font>
+<font color="red"> 237.         if self.pos &gt;= len(self.field):</font>
+<font color="black"> 238.             # Bad email address technically, no domain.</font>
+<font color="red"> 239.             if plist:</font>
+<font color="red"> 240.                 returnlist = [(SPACE.join(self.commentlist), plist[0])]</font>
+<font color="black"> 241. </font>
+<font color="red"> 242.         elif self.field[self.pos] in '.@':</font>
+<font color="black"> 243.             # email address is just an addrspec</font>
+<font color="black"> 244.             # this isn't very efficient since we start over</font>
+<font color="red"> 245.             self.pos = oldpos</font>
+<font color="red"> 246.             self.commentlist = oldcl</font>
+<font color="red"> 247.             addrspec = self.getaddrspec()</font>
+<font color="red"> 248.             returnlist = [(SPACE.join(self.commentlist), addrspec)]</font>
+<font color="black"> 249. </font>
+<font color="red"> 250.         elif self.field[self.pos] == ':':</font>
+<font color="black"> 251.             # address is a group</font>
+<font color="red"> 252.             returnlist = []</font>
+<font color="black"> 253. </font>
+<font color="red"> 254.             fieldlen = len(self.field)</font>
+<font color="red"> 255.             self.pos += 1</font>
+<font color="red"> 256.             while self.pos &lt; len(self.field):</font>
+<font color="red"> 257.                 self.gotonext()</font>
+<font color="red"> 258.                 if self.pos &lt; fieldlen and self.field[self.pos] == ';':</font>
+<font color="red"> 259.                     self.pos += 1</font>
+<font color="red"> 260.                     break</font>
+<font color="red"> 261.                 returnlist = returnlist + self.getaddress()</font>
+<font color="black"> 262. </font>
+<font color="red"> 263.         elif self.field[self.pos] == '&lt;':</font>
+<font color="black"> 264.             # Address is a phrase then a route addr</font>
+<font color="red"> 265.             routeaddr = self.getrouteaddr()</font>
+<font color="black"> 266. </font>
+<font color="red"> 267.             if self.commentlist:</font>
+<font color="black"> 268.                 returnlist = [(SPACE.join(plist) + ' (' +</font>
+<font color="red"> 269.                                ' '.join(self.commentlist) + ')', routeaddr)]</font>
+<font color="black"> 270.             else:</font>
+<font color="red"> 271.                 returnlist = [(SPACE.join(plist), routeaddr)]</font>
+<font color="black"> 272. </font>
+<font color="black"> 273.         else:</font>
+<font color="red"> 274.             if plist:</font>
+<font color="red"> 275.                 returnlist = [(SPACE.join(self.commentlist), plist[0])]</font>
+<font color="red"> 276.             elif self.field[self.pos] in self.specials:</font>
+<font color="red"> 277.                 self.pos += 1</font>
+<font color="black"> 278. </font>
+<font color="red"> 279.         self.gotonext()</font>
+<font color="red"> 280.         if self.pos &lt; len(self.field) and self.field[self.pos] == ',':</font>
+<font color="red"> 281.             self.pos += 1</font>
+<font color="red"> 282.         return returnlist</font>
+<font color="black"> 283. </font>
+<font color="green"> 284.     def getrouteaddr(self):</font>
+<font color="black"> 285.         &quot;&quot;&quot;Parse a route address (Return-path value).</font>
+<font color="black"> 286. </font>
+<font color="black"> 287.         This method just skips all the route stuff and returns the addrspec.</font>
+<font color="black"> 288.         &quot;&quot;&quot;</font>
+<font color="red"> 289.         if self.field[self.pos] != '&lt;':</font>
+<font color="red"> 290.             return</font>
+<font color="black"> 291. </font>
+<font color="red"> 292.         expectroute = False</font>
+<font color="red"> 293.         self.pos += 1</font>
+<font color="red"> 294.         self.gotonext()</font>
+<font color="red"> 295.         adlist = ''</font>
+<font color="red"> 296.         while self.pos &lt; len(self.field):</font>
+<font color="red"> 297.             if expectroute:</font>
+<font color="red"> 298.                 self.getdomain()</font>
+<font color="red"> 299.                 expectroute = False</font>
+<font color="red"> 300.             elif self.field[self.pos] == '&gt;':</font>
+<font color="red"> 301.                 self.pos += 1</font>
+<font color="red"> 302.                 break</font>
+<font color="red"> 303.             elif self.field[self.pos] == '@':</font>
+<font color="red"> 304.                 self.pos += 1</font>
+<font color="red"> 305.                 expectroute = True</font>
+<font color="red"> 306.             elif self.field[self.pos] == ':':</font>
+<font color="red"> 307.                 self.pos += 1</font>
+<font color="black"> 308.             else:</font>
+<font color="red"> 309.                 adlist = self.getaddrspec()</font>
+<font color="red"> 310.                 self.pos += 1</font>
+<font color="red"> 311.                 break</font>
+<font color="red"> 312.             self.gotonext()</font>
+<font color="black"> 313. </font>
+<font color="red"> 314.         return adlist</font>
+<font color="black"> 315. </font>
+<font color="green"> 316.     def getaddrspec(self):</font>
+<font color="black"> 317.         &quot;&quot;&quot;Parse an RFC 2822 addr-spec.&quot;&quot;&quot;</font>
+<font color="red"> 318.         aslist = []</font>
+<font color="black"> 319. </font>
+<font color="red"> 320.         self.gotonext()</font>
+<font color="red"> 321.         while self.pos &lt; len(self.field):</font>
+<font color="red"> 322.             if self.field[self.pos] == '.':</font>
+<font color="red"> 323.                 aslist.append('.')</font>
+<font color="red"> 324.                 self.pos += 1</font>
+<font color="red"> 325.             elif self.field[self.pos] == '&quot;':</font>
+<font color="red"> 326.                 aslist.append('&quot;%s&quot;' % quote(self.getquote()))</font>
+<font color="red"> 327.             elif self.field[self.pos] in self.atomends:</font>
+<font color="red"> 328.                 break</font>
+<font color="black"> 329.             else:</font>
+<font color="red"> 330.                 aslist.append(self.getatom())</font>
+<font color="red"> 331.             self.gotonext()</font>
+<font color="black"> 332. </font>
+<font color="red"> 333.         if self.pos &gt;= len(self.field) or self.field[self.pos] != '@':</font>
+<font color="red"> 334.             return EMPTYSTRING.join(aslist)</font>
+<font color="black"> 335. </font>
+<font color="red"> 336.         aslist.append('@')</font>
+<font color="red"> 337.         self.pos += 1</font>
+<font color="red"> 338.         self.gotonext()</font>
+<font color="red"> 339.         return EMPTYSTRING.join(aslist) + self.getdomain()</font>
+<font color="black"> 340. </font>
+<font color="green"> 341.     def getdomain(self):</font>
+<font color="black"> 342.         &quot;&quot;&quot;Get the complete domain name from an address.&quot;&quot;&quot;</font>
+<font color="red"> 343.         sdlist = []</font>
+<font color="red"> 344.         while self.pos &lt; len(self.field):</font>
+<font color="red"> 345.             if self.field[self.pos] in self.LWS:</font>
+<font color="red"> 346.                 self.pos += 1</font>
+<font color="red"> 347.             elif self.field[self.pos] == '(':</font>
+<font color="red"> 348.                 self.commentlist.append(self.getcomment())</font>
+<font color="red"> 349.             elif self.field[self.pos] == '[':</font>
+<font color="red"> 350.                 sdlist.append(self.getdomainliteral())</font>
+<font color="red"> 351.             elif self.field[self.pos] == '.':</font>
+<font color="red"> 352.                 self.pos += 1</font>
+<font color="red"> 353.                 sdlist.append('.')</font>
+<font color="red"> 354.             elif self.field[self.pos] in self.atomends:</font>
+<font color="red"> 355.                 break</font>
+<font color="black"> 356.             else:</font>
+<font color="red"> 357.                 sdlist.append(self.getatom())</font>
+<font color="red"> 358.         return EMPTYSTRING.join(sdlist)</font>
+<font color="black"> 359. </font>
+<font color="green"> 360.     def getdelimited(self, beginchar, endchars, allowcomments=True):</font>
+<font color="black"> 361.         &quot;&quot;&quot;Parse a header fragment delimited by special characters.</font>
+<font color="black"> 362. </font>
+<font color="black"> 363.         `beginchar' is the start character for the fragment.</font>
+<font color="black"> 364.         If self is not looking at an instance of `beginchar' then</font>
+<font color="black"> 365.         getdelimited returns the empty string.</font>
+<font color="black"> 366. </font>
+<font color="black"> 367.         `endchars' is a sequence of allowable end-delimiting characters.</font>
+<font color="black"> 368.         Parsing stops when one of these is encountered.</font>
+<font color="black"> 369. </font>
+<font color="black"> 370.         If `allowcomments' is non-zero, embedded RFC 2822 comments are allowed</font>
+<font color="black"> 371.         within the parsed fragment.</font>
+<font color="black"> 372.         &quot;&quot;&quot;</font>
+<font color="red"> 373.         if self.field[self.pos] != beginchar:</font>
+<font color="red"> 374.             return ''</font>
+<font color="black"> 375. </font>
+<font color="red"> 376.         slist = ['']</font>
+<font color="red"> 377.         quote = False</font>
+<font color="red"> 378.         self.pos += 1</font>
+<font color="red"> 379.         while self.pos &lt; len(self.field):</font>
+<font color="red"> 380.             if quote:</font>
+<font color="red"> 381.                 slist.append(self.field[self.pos])</font>
+<font color="red"> 382.                 quote = False</font>
+<font color="red"> 383.             elif self.field[self.pos] in endchars:</font>
+<font color="red"> 384.                 self.pos += 1</font>
+<font color="red"> 385.                 break</font>
+<font color="red"> 386.             elif allowcomments and self.field[self.pos] == '(':</font>
+<font color="red"> 387.                 slist.append(self.getcomment())</font>
+<font color="red"> 388.                 continue        # have already advanced pos from getcomment</font>
+<font color="red"> 389.             elif self.field[self.pos] == '\\':</font>
+<font color="red"> 390.                 quote = True</font>
+<font color="black"> 391.             else:</font>
+<font color="red"> 392.                 slist.append(self.field[self.pos])</font>
+<font color="red"> 393.             self.pos += 1</font>
+<font color="black"> 394. </font>
+<font color="red"> 395.         return EMPTYSTRING.join(slist)</font>
+<font color="black"> 396. </font>
+<font color="green"> 397.     def getquote(self):</font>
+<font color="black"> 398.         &quot;&quot;&quot;Get a quote-delimited fragment from self's field.&quot;&quot;&quot;</font>
+<font color="red"> 399.         return self.getdelimited('&quot;', '&quot;\r', False)</font>
+<font color="black"> 400. </font>
+<font color="green"> 401.     def getcomment(self):</font>
+<font color="black"> 402.         &quot;&quot;&quot;Get a parenthesis-delimited fragment from self's field.&quot;&quot;&quot;</font>
+<font color="red"> 403.         return self.getdelimited('(', ')\r', True)</font>
+<font color="black"> 404. </font>
+<font color="green"> 405.     def getdomainliteral(self):</font>
+<font color="black"> 406.         &quot;&quot;&quot;Parse an RFC 2822 domain-literal.&quot;&quot;&quot;</font>
+<font color="red"> 407.         return '[%s]' % self.getdelimited('[', ']\r', False)</font>
+<font color="black"> 408. </font>
+<font color="green"> 409.     def getatom(self, atomends=None):</font>
+<font color="black"> 410.         &quot;&quot;&quot;Parse an RFC 2822 atom.</font>
+<font color="black"> 411. </font>
+<font color="black"> 412.         Optional atomends specifies a different set of end token delimiters</font>
+<font color="black"> 413.         (the default is to use self.atomends).  This is used e.g. in</font>
+<font color="black"> 414.         getphraselist() since phrase endings must not include the `.' (which</font>
+<font color="black"> 415.         is legal in phrases).&quot;&quot;&quot;</font>
+<font color="red"> 416.         atomlist = ['']</font>
+<font color="red"> 417.         if atomends is None:</font>
+<font color="red"> 418.             atomends = self.atomends</font>
+<font color="black"> 419. </font>
+<font color="red"> 420.         while self.pos &lt; len(self.field):</font>
+<font color="red"> 421.             if self.field[self.pos] in atomends:</font>
+<font color="red"> 422.                 break</font>
+<font color="black"> 423.             else:</font>
+<font color="red"> 424.                 atomlist.append(self.field[self.pos])</font>
+<font color="red"> 425.             self.pos += 1</font>
+<font color="black"> 426. </font>
+<font color="red"> 427.         return EMPTYSTRING.join(atomlist)</font>
+<font color="black"> 428. </font>
+<font color="green"> 429.     def getphraselist(self):</font>
+<font color="black"> 430.         &quot;&quot;&quot;Parse a sequence of RFC 2822 phrases.</font>
+<font color="black"> 431. </font>
+<font color="black"> 432.         A phrase is a sequence of words, which are in turn either RFC 2822</font>
+<font color="black"> 433.         atoms or quoted-strings.  Phrases are canonicalized by squeezing all</font>
+<font color="black"> 434.         runs of continuous whitespace into one space.</font>
+<font color="black"> 435.         &quot;&quot;&quot;</font>
+<font color="red"> 436.         plist = []</font>
+<font color="black"> 437. </font>
+<font color="red"> 438.         while self.pos &lt; len(self.field):</font>
+<font color="red"> 439.             if self.field[self.pos] in self.FWS:</font>
+<font color="red"> 440.                 self.pos += 1</font>
+<font color="red"> 441.             elif self.field[self.pos] == '&quot;':</font>
+<font color="red"> 442.                 plist.append(self.getquote())</font>
+<font color="red"> 443.             elif self.field[self.pos] == '(':</font>
+<font color="red"> 444.                 self.commentlist.append(self.getcomment())</font>
+<font color="red"> 445.             elif self.field[self.pos] in self.phraseends:</font>
+<font color="red"> 446.                 break</font>
+<font color="black"> 447.             else:</font>
+<font color="red"> 448.                 plist.append(self.getatom(self.phraseends))</font>
+<font color="black"> 449. </font>
+<font color="red"> 450.         return plist</font>
+<font color="black"> 451. </font>
+<font color="green"> 452. class AddressList(AddrlistClass):</font>
+<font color="green"> 453.     &quot;&quot;&quot;An AddressList encapsulates a list of parsed RFC 2822 addresses.&quot;&quot;&quot;</font>
+<font color="green"> 454.     def __init__(self, field):</font>
+<font color="red"> 455.         AddrlistClass.__init__(self, field)</font>
+<font color="red"> 456.         if field:</font>
+<font color="red"> 457.             self.addresslist = self.getaddrlist()</font>
+<font color="black"> 458.         else:</font>
+<font color="red"> 459.             self.addresslist = []</font>
+<font color="black"> 460. </font>
+<font color="green"> 461.     def __len__(self):</font>
+<font color="red"> 462.         return len(self.addresslist)</font>
+<font color="black"> 463. </font>
+<font color="green"> 464.     def __add__(self, other):</font>
+<font color="black"> 465.         # Set union</font>
+<font color="red"> 466.         newaddr = AddressList(None)</font>
+<font color="red"> 467.         newaddr.addresslist = self.addresslist[:]</font>
+<font color="red"> 468.         for x in other.addresslist:</font>
+<font color="red"> 469.             if not x in self.addresslist:</font>
+<font color="red"> 470.                 newaddr.addresslist.append(x)</font>
+<font color="red"> 471.         return newaddr</font>
+<font color="black"> 472. </font>
+<font color="green"> 473.     def __iadd__(self, other):</font>
+<font color="black"> 474.         # Set union, in-place</font>
+<font color="red"> 475.         for x in other.addresslist:</font>
+<font color="red"> 476.             if not x in self.addresslist:</font>
+<font color="red"> 477.                 self.addresslist.append(x)</font>
+<font color="red"> 478.         return self</font>
+<font color="black"> 479. </font>
+<font color="green"> 480.     def __sub__(self, other):</font>
+<font color="black"> 481.         # Set difference</font>
+<font color="red"> 482.         newaddr = AddressList(None)</font>
+<font color="red"> 483.         for x in self.addresslist:</font>
+<font color="red"> 484.             if not x in other.addresslist:</font>
+<font color="red"> 485.                 newaddr.addresslist.append(x)</font>
+<font color="red"> 486.         return newaddr</font>
+<font color="black"> 487. </font>
+<font color="green"> 488.     def __isub__(self, other):</font>
+<font color="black"> 489.         # Set difference, in-place</font>
+<font color="red"> 490.         for x in other.addresslist:</font>
+<font color="red"> 491.             if x in self.addresslist:</font>
+<font color="red"> 492.                 self.addresslist.remove(x)</font>
+<font color="red"> 493.         return self</font>
+<font color="black"> 494. </font>
+<font color="green"> 495.     def __getitem__(self, index):</font>
+<font color="black"> 496.         # Make indexing, slices, and 'in' work</font>
+<font color="red"> 497.         return self.addresslist[index]</font>
+</pre>
+

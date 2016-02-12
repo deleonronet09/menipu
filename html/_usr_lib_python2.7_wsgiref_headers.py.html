@@ -1,0 +1,176 @@
+source file: <b>/usr/lib/python2.7/wsgiref/headers.py</b><br>
+
+
+file stats: <b>64 lines, 23 executed: 35.9% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Manage HTTP Response Headers</font>
+<font color="black">   2. </font>
+<font color="black">   3. Much of this module is red-handedly pilfered from email.message in the stdlib,</font>
+<font color="black">   4. so portions are Copyright (C) 2001,2002 Python Software Foundation, and were</font>
+<font color="black">   5. written by Barry Warsaw.</font>
+<font color="green">   6. &quot;&quot;&quot;</font>
+<font color="black">   7. </font>
+<font color="green">   8. from types import ListType, TupleType</font>
+<font color="black">   9. </font>
+<font color="black">  10. # Regular expression that matches `special' characters in parameters, the</font>
+<font color="black">  11. # existence of which force quoting of the parameter value.</font>
+<font color="green">  12. import re</font>
+<font color="green">  13. tspecials = re.compile(r'[ \(\)&lt;&gt;@,;:\\&quot;/\[\]\?=]')</font>
+<font color="black">  14. </font>
+<font color="green">  15. def _formatparam(param, value=None, quote=1):</font>
+<font color="black">  16.     &quot;&quot;&quot;Convenience function to format and return a key=value pair.</font>
+<font color="black">  17. </font>
+<font color="black">  18.     This will quote the value if needed or if quote is true.</font>
+<font color="black">  19.     &quot;&quot;&quot;</font>
+<font color="red">  20.     if value is not None and len(value) &gt; 0:</font>
+<font color="red">  21.         if quote or tspecials.search(value):</font>
+<font color="red">  22.             value = value.replace('\\', '\\\\').replace('&quot;', r'\&quot;')</font>
+<font color="red">  23.             return '%s=&quot;%s&quot;' % (param, value)</font>
+<font color="black">  24.         else:</font>
+<font color="red">  25.             return '%s=%s' % (param, value)</font>
+<font color="black">  26.     else:</font>
+<font color="red">  27.         return param</font>
+<font color="black">  28. </font>
+<font color="black">  29. </font>
+<font color="green">  30. class Headers:</font>
+<font color="black">  31. </font>
+<font color="green">  32.     &quot;&quot;&quot;Manage a collection of HTTP response headers&quot;&quot;&quot;</font>
+<font color="black">  33. </font>
+<font color="green">  34.     def __init__(self,headers):</font>
+<font color="red">  35.         if type(headers) is not ListType:</font>
+<font color="red">  36.             raise TypeError(&quot;Headers must be a list of name/value tuples&quot;)</font>
+<font color="red">  37.         self._headers = headers</font>
+<font color="black">  38. </font>
+<font color="green">  39.     def __len__(self):</font>
+<font color="black">  40.         &quot;&quot;&quot;Return the total number of headers, including duplicates.&quot;&quot;&quot;</font>
+<font color="red">  41.         return len(self._headers)</font>
+<font color="black">  42. </font>
+<font color="green">  43.     def __setitem__(self, name, val):</font>
+<font color="black">  44.         &quot;&quot;&quot;Set the value of a header.&quot;&quot;&quot;</font>
+<font color="red">  45.         del self[name]</font>
+<font color="red">  46.         self._headers.append((name, val))</font>
+<font color="black">  47. </font>
+<font color="green">  48.     def __delitem__(self,name):</font>
+<font color="black">  49.         &quot;&quot;&quot;Delete all occurrences of a header, if present.</font>
+<font color="black">  50. </font>
+<font color="black">  51.         Does *not* raise an exception if the header is missing.</font>
+<font color="black">  52.         &quot;&quot;&quot;</font>
+<font color="red">  53.         name = name.lower()</font>
+<font color="red">  54.         self._headers[:] = [kv for kv in self._headers if kv[0].lower() != name]</font>
+<font color="black">  55. </font>
+<font color="green">  56.     def __getitem__(self,name):</font>
+<font color="black">  57.         &quot;&quot;&quot;Get the first header value for 'name'</font>
+<font color="black">  58. </font>
+<font color="black">  59.         Return None if the header is missing instead of raising an exception.</font>
+<font color="black">  60. </font>
+<font color="black">  61.         Note that if the header appeared multiple times, the first exactly which</font>
+<font color="black">  62.         occurrance gets returned is undefined.  Use getall() to get all</font>
+<font color="black">  63.         the values matching a header field name.</font>
+<font color="black">  64.         &quot;&quot;&quot;</font>
+<font color="red">  65.         return self.get(name)</font>
+<font color="black">  66. </font>
+<font color="green">  67.     def has_key(self, name):</font>
+<font color="black">  68.         &quot;&quot;&quot;Return true if the message contains the header.&quot;&quot;&quot;</font>
+<font color="red">  69.         return self.get(name) is not None</font>
+<font color="black">  70. </font>
+<font color="green">  71.     __contains__ = has_key</font>
+<font color="black">  72. </font>
+<font color="black">  73. </font>
+<font color="green">  74.     def get_all(self, name):</font>
+<font color="black">  75.         &quot;&quot;&quot;Return a list of all the values for the named field.</font>
+<font color="black">  76. </font>
+<font color="black">  77.         These will be sorted in the order they appeared in the original header</font>
+<font color="black">  78.         list or were added to this instance, and may contain duplicates.  Any</font>
+<font color="black">  79.         fields deleted and re-inserted are always appended to the header list.</font>
+<font color="black">  80.         If no fields exist with the given name, returns an empty list.</font>
+<font color="black">  81.         &quot;&quot;&quot;</font>
+<font color="red">  82.         name = name.lower()</font>
+<font color="red">  83.         return [kv[1] for kv in self._headers if kv[0].lower()==name]</font>
+<font color="black">  84. </font>
+<font color="black">  85. </font>
+<font color="green">  86.     def get(self,name,default=None):</font>
+<font color="black">  87.         &quot;&quot;&quot;Get the first header value for 'name', or return 'default'&quot;&quot;&quot;</font>
+<font color="red">  88.         name = name.lower()</font>
+<font color="red">  89.         for k,v in self._headers:</font>
+<font color="red">  90.             if k.lower()==name:</font>
+<font color="red">  91.                 return v</font>
+<font color="red">  92.         return default</font>
+<font color="black">  93. </font>
+<font color="black">  94. </font>
+<font color="green">  95.     def keys(self):</font>
+<font color="black">  96.         &quot;&quot;&quot;Return a list of all the header field names.</font>
+<font color="black">  97. </font>
+<font color="black">  98.         These will be sorted in the order they appeared in the original header</font>
+<font color="black">  99.         list, or were added to this instance, and may contain duplicates.</font>
+<font color="black"> 100.         Any fields deleted and re-inserted are always appended to the header</font>
+<font color="black"> 101.         list.</font>
+<font color="black"> 102.         &quot;&quot;&quot;</font>
+<font color="red"> 103.         return [k for k, v in self._headers]</font>
+<font color="black"> 104. </font>
+<font color="green"> 105.     def values(self):</font>
+<font color="black"> 106.         &quot;&quot;&quot;Return a list of all header values.</font>
+<font color="black"> 107. </font>
+<font color="black"> 108.         These will be sorted in the order they appeared in the original header</font>
+<font color="black"> 109.         list, or were added to this instance, and may contain duplicates.</font>
+<font color="black"> 110.         Any fields deleted and re-inserted are always appended to the header</font>
+<font color="black"> 111.         list.</font>
+<font color="black"> 112.         &quot;&quot;&quot;</font>
+<font color="red"> 113.         return [v for k, v in self._headers]</font>
+<font color="black"> 114. </font>
+<font color="green"> 115.     def items(self):</font>
+<font color="black"> 116.         &quot;&quot;&quot;Get all the header fields and values.</font>
+<font color="black"> 117. </font>
+<font color="black"> 118.         These will be sorted in the order they were in the original header</font>
+<font color="black"> 119.         list, or were added to this instance, and may contain duplicates.</font>
+<font color="black"> 120.         Any fields deleted and re-inserted are always appended to the header</font>
+<font color="black"> 121.         list.</font>
+<font color="black"> 122.         &quot;&quot;&quot;</font>
+<font color="red"> 123.         return self._headers[:]</font>
+<font color="black"> 124. </font>
+<font color="green"> 125.     def __repr__(self):</font>
+<font color="red"> 126.         return &quot;Headers(%r)&quot; % self._headers</font>
+<font color="black"> 127. </font>
+<font color="green"> 128.     def __str__(self):</font>
+<font color="black"> 129.         &quot;&quot;&quot;str() returns the formatted headers, complete with end line,</font>
+<font color="black"> 130.         suitable for direct HTTP transmission.&quot;&quot;&quot;</font>
+<font color="red"> 131.         return '\r\n'.join([&quot;%s: %s&quot; % kv for kv in self._headers]+['',''])</font>
+<font color="black"> 132. </font>
+<font color="green"> 133.     def setdefault(self,name,value):</font>
+<font color="black"> 134.         &quot;&quot;&quot;Return first matching header value for 'name', or 'value'</font>
+<font color="black"> 135. </font>
+<font color="black"> 136.         If there is no header named 'name', add a new header with name 'name'</font>
+<font color="black"> 137.         and value 'value'.&quot;&quot;&quot;</font>
+<font color="red"> 138.         result = self.get(name)</font>
+<font color="red"> 139.         if result is None:</font>
+<font color="red"> 140.             self._headers.append((name,value))</font>
+<font color="red"> 141.             return value</font>
+<font color="black"> 142.         else:</font>
+<font color="red"> 143.             return result</font>
+<font color="black"> 144. </font>
+<font color="green"> 145.     def add_header(self, _name, _value, **_params):</font>
+<font color="black"> 146.         &quot;&quot;&quot;Extended header setting.</font>
+<font color="black"> 147. </font>
+<font color="black"> 148.         _name is the header field to add.  keyword arguments can be used to set</font>
+<font color="black"> 149.         additional parameters for the header field, with underscores converted</font>
+<font color="black"> 150.         to dashes.  Normally the parameter will be added as key=&quot;value&quot; unless</font>
+<font color="black"> 151.         value is None, in which case only the key will be added.</font>
+<font color="black"> 152. </font>
+<font color="black"> 153.         Example:</font>
+<font color="black"> 154. </font>
+<font color="black"> 155.         h.add_header('content-disposition', 'attachment', filename='bud.gif')</font>
+<font color="black"> 156. </font>
+<font color="black"> 157.         Note that unlike the corresponding 'email.message' method, this does</font>
+<font color="black"> 158.         *not* handle '(charset, language, value)' tuples: all values must be</font>
+<font color="black"> 159.         strings or None.</font>
+<font color="black"> 160.         &quot;&quot;&quot;</font>
+<font color="red"> 161.         parts = []</font>
+<font color="red"> 162.         if _value is not None:</font>
+<font color="red"> 163.             parts.append(_value)</font>
+<font color="red"> 164.         for k, v in _params.items():</font>
+<font color="red"> 165.             if v is None:</font>
+<font color="red"> 166.                 parts.append(k.replace('_', '-'))</font>
+<font color="black"> 167.             else:</font>
+<font color="red"> 168.                 parts.append(_formatparam(k.replace('_', '-'), v))</font>
+<font color="red"> 169.         self._headers.append((_name, &quot;; &quot;.join(parts)))</font>
+</pre>
+

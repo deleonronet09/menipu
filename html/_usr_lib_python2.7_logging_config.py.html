@@ -1,0 +1,926 @@
+source file: <b>/usr/lib/python2.7/logging/config.py</b><br>
+
+
+file stats: <b>630 lines, 224 executed: 35.6% covered</b>
+<pre>
+<font color="black">   1. # Copyright 2001-2014 by Vinay Sajip. All Rights Reserved.</font>
+<font color="black">   2. #</font>
+<font color="black">   3. # Permission to use, copy, modify, and distribute this software and its</font>
+<font color="black">   4. # documentation for any purpose and without fee is hereby granted,</font>
+<font color="black">   5. # provided that the above copyright notice appear in all copies and that</font>
+<font color="black">   6. # both that copyright notice and this permission notice appear in</font>
+<font color="black">   7. # supporting documentation, and that the name of Vinay Sajip</font>
+<font color="black">   8. # not be used in advertising or publicity pertaining to distribution</font>
+<font color="black">   9. # of the software without specific, written prior permission.</font>
+<font color="black">  10. # VINAY SAJIP DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING</font>
+<font color="black">  11. # ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL</font>
+<font color="black">  12. # VINAY SAJIP BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR</font>
+<font color="black">  13. # ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER</font>
+<font color="black">  14. # IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT</font>
+<font color="black">  15. # OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.</font>
+<font color="black">  16. </font>
+<font color="black">  17. &quot;&quot;&quot;</font>
+<font color="black">  18. Configuration functions for the logging package for Python. The core package</font>
+<font color="black">  19. is based on PEP 282 and comments thereto in comp.lang.python, and influenced</font>
+<font color="black">  20. by Apache's log4j system.</font>
+<font color="black">  21. </font>
+<font color="black">  22. Copyright (C) 2001-2014 Vinay Sajip. All Rights Reserved.</font>
+<font color="black">  23. </font>
+<font color="black">  24. To use, simply 'import logging' and log away!</font>
+<font color="green">  25. &quot;&quot;&quot;</font>
+<font color="black">  26. </font>
+<font color="green">  27. import cStringIO</font>
+<font color="green">  28. import errno</font>
+<font color="green">  29. import io</font>
+<font color="green">  30. import logging</font>
+<font color="green">  31. import logging.handlers</font>
+<font color="green">  32. import os</font>
+<font color="green">  33. import re</font>
+<font color="green">  34. import socket</font>
+<font color="green">  35. import struct</font>
+<font color="green">  36. import sys</font>
+<font color="green">  37. import traceback</font>
+<font color="green">  38. import types</font>
+<font color="black">  39. </font>
+<font color="green">  40. try:</font>
+<font color="green">  41.     import thread</font>
+<font color="green">  42.     import threading</font>
+<font color="red">  43. except ImportError:</font>
+<font color="red">  44.     thread = None</font>
+<font color="black">  45. </font>
+<font color="green">  46. from SocketServer import ThreadingTCPServer, StreamRequestHandler</font>
+<font color="black">  47. </font>
+<font color="black">  48. </font>
+<font color="green">  49. DEFAULT_LOGGING_CONFIG_PORT = 9030</font>
+<font color="black">  50. </font>
+<font color="green">  51. RESET_ERROR = errno.ECONNRESET</font>
+<font color="black">  52. </font>
+<font color="black">  53. #</font>
+<font color="black">  54. #   The following code implements a socket listener for on-the-fly</font>
+<font color="black">  55. #   reconfiguration of logging.</font>
+<font color="black">  56. #</font>
+<font color="black">  57. #   _listener holds the server object doing the listening</font>
+<font color="green">  58. _listener = None</font>
+<font color="black">  59. </font>
+<font color="green">  60. def fileConfig(fname, defaults=None, disable_existing_loggers=True):</font>
+<font color="black">  61.     &quot;&quot;&quot;</font>
+<font color="black">  62.     Read the logging configuration from a ConfigParser-format file.</font>
+<font color="black">  63. </font>
+<font color="black">  64.     This can be called several times from an application, allowing an end user</font>
+<font color="black">  65.     the ability to select from various pre-canned configurations (if the</font>
+<font color="black">  66.     developer provides a mechanism to present the choices and load the chosen</font>
+<font color="black">  67.     configuration).</font>
+<font color="black">  68.     &quot;&quot;&quot;</font>
+<font color="red">  69.     import ConfigParser</font>
+<font color="black">  70. </font>
+<font color="red">  71.     cp = ConfigParser.ConfigParser(defaults)</font>
+<font color="red">  72.     if hasattr(fname, 'readline'):</font>
+<font color="red">  73.         cp.readfp(fname)</font>
+<font color="black">  74.     else:</font>
+<font color="red">  75.         cp.read(fname)</font>
+<font color="black">  76. </font>
+<font color="red">  77.     formatters = _create_formatters(cp)</font>
+<font color="black">  78. </font>
+<font color="black">  79.     # critical section</font>
+<font color="red">  80.     logging._acquireLock()</font>
+<font color="red">  81.     try:</font>
+<font color="red">  82.         logging._handlers.clear()</font>
+<font color="red">  83.         del logging._handlerList[:]</font>
+<font color="black">  84.         # Handlers add themselves to logging._handlers</font>
+<font color="red">  85.         handlers = _install_handlers(cp, formatters)</font>
+<font color="red">  86.         _install_loggers(cp, handlers, disable_existing_loggers)</font>
+<font color="black">  87.     finally:</font>
+<font color="red">  88.         logging._releaseLock()</font>
+<font color="black">  89. </font>
+<font color="black">  90. </font>
+<font color="green">  91. def _resolve(name):</font>
+<font color="black">  92.     &quot;&quot;&quot;Resolve a dotted name to a global object.&quot;&quot;&quot;</font>
+<font color="red">  93.     name = name.split('.')</font>
+<font color="red">  94.     used = name.pop(0)</font>
+<font color="red">  95.     found = __import__(used)</font>
+<font color="red">  96.     for n in name:</font>
+<font color="red">  97.         used = used + '.' + n</font>
+<font color="red">  98.         try:</font>
+<font color="red">  99.             found = getattr(found, n)</font>
+<font color="red"> 100.         except AttributeError:</font>
+<font color="red"> 101.             __import__(used)</font>
+<font color="red"> 102.             found = getattr(found, n)</font>
+<font color="red"> 103.     return found</font>
+<font color="black"> 104. </font>
+<font color="green"> 105. def _strip_spaces(alist):</font>
+<font color="red"> 106.     return map(lambda x: x.strip(), alist)</font>
+<font color="black"> 107. </font>
+<font color="green"> 108. def _encoded(s):</font>
+<font color="green"> 109.     return s if isinstance(s, str) else s.encode('utf-8')</font>
+<font color="black"> 110. </font>
+<font color="green"> 111. def _create_formatters(cp):</font>
+<font color="black"> 112.     &quot;&quot;&quot;Create and return formatters&quot;&quot;&quot;</font>
+<font color="red"> 113.     flist = cp.get(&quot;formatters&quot;, &quot;keys&quot;)</font>
+<font color="red"> 114.     if not len(flist):</font>
+<font color="red"> 115.         return {}</font>
+<font color="red"> 116.     flist = flist.split(&quot;,&quot;)</font>
+<font color="red"> 117.     flist = _strip_spaces(flist)</font>
+<font color="red"> 118.     formatters = {}</font>
+<font color="red"> 119.     for form in flist:</font>
+<font color="red"> 120.         sectname = &quot;formatter_%s&quot; % form</font>
+<font color="red"> 121.         opts = cp.options(sectname)</font>
+<font color="red"> 122.         if &quot;format&quot; in opts:</font>
+<font color="red"> 123.             fs = cp.get(sectname, &quot;format&quot;, 1)</font>
+<font color="black"> 124.         else:</font>
+<font color="red"> 125.             fs = None</font>
+<font color="red"> 126.         if &quot;datefmt&quot; in opts:</font>
+<font color="red"> 127.             dfs = cp.get(sectname, &quot;datefmt&quot;, 1)</font>
+<font color="black"> 128.         else:</font>
+<font color="red"> 129.             dfs = None</font>
+<font color="red"> 130.         c = logging.Formatter</font>
+<font color="red"> 131.         if &quot;class&quot; in opts:</font>
+<font color="red"> 132.             class_name = cp.get(sectname, &quot;class&quot;)</font>
+<font color="red"> 133.             if class_name:</font>
+<font color="red"> 134.                 c = _resolve(class_name)</font>
+<font color="red"> 135.         f = c(fs, dfs)</font>
+<font color="red"> 136.         formatters[form] = f</font>
+<font color="red"> 137.     return formatters</font>
+<font color="black"> 138. </font>
+<font color="black"> 139. </font>
+<font color="green"> 140. def _install_handlers(cp, formatters):</font>
+<font color="black"> 141.     &quot;&quot;&quot;Install and return handlers&quot;&quot;&quot;</font>
+<font color="red"> 142.     hlist = cp.get(&quot;handlers&quot;, &quot;keys&quot;)</font>
+<font color="red"> 143.     if not len(hlist):</font>
+<font color="red"> 144.         return {}</font>
+<font color="red"> 145.     hlist = hlist.split(&quot;,&quot;)</font>
+<font color="red"> 146.     hlist = _strip_spaces(hlist)</font>
+<font color="red"> 147.     handlers = {}</font>
+<font color="red"> 148.     fixups = [] #for inter-handler references</font>
+<font color="red"> 149.     for hand in hlist:</font>
+<font color="red"> 150.         sectname = &quot;handler_%s&quot; % hand</font>
+<font color="red"> 151.         klass = cp.get(sectname, &quot;class&quot;)</font>
+<font color="red"> 152.         opts = cp.options(sectname)</font>
+<font color="red"> 153.         if &quot;formatter&quot; in opts:</font>
+<font color="red"> 154.             fmt = cp.get(sectname, &quot;formatter&quot;)</font>
+<font color="black"> 155.         else:</font>
+<font color="red"> 156.             fmt = &quot;&quot;</font>
+<font color="red"> 157.         try:</font>
+<font color="red"> 158.             klass = eval(klass, vars(logging))</font>
+<font color="red"> 159.         except (AttributeError, NameError):</font>
+<font color="red"> 160.             klass = _resolve(klass)</font>
+<font color="red"> 161.         args = cp.get(sectname, &quot;args&quot;)</font>
+<font color="red"> 162.         args = eval(args, vars(logging))</font>
+<font color="red"> 163.         h = klass(*args)</font>
+<font color="red"> 164.         if &quot;level&quot; in opts:</font>
+<font color="red"> 165.             level = cp.get(sectname, &quot;level&quot;)</font>
+<font color="red"> 166.             h.setLevel(logging._levelNames[level])</font>
+<font color="red"> 167.         if len(fmt):</font>
+<font color="red"> 168.             h.setFormatter(formatters[fmt])</font>
+<font color="red"> 169.         if issubclass(klass, logging.handlers.MemoryHandler):</font>
+<font color="red"> 170.             if &quot;target&quot; in opts:</font>
+<font color="red"> 171.                 target = cp.get(sectname,&quot;target&quot;)</font>
+<font color="black"> 172.             else:</font>
+<font color="red"> 173.                 target = &quot;&quot;</font>
+<font color="red"> 174.             if len(target): #the target handler may not be loaded yet, so keep for later...</font>
+<font color="red"> 175.                 fixups.append((h, target))</font>
+<font color="red"> 176.         handlers[hand] = h</font>
+<font color="black"> 177.     #now all handlers are loaded, fixup inter-handler references...</font>
+<font color="red"> 178.     for h, t in fixups:</font>
+<font color="red"> 179.         h.setTarget(handlers[t])</font>
+<font color="red"> 180.     return handlers</font>
+<font color="black"> 181. </font>
+<font color="black"> 182. </font>
+<font color="green"> 183. def _install_loggers(cp, handlers, disable_existing_loggers):</font>
+<font color="black"> 184.     &quot;&quot;&quot;Create and install loggers&quot;&quot;&quot;</font>
+<font color="black"> 185. </font>
+<font color="black"> 186.     # configure the root first</font>
+<font color="red"> 187.     llist = cp.get(&quot;loggers&quot;, &quot;keys&quot;)</font>
+<font color="red"> 188.     llist = llist.split(&quot;,&quot;)</font>
+<font color="red"> 189.     llist = list(map(lambda x: x.strip(), llist))</font>
+<font color="red"> 190.     llist.remove(&quot;root&quot;)</font>
+<font color="red"> 191.     sectname = &quot;logger_root&quot;</font>
+<font color="red"> 192.     root = logging.root</font>
+<font color="red"> 193.     log = root</font>
+<font color="red"> 194.     opts = cp.options(sectname)</font>
+<font color="red"> 195.     if &quot;level&quot; in opts:</font>
+<font color="red"> 196.         level = cp.get(sectname, &quot;level&quot;)</font>
+<font color="red"> 197.         log.setLevel(logging._levelNames[level])</font>
+<font color="red"> 198.     for h in root.handlers[:]:</font>
+<font color="red"> 199.         root.removeHandler(h)</font>
+<font color="red"> 200.     hlist = cp.get(sectname, &quot;handlers&quot;)</font>
+<font color="red"> 201.     if len(hlist):</font>
+<font color="red"> 202.         hlist = hlist.split(&quot;,&quot;)</font>
+<font color="red"> 203.         hlist = _strip_spaces(hlist)</font>
+<font color="red"> 204.         for hand in hlist:</font>
+<font color="red"> 205.             log.addHandler(handlers[hand])</font>
+<font color="black"> 206. </font>
+<font color="black"> 207.     #and now the others...</font>
+<font color="black"> 208.     #we don't want to lose the existing loggers,</font>
+<font color="black"> 209.     #since other threads may have pointers to them.</font>
+<font color="black"> 210.     #existing is set to contain all existing loggers,</font>
+<font color="black"> 211.     #and as we go through the new configuration we</font>
+<font color="black"> 212.     #remove any which are configured. At the end,</font>
+<font color="black"> 213.     #what's left in existing is the set of loggers</font>
+<font color="black"> 214.     #which were in the previous configuration but</font>
+<font color="black"> 215.     #which are not in the new configuration.</font>
+<font color="red"> 216.     existing = list(root.manager.loggerDict.keys())</font>
+<font color="black"> 217.     #The list needs to be sorted so that we can</font>
+<font color="black"> 218.     #avoid disabling child loggers of explicitly</font>
+<font color="black"> 219.     #named loggers. With a sorted list it is easier</font>
+<font color="black"> 220.     #to find the child loggers.</font>
+<font color="red"> 221.     existing.sort()</font>
+<font color="black"> 222.     #We'll keep the list of existing loggers</font>
+<font color="black"> 223.     #which are children of named loggers here...</font>
+<font color="red"> 224.     child_loggers = []</font>
+<font color="black"> 225.     #now set up the new ones...</font>
+<font color="red"> 226.     for log in llist:</font>
+<font color="red"> 227.         sectname = &quot;logger_%s&quot; % log</font>
+<font color="red"> 228.         qn = cp.get(sectname, &quot;qualname&quot;)</font>
+<font color="red"> 229.         opts = cp.options(sectname)</font>
+<font color="red"> 230.         if &quot;propagate&quot; in opts:</font>
+<font color="red"> 231.             propagate = cp.getint(sectname, &quot;propagate&quot;)</font>
+<font color="black"> 232.         else:</font>
+<font color="red"> 233.             propagate = 1</font>
+<font color="red"> 234.         logger = logging.getLogger(qn)</font>
+<font color="red"> 235.         if qn in existing:</font>
+<font color="red"> 236.             i = existing.index(qn) + 1 # start with the entry after qn</font>
+<font color="red"> 237.             prefixed = qn + &quot;.&quot;</font>
+<font color="red"> 238.             pflen = len(prefixed)</font>
+<font color="red"> 239.             num_existing = len(existing)</font>
+<font color="red"> 240.             while i &lt; num_existing:</font>
+<font color="red"> 241.                 if existing[i][:pflen] == prefixed:</font>
+<font color="red"> 242.                     child_loggers.append(existing[i])</font>
+<font color="red"> 243.                 i += 1</font>
+<font color="red"> 244.             existing.remove(qn)</font>
+<font color="red"> 245.         if &quot;level&quot; in opts:</font>
+<font color="red"> 246.             level = cp.get(sectname, &quot;level&quot;)</font>
+<font color="red"> 247.             logger.setLevel(logging._levelNames[level])</font>
+<font color="red"> 248.         for h in logger.handlers[:]:</font>
+<font color="red"> 249.             logger.removeHandler(h)</font>
+<font color="red"> 250.         logger.propagate = propagate</font>
+<font color="red"> 251.         logger.disabled = 0</font>
+<font color="red"> 252.         hlist = cp.get(sectname, &quot;handlers&quot;)</font>
+<font color="red"> 253.         if len(hlist):</font>
+<font color="red"> 254.             hlist = hlist.split(&quot;,&quot;)</font>
+<font color="red"> 255.             hlist = _strip_spaces(hlist)</font>
+<font color="red"> 256.             for hand in hlist:</font>
+<font color="red"> 257.                 logger.addHandler(handlers[hand])</font>
+<font color="black"> 258. </font>
+<font color="black"> 259.     #Disable any old loggers. There's no point deleting</font>
+<font color="black"> 260.     #them as other threads may continue to hold references</font>
+<font color="black"> 261.     #and by disabling them, you stop them doing any logging.</font>
+<font color="black"> 262.     #However, don't disable children of named loggers, as that's</font>
+<font color="black"> 263.     #probably not what was intended by the user.</font>
+<font color="red"> 264.     for log in existing:</font>
+<font color="red"> 265.         logger = root.manager.loggerDict[log]</font>
+<font color="red"> 266.         if log in child_loggers:</font>
+<font color="red"> 267.             logger.level = logging.NOTSET</font>
+<font color="red"> 268.             logger.handlers = []</font>
+<font color="red"> 269.             logger.propagate = 1</font>
+<font color="black"> 270.         else:</font>
+<font color="red"> 271.             logger.disabled = disable_existing_loggers</font>
+<font color="black"> 272. </font>
+<font color="black"> 273. </font>
+<font color="black"> 274. </font>
+<font color="green"> 275. IDENTIFIER = re.compile('^[a-z_][a-z0-9_]*$', re.I)</font>
+<font color="black"> 276. </font>
+<font color="black"> 277. </font>
+<font color="green"> 278. def valid_ident(s):</font>
+<font color="red"> 279.     m = IDENTIFIER.match(s)</font>
+<font color="red"> 280.     if not m:</font>
+<font color="red"> 281.         raise ValueError('Not a valid Python identifier: %r' % s)</font>
+<font color="red"> 282.     return True</font>
+<font color="black"> 283. </font>
+<font color="black"> 284. </font>
+<font color="green"> 285. class ConvertingMixin(object):</font>
+<font color="green"> 286.     &quot;&quot;&quot;For ConvertingXXX's, this mixin class provides common functions&quot;&quot;&quot;</font>
+<font color="black"> 287. </font>
+<font color="green"> 288.     def convert_with_key(self, key, value, replace=True):</font>
+<font color="green"> 289.         result = self.configurator.convert(value)</font>
+<font color="black"> 290.         #If the converted value is different, save for next time</font>
+<font color="green"> 291.         if value is not result:</font>
+<font color="green"> 292.             if replace:</font>
+<font color="green"> 293.                 self[key] = result</font>
+<font color="green"> 294.             if type(result) in (ConvertingDict, ConvertingList,</font>
+<font color="green"> 295.                                ConvertingTuple):</font>
+<font color="green"> 296.                 result.parent = self</font>
+<font color="green"> 297.                 result.key = key</font>
+<font color="green"> 298.         return result</font>
+<font color="black"> 299. </font>
+<font color="green"> 300.     def convert(self, value):</font>
+<font color="red"> 301.         result = self.configurator.convert(value)</font>
+<font color="red"> 302.         if value is not result:</font>
+<font color="red"> 303.             if type(result) in (ConvertingDict, ConvertingList,</font>
+<font color="red"> 304.                                ConvertingTuple):</font>
+<font color="red"> 305.                 result.parent = self</font>
+<font color="red"> 306.         return result</font>
+<font color="black"> 307. </font>
+<font color="black"> 308. </font>
+<font color="black"> 309. # The ConvertingXXX classes are wrappers around standard Python containers,</font>
+<font color="black"> 310. # and they serve to convert any suitable values in the container. The</font>
+<font color="black"> 311. # conversion converts base dicts, lists and tuples to their wrapped</font>
+<font color="black"> 312. # equivalents, whereas strings which match a conversion format are converted</font>
+<font color="black"> 313. # appropriately.</font>
+<font color="black"> 314. #</font>
+<font color="black"> 315. # Each wrapper should have a configurator attribute holding the actual</font>
+<font color="black"> 316. # configurator to use for conversion.</font>
+<font color="black"> 317. </font>
+<font color="green"> 318. class ConvertingDict(dict, ConvertingMixin):</font>
+<font color="green"> 319.     &quot;&quot;&quot;A converting dictionary wrapper.&quot;&quot;&quot;</font>
+<font color="black"> 320. </font>
+<font color="green"> 321.     def __getitem__(self, key):</font>
+<font color="green"> 322.         value = dict.__getitem__(self, key)</font>
+<font color="green"> 323.         return self.convert_with_key(key, value)</font>
+<font color="black"> 324. </font>
+<font color="green"> 325.     def get(self, key, default=None):</font>
+<font color="green"> 326.         value = dict.get(self, key, default)</font>
+<font color="green"> 327.         return self.convert_with_key(key, value)</font>
+<font color="black"> 328. </font>
+<font color="green"> 329.     def pop(self, key, default=None):</font>
+<font color="green"> 330.         value = dict.pop(self, key, default)</font>
+<font color="green"> 331.         return self.convert_with_key(key, value, replace=False)</font>
+<font color="black"> 332. </font>
+<font color="green"> 333. class ConvertingList(list, ConvertingMixin):</font>
+<font color="green"> 334.     &quot;&quot;&quot;A converting list wrapper.&quot;&quot;&quot;</font>
+<font color="green"> 335.     def __getitem__(self, key):</font>
+<font color="red"> 336.         value = list.__getitem__(self, key)</font>
+<font color="red"> 337.         return self.convert_with_key(key, value)</font>
+<font color="black"> 338. </font>
+<font color="green"> 339.     def pop(self, idx=-1):</font>
+<font color="red"> 340.         value = list.pop(self, idx)</font>
+<font color="red"> 341.         return self.convert(value)</font>
+<font color="black"> 342. </font>
+<font color="green"> 343. class ConvertingTuple(tuple, ConvertingMixin):</font>
+<font color="green"> 344.     &quot;&quot;&quot;A converting tuple wrapper.&quot;&quot;&quot;</font>
+<font color="green"> 345.     def __getitem__(self, key):</font>
+<font color="red"> 346.         value = tuple.__getitem__(self, key)</font>
+<font color="black"> 347.         # Can't replace a tuple entry.</font>
+<font color="red"> 348.         return self.convert_with_key(key, value, replace=False)</font>
+<font color="black"> 349. </font>
+<font color="green"> 350. class BaseConfigurator(object):</font>
+<font color="black"> 351.     &quot;&quot;&quot;</font>
+<font color="black"> 352.     The configurator base class which defines some useful defaults.</font>
+<font color="green"> 353.     &quot;&quot;&quot;</font>
+<font color="black"> 354. </font>
+<font color="green"> 355.     CONVERT_PATTERN = re.compile(r'^(?P&lt;prefix&gt;[a-z]+)://(?P&lt;suffix&gt;.*)$')</font>
+<font color="black"> 356. </font>
+<font color="green"> 357.     WORD_PATTERN = re.compile(r'^\s*(\w+)\s*')</font>
+<font color="green"> 358.     DOT_PATTERN = re.compile(r'^\.\s*(\w+)\s*')</font>
+<font color="green"> 359.     INDEX_PATTERN = re.compile(r'^\[\s*(\w+)\s*\]\s*')</font>
+<font color="green"> 360.     DIGIT_PATTERN = re.compile(r'^\d+$')</font>
+<font color="black"> 361. </font>
+<font color="green"> 362.     value_converters = {</font>
+<font color="green"> 363.         'ext' : 'ext_convert',</font>
+<font color="green"> 364.         'cfg' : 'cfg_convert',</font>
+<font color="black"> 365.     }</font>
+<font color="black"> 366. </font>
+<font color="black"> 367.     # We might want to use a different one, e.g. importlib</font>
+<font color="green"> 368.     importer = __import__</font>
+<font color="black"> 369. </font>
+<font color="green"> 370.     def __init__(self, config):</font>
+<font color="green"> 371.         self.config = ConvertingDict(config)</font>
+<font color="green"> 372.         self.config.configurator = self</font>
+<font color="black"> 373.         # Issue 12718: winpdb replaces __import__ with a Python function, which</font>
+<font color="black"> 374.         # ends up being treated as a bound method. To avoid problems, we</font>
+<font color="black"> 375.         # set the importer on the instance, but leave it defined in the class</font>
+<font color="black"> 376.         # so existing code doesn't break</font>
+<font color="green"> 377.         if type(__import__) == types.FunctionType:</font>
+<font color="red"> 378.             self.importer = __import__</font>
+<font color="black"> 379. </font>
+<font color="green"> 380.     def resolve(self, s):</font>
+<font color="black"> 381.         &quot;&quot;&quot;</font>
+<font color="black"> 382.         Resolve strings to objects using standard import and attribute</font>
+<font color="black"> 383.         syntax.</font>
+<font color="black"> 384.         &quot;&quot;&quot;</font>
+<font color="green"> 385.         name = s.split('.')</font>
+<font color="green"> 386.         used = name.pop(0)</font>
+<font color="green"> 387.         try:</font>
+<font color="green"> 388.             found = self.importer(used)</font>
+<font color="green"> 389.             for frag in name:</font>
+<font color="green"> 390.                 used += '.' + frag</font>
+<font color="green"> 391.                 try:</font>
+<font color="green"> 392.                     found = getattr(found, frag)</font>
+<font color="red"> 393.                 except AttributeError:</font>
+<font color="red"> 394.                     self.importer(used)</font>
+<font color="red"> 395.                     found = getattr(found, frag)</font>
+<font color="green"> 396.             return found</font>
+<font color="red"> 397.         except ImportError:</font>
+<font color="red"> 398.             e, tb = sys.exc_info()[1:]</font>
+<font color="red"> 399.             v = ValueError('Cannot resolve %r: %s' % (s, e))</font>
+<font color="red"> 400.             v.__cause__, v.__traceback__ = e, tb</font>
+<font color="red"> 401.             raise v</font>
+<font color="black"> 402. </font>
+<font color="green"> 403.     def ext_convert(self, value):</font>
+<font color="black"> 404.         &quot;&quot;&quot;Default converter for the ext:// protocol.&quot;&quot;&quot;</font>
+<font color="red"> 405.         return self.resolve(value)</font>
+<font color="black"> 406. </font>
+<font color="green"> 407.     def cfg_convert(self, value):</font>
+<font color="black"> 408.         &quot;&quot;&quot;Default converter for the cfg:// protocol.&quot;&quot;&quot;</font>
+<font color="red"> 409.         rest = value</font>
+<font color="red"> 410.         m = self.WORD_PATTERN.match(rest)</font>
+<font color="red"> 411.         if m is None:</font>
+<font color="red"> 412.             raise ValueError(&quot;Unable to convert %r&quot; % value)</font>
+<font color="black"> 413.         else:</font>
+<font color="red"> 414.             rest = rest[m.end():]</font>
+<font color="red"> 415.             d = self.config[m.groups()[0]]</font>
+<font color="black"> 416.             #print d, rest</font>
+<font color="red"> 417.             while rest:</font>
+<font color="red"> 418.                 m = self.DOT_PATTERN.match(rest)</font>
+<font color="red"> 419.                 if m:</font>
+<font color="red"> 420.                     d = d[m.groups()[0]]</font>
+<font color="black"> 421.                 else:</font>
+<font color="red"> 422.                     m = self.INDEX_PATTERN.match(rest)</font>
+<font color="red"> 423.                     if m:</font>
+<font color="red"> 424.                         idx = m.groups()[0]</font>
+<font color="red"> 425.                         if not self.DIGIT_PATTERN.match(idx):</font>
+<font color="red"> 426.                             d = d[idx]</font>
+<font color="black"> 427.                         else:</font>
+<font color="red"> 428.                             try:</font>
+<font color="red"> 429.                                 n = int(idx) # try as number first (most likely)</font>
+<font color="red"> 430.                                 d = d[n]</font>
+<font color="red"> 431.                             except TypeError:</font>
+<font color="red"> 432.                                 d = d[idx]</font>
+<font color="red"> 433.                 if m:</font>
+<font color="red"> 434.                     rest = rest[m.end():]</font>
+<font color="black"> 435.                 else:</font>
+<font color="red"> 436.                     raise ValueError('Unable to convert '</font>
+<font color="red"> 437.                                      '%r at %r' % (value, rest))</font>
+<font color="black"> 438.         #rest should be empty</font>
+<font color="red"> 439.         return d</font>
+<font color="black"> 440. </font>
+<font color="green"> 441.     def convert(self, value):</font>
+<font color="black"> 442.         &quot;&quot;&quot;</font>
+<font color="black"> 443.         Convert values to an appropriate type. dicts, lists and tuples are</font>
+<font color="black"> 444.         replaced by their converting alternatives. Strings are checked to</font>
+<font color="black"> 445.         see if they have a conversion format and are converted if they do.</font>
+<font color="black"> 446.         &quot;&quot;&quot;</font>
+<font color="green"> 447.         if not isinstance(value, ConvertingDict) and isinstance(value, dict):</font>
+<font color="green"> 448.             value = ConvertingDict(value)</font>
+<font color="green"> 449.             value.configurator = self</font>
+<font color="green"> 450.         elif not isinstance(value, ConvertingList) and isinstance(value, list):</font>
+<font color="green"> 451.             value = ConvertingList(value)</font>
+<font color="green"> 452.             value.configurator = self</font>
+<font color="green"> 453.         elif not isinstance(value, ConvertingTuple) and\</font>
+<font color="green"> 454.                  isinstance(value, tuple):</font>
+<font color="red"> 455.             value = ConvertingTuple(value)</font>
+<font color="red"> 456.             value.configurator = self</font>
+<font color="green"> 457.         elif isinstance(value, basestring): # str for py3k</font>
+<font color="green"> 458.             m = self.CONVERT_PATTERN.match(value)</font>
+<font color="green"> 459.             if m:</font>
+<font color="red"> 460.                 d = m.groupdict()</font>
+<font color="red"> 461.                 prefix = d['prefix']</font>
+<font color="red"> 462.                 converter = self.value_converters.get(prefix, None)</font>
+<font color="red"> 463.                 if converter:</font>
+<font color="red"> 464.                     suffix = d['suffix']</font>
+<font color="red"> 465.                     converter = getattr(self, converter)</font>
+<font color="red"> 466.                     value = converter(suffix)</font>
+<font color="green"> 467.         return value</font>
+<font color="black"> 468. </font>
+<font color="green"> 469.     def configure_custom(self, config):</font>
+<font color="black"> 470.         &quot;&quot;&quot;Configure an object with a user-supplied factory.&quot;&quot;&quot;</font>
+<font color="green"> 471.         c = config.pop('()')</font>
+<font color="green"> 472.         if not hasattr(c, '__call__') and hasattr(types, 'ClassType') and type(c) != types.ClassType:</font>
+<font color="green"> 473.             c = self.resolve(c)</font>
+<font color="green"> 474.         props = config.pop('.', None)</font>
+<font color="black"> 475.         # Check for valid identifiers</font>
+<font color="green"> 476.         kwargs = dict([(k, config[k]) for k in config if valid_ident(k)])</font>
+<font color="green"> 477.         result = c(**kwargs)</font>
+<font color="green"> 478.         if props:</font>
+<font color="red"> 479.             for name, value in props.items():</font>
+<font color="red"> 480.                 setattr(result, name, value)</font>
+<font color="green"> 481.         return result</font>
+<font color="black"> 482. </font>
+<font color="green"> 483.     def as_tuple(self, value):</font>
+<font color="black"> 484.         &quot;&quot;&quot;Utility function which converts lists to tuples.&quot;&quot;&quot;</font>
+<font color="red"> 485.         if isinstance(value, list):</font>
+<font color="red"> 486.             value = tuple(value)</font>
+<font color="red"> 487.         return value</font>
+<font color="black"> 488. </font>
+<font color="green"> 489. class DictConfigurator(BaseConfigurator):</font>
+<font color="black"> 490.     &quot;&quot;&quot;</font>
+<font color="black"> 491.     Configure logging using a dictionary-like object to describe the</font>
+<font color="black"> 492.     configuration.</font>
+<font color="green"> 493.     &quot;&quot;&quot;</font>
+<font color="black"> 494. </font>
+<font color="green"> 495.     def configure(self):</font>
+<font color="black"> 496.         &quot;&quot;&quot;Do the configuration.&quot;&quot;&quot;</font>
+<font color="black"> 497. </font>
+<font color="green"> 498.         config = self.config</font>
+<font color="green"> 499.         if 'version' not in config:</font>
+<font color="red"> 500.             raise ValueError(&quot;dictionary doesn't specify a version&quot;)</font>
+<font color="green"> 501.         if config['version'] != 1:</font>
+<font color="red"> 502.             raise ValueError(&quot;Unsupported version: %s&quot; % config['version'])</font>
+<font color="green"> 503.         incremental = config.pop('incremental', False)</font>
+<font color="green"> 504.         EMPTY_DICT = {}</font>
+<font color="green"> 505.         logging._acquireLock()</font>
+<font color="green"> 506.         try:</font>
+<font color="green"> 507.             if incremental:</font>
+<font color="red"> 508.                 handlers = config.get('handlers', EMPTY_DICT)</font>
+<font color="red"> 509.                 for name in handlers:</font>
+<font color="red"> 510.                     if name not in logging._handlers:</font>
+<font color="red"> 511.                         raise ValueError('No handler found with '</font>
+<font color="red"> 512.                                          'name %r'  % name)</font>
+<font color="black"> 513.                     else:</font>
+<font color="red"> 514.                         try:</font>
+<font color="red"> 515.                             handler = logging._handlers[name]</font>
+<font color="red"> 516.                             handler_config = handlers[name]</font>
+<font color="red"> 517.                             level = handler_config.get('level', None)</font>
+<font color="red"> 518.                             if level:</font>
+<font color="red"> 519.                                 handler.setLevel(logging._checkLevel(level))</font>
+<font color="red"> 520.                         except StandardError as e:</font>
+<font color="red"> 521.                             raise ValueError('Unable to configure handler '</font>
+<font color="red"> 522.                                              '%r: %s' % (name, e))</font>
+<font color="red"> 523.                 loggers = config.get('loggers', EMPTY_DICT)</font>
+<font color="red"> 524.                 for name in loggers:</font>
+<font color="red"> 525.                     try:</font>
+<font color="red"> 526.                         self.configure_logger(name, loggers[name], True)</font>
+<font color="red"> 527.                     except StandardError as e:</font>
+<font color="red"> 528.                         raise ValueError('Unable to configure logger '</font>
+<font color="red"> 529.                                          '%r: %s' % (name, e))</font>
+<font color="red"> 530.                 root = config.get('root', None)</font>
+<font color="red"> 531.                 if root:</font>
+<font color="red"> 532.                     try:</font>
+<font color="red"> 533.                         self.configure_root(root, True)</font>
+<font color="red"> 534.                     except StandardError as e:</font>
+<font color="red"> 535.                         raise ValueError('Unable to configure root '</font>
+<font color="red"> 536.                                          'logger: %s' % e)</font>
+<font color="black"> 537.             else:</font>
+<font color="green"> 538.                 disable_existing = config.pop('disable_existing_loggers', True)</font>
+<font color="black"> 539. </font>
+<font color="green"> 540.                 logging._handlers.clear()</font>
+<font color="green"> 541.                 del logging._handlerList[:]</font>
+<font color="black"> 542. </font>
+<font color="black"> 543.                 # Do formatters first - they don't refer to anything else</font>
+<font color="green"> 544.                 formatters = config.get('formatters', EMPTY_DICT)</font>
+<font color="green"> 545.                 for name in formatters:</font>
+<font color="red"> 546.                     try:</font>
+<font color="red"> 547.                         formatters[name] = self.configure_formatter(</font>
+<font color="red"> 548.                                                             formatters[name])</font>
+<font color="red"> 549.                     except StandardError as e:</font>
+<font color="red"> 550.                         raise ValueError('Unable to configure '</font>
+<font color="red"> 551.                                          'formatter %r: %s' % (name, e))</font>
+<font color="black"> 552.                 # Next, do filters - they don't refer to anything else, either</font>
+<font color="green"> 553.                 filters = config.get('filters', EMPTY_DICT)</font>
+<font color="green"> 554.                 for name in filters:</font>
+<font color="green"> 555.                     try:</font>
+<font color="green"> 556.                         filters[name] = self.configure_filter(filters[name])</font>
+<font color="red"> 557.                     except StandardError as e:</font>
+<font color="red"> 558.                         raise ValueError('Unable to configure '</font>
+<font color="red"> 559.                                          'filter %r: %s' % (name, e))</font>
+<font color="black"> 560. </font>
+<font color="black"> 561.                 # Next, do handlers - they refer to formatters and filters</font>
+<font color="black"> 562.                 # As handlers can refer to other handlers, sort the keys</font>
+<font color="black"> 563.                 # to allow a deterministic order of configuration</font>
+<font color="green"> 564.                 handlers = config.get('handlers', EMPTY_DICT)</font>
+<font color="green"> 565.                 deferred = []</font>
+<font color="green"> 566.                 for name in sorted(handlers):</font>
+<font color="green"> 567.                     try:</font>
+<font color="green"> 568.                         handler = self.configure_handler(handlers[name])</font>
+<font color="green"> 569.                         handler.name = name</font>
+<font color="green"> 570.                         handlers[name] = handler</font>
+<font color="red"> 571.                     except StandardError as e:</font>
+<font color="red"> 572.                         if 'target not configured yet' in str(e):</font>
+<font color="red"> 573.                             deferred.append(name)</font>
+<font color="black"> 574.                         else:</font>
+<font color="red"> 575.                             raise ValueError('Unable to configure handler '</font>
+<font color="red"> 576.                                              '%r: %s' % (name, e))</font>
+<font color="black"> 577. </font>
+<font color="black"> 578.                 # Now do any that were deferred</font>
+<font color="green"> 579.                 for name in deferred:</font>
+<font color="red"> 580.                     try:</font>
+<font color="red"> 581.                         handler = self.configure_handler(handlers[name])</font>
+<font color="red"> 582.                         handler.name = name</font>
+<font color="red"> 583.                         handlers[name] = handler</font>
+<font color="red"> 584.                     except StandardError as e:</font>
+<font color="red"> 585.                         raise ValueError('Unable to configure handler '</font>
+<font color="red"> 586.                                          '%r: %s' % (name, e))</font>
+<font color="black"> 587. </font>
+<font color="black"> 588.                 # Next, do loggers - they refer to handlers and filters</font>
+<font color="black"> 589. </font>
+<font color="black"> 590.                 #we don't want to lose the existing loggers,</font>
+<font color="black"> 591.                 #since other threads may have pointers to them.</font>
+<font color="black"> 592.                 #existing is set to contain all existing loggers,</font>
+<font color="black"> 593.                 #and as we go through the new configuration we</font>
+<font color="black"> 594.                 #remove any which are configured. At the end,</font>
+<font color="black"> 595.                 #what's left in existing is the set of loggers</font>
+<font color="black"> 596.                 #which were in the previous configuration but</font>
+<font color="black"> 597.                 #which are not in the new configuration.</font>
+<font color="green"> 598.                 root = logging.root</font>
+<font color="green"> 599.                 existing = root.manager.loggerDict.keys()</font>
+<font color="black"> 600.                 #The list needs to be sorted so that we can</font>
+<font color="black"> 601.                 #avoid disabling child loggers of explicitly</font>
+<font color="black"> 602.                 #named loggers. With a sorted list it is easier</font>
+<font color="black"> 603.                 #to find the child loggers.</font>
+<font color="green"> 604.                 existing.sort()</font>
+<font color="black"> 605.                 #We'll keep the list of existing loggers</font>
+<font color="black"> 606.                 #which are children of named loggers here...</font>
+<font color="green"> 607.                 child_loggers = []</font>
+<font color="black"> 608.                 #now set up the new ones...</font>
+<font color="green"> 609.                 loggers = config.get('loggers', EMPTY_DICT)</font>
+<font color="green"> 610.                 for name in loggers:</font>
+<font color="green"> 611.                     name = _encoded(name)</font>
+<font color="green"> 612.                     if name in existing:</font>
+<font color="green"> 613.                         i = existing.index(name)</font>
+<font color="green"> 614.                         prefixed = name + &quot;.&quot;</font>
+<font color="green"> 615.                         pflen = len(prefixed)</font>
+<font color="green"> 616.                         num_existing = len(existing)</font>
+<font color="green"> 617.                         i = i + 1 # look at the entry after name</font>
+<font color="green"> 618.                         while (i &lt; num_existing) and\</font>
+<font color="green"> 619.                               (existing[i][:pflen] == prefixed):</font>
+<font color="green"> 620.                             child_loggers.append(existing[i])</font>
+<font color="green"> 621.                             i = i + 1</font>
+<font color="green"> 622.                         existing.remove(name)</font>
+<font color="green"> 623.                     try:</font>
+<font color="green"> 624.                         self.configure_logger(name, loggers[name])</font>
+<font color="red"> 625.                     except StandardError as e:</font>
+<font color="red"> 626.                         raise ValueError('Unable to configure logger '</font>
+<font color="red"> 627.                                          '%r: %s' % (name, e))</font>
+<font color="black"> 628. </font>
+<font color="black"> 629.                 #Disable any old loggers. There's no point deleting</font>
+<font color="black"> 630.                 #them as other threads may continue to hold references</font>
+<font color="black"> 631.                 #and by disabling them, you stop them doing any logging.</font>
+<font color="black"> 632.                 #However, don't disable children of named loggers, as that's</font>
+<font color="black"> 633.                 #probably not what was intended by the user.</font>
+<font color="green"> 634.                 for log in existing:</font>
+<font color="green"> 635.                     logger = root.manager.loggerDict[log]</font>
+<font color="green"> 636.                     if log in child_loggers:</font>
+<font color="green"> 637.                         logger.level = logging.NOTSET</font>
+<font color="green"> 638.                         logger.handlers = []</font>
+<font color="green"> 639.                         logger.propagate = True</font>
+<font color="red"> 640.                     elif disable_existing:</font>
+<font color="red"> 641.                         logger.disabled = True</font>
+<font color="black"> 642. </font>
+<font color="black"> 643.                 # And finally, do the root logger</font>
+<font color="green"> 644.                 root = config.get('root', None)</font>
+<font color="green"> 645.                 if root:</font>
+<font color="red"> 646.                     try:</font>
+<font color="red"> 647.                         self.configure_root(root)</font>
+<font color="red"> 648.                     except StandardError as e:</font>
+<font color="red"> 649.                         raise ValueError('Unable to configure root '</font>
+<font color="red"> 650.                                          'logger: %s' % e)</font>
+<font color="black"> 651.         finally:</font>
+<font color="green"> 652.             logging._releaseLock()</font>
+<font color="black"> 653. </font>
+<font color="green"> 654.     def configure_formatter(self, config):</font>
+<font color="black"> 655.         &quot;&quot;&quot;Configure a formatter from a dictionary.&quot;&quot;&quot;</font>
+<font color="red"> 656.         if '()' in config:</font>
+<font color="red"> 657.             factory = config['()'] # for use in exception handler</font>
+<font color="red"> 658.             try:</font>
+<font color="red"> 659.                 result = self.configure_custom(config)</font>
+<font color="red"> 660.             except TypeError as te:</font>
+<font color="red"> 661.                 if &quot;'format'&quot; not in str(te):</font>
+<font color="red"> 662.                     raise</font>
+<font color="black"> 663.                 #Name of parameter changed from fmt to format.</font>
+<font color="black"> 664.                 #Retry with old name.</font>
+<font color="black"> 665.                 #This is so that code can be used with older Python versions</font>
+<font color="black"> 666.                 #(e.g. by Django)</font>
+<font color="red"> 667.                 config['fmt'] = config.pop('format')</font>
+<font color="red"> 668.                 config['()'] = factory</font>
+<font color="red"> 669.                 result = self.configure_custom(config)</font>
+<font color="black"> 670.         else:</font>
+<font color="red"> 671.             fmt = config.get('format', None)</font>
+<font color="red"> 672.             dfmt = config.get('datefmt', None)</font>
+<font color="red"> 673.             result = logging.Formatter(fmt, dfmt)</font>
+<font color="red"> 674.         return result</font>
+<font color="black"> 675. </font>
+<font color="green"> 676.     def configure_filter(self, config):</font>
+<font color="black"> 677.         &quot;&quot;&quot;Configure a filter from a dictionary.&quot;&quot;&quot;</font>
+<font color="green"> 678.         if '()' in config:</font>
+<font color="green"> 679.             result = self.configure_custom(config)</font>
+<font color="black"> 680.         else:</font>
+<font color="red"> 681.             name = config.get('name', '')</font>
+<font color="red"> 682.             result = logging.Filter(name)</font>
+<font color="green"> 683.         return result</font>
+<font color="black"> 684. </font>
+<font color="green"> 685.     def add_filters(self, filterer, filters):</font>
+<font color="black"> 686.         &quot;&quot;&quot;Add filters to a filterer from a list of names.&quot;&quot;&quot;</font>
+<font color="green"> 687.         for f in filters:</font>
+<font color="green"> 688.             try:</font>
+<font color="green"> 689.                 filterer.addFilter(self.config['filters'][f])</font>
+<font color="red"> 690.             except StandardError as e:</font>
+<font color="red"> 691.                 raise ValueError('Unable to add filter %r: %s' % (f, e))</font>
+<font color="black"> 692. </font>
+<font color="green"> 693.     def configure_handler(self, config):</font>
+<font color="black"> 694.         &quot;&quot;&quot;Configure a handler from a dictionary.&quot;&quot;&quot;</font>
+<font color="green"> 695.         formatter = config.pop('formatter', None)</font>
+<font color="green"> 696.         if formatter:</font>
+<font color="red"> 697.             try:</font>
+<font color="red"> 698.                 formatter = self.config['formatters'][formatter]</font>
+<font color="red"> 699.             except StandardError as e:</font>
+<font color="red"> 700.                 raise ValueError('Unable to set formatter '</font>
+<font color="red"> 701.                                  '%r: %s' % (formatter, e))</font>
+<font color="green"> 702.         level = config.pop('level', None)</font>
+<font color="green"> 703.         filters = config.pop('filters', None)</font>
+<font color="green"> 704.         if '()' in config:</font>
+<font color="red"> 705.             c = config.pop('()')</font>
+<font color="red"> 706.             if not hasattr(c, '__call__') and hasattr(types, 'ClassType') and type(c) != types.ClassType:</font>
+<font color="red"> 707.                 c = self.resolve(c)</font>
+<font color="red"> 708.             factory = c</font>
+<font color="black"> 709.         else:</font>
+<font color="green"> 710.             cname = config.pop('class')</font>
+<font color="green"> 711.             klass = self.resolve(cname)</font>
+<font color="black"> 712.             #Special case for handler which refers to another handler</font>
+<font color="green"> 713.             if issubclass(klass, logging.handlers.MemoryHandler) and\</font>
+<font color="red"> 714.                 'target' in config:</font>
+<font color="red"> 715.                 try:</font>
+<font color="red"> 716.                     th = self.config['handlers'][config['target']]</font>
+<font color="red"> 717.                     if not isinstance(th, logging.Handler):</font>
+<font color="red"> 718.                         config['class'] = cname # restore for deferred configuration</font>
+<font color="red"> 719.                         raise StandardError('target not configured yet')</font>
+<font color="red"> 720.                     config['target'] = th</font>
+<font color="red"> 721.                 except StandardError as e:</font>
+<font color="red"> 722.                     raise ValueError('Unable to set target handler '</font>
+<font color="red"> 723.                                      '%r: %s' % (config['target'], e))</font>
+<font color="green"> 724.             elif issubclass(klass, logging.handlers.SMTPHandler) and\</font>
+<font color="red"> 725.                 'mailhost' in config:</font>
+<font color="red"> 726.                 config['mailhost'] = self.as_tuple(config['mailhost'])</font>
+<font color="green"> 727.             elif issubclass(klass, logging.handlers.SysLogHandler) and\</font>
+<font color="red"> 728.                 'address' in config:</font>
+<font color="red"> 729.                 config['address'] = self.as_tuple(config['address'])</font>
+<font color="green"> 730.             factory = klass</font>
+<font color="green"> 731.         kwargs = dict([(k, config[k]) for k in config if valid_ident(k)])</font>
+<font color="green"> 732.         try:</font>
+<font color="green"> 733.             result = factory(**kwargs)</font>
+<font color="red"> 734.         except TypeError as te:</font>
+<font color="red"> 735.             if &quot;'stream'&quot; not in str(te):</font>
+<font color="red"> 736.                 raise</font>
+<font color="black"> 737.             #The argument name changed from strm to stream</font>
+<font color="black"> 738.             #Retry with old name.</font>
+<font color="black"> 739.             #This is so that code can be used with older Python versions</font>
+<font color="black"> 740.             #(e.g. by Django)</font>
+<font color="red"> 741.             kwargs['strm'] = kwargs.pop('stream')</font>
+<font color="red"> 742.             result = factory(**kwargs)</font>
+<font color="green"> 743.         if formatter:</font>
+<font color="red"> 744.             result.setFormatter(formatter)</font>
+<font color="green"> 745.         if level is not None:</font>
+<font color="green"> 746.             result.setLevel(logging._checkLevel(level))</font>
+<font color="green"> 747.         if filters:</font>
+<font color="green"> 748.             self.add_filters(result, filters)</font>
+<font color="green"> 749.         return result</font>
+<font color="black"> 750. </font>
+<font color="green"> 751.     def add_handlers(self, logger, handlers):</font>
+<font color="black"> 752.         &quot;&quot;&quot;Add handlers to a logger from a list of names.&quot;&quot;&quot;</font>
+<font color="green"> 753.         for h in handlers:</font>
+<font color="green"> 754.             try:</font>
+<font color="green"> 755.                 logger.addHandler(self.config['handlers'][h])</font>
+<font color="red"> 756.             except StandardError as e:</font>
+<font color="red"> 757.                 raise ValueError('Unable to add handler %r: %s' % (h, e))</font>
+<font color="black"> 758. </font>
+<font color="green"> 759.     def common_logger_config(self, logger, config, incremental=False):</font>
+<font color="black"> 760.         &quot;&quot;&quot;</font>
+<font color="black"> 761.         Perform configuration which is common to root and non-root loggers.</font>
+<font color="black"> 762.         &quot;&quot;&quot;</font>
+<font color="green"> 763.         level = config.get('level', None)</font>
+<font color="green"> 764.         if level is not None:</font>
+<font color="green"> 765.             logger.setLevel(logging._checkLevel(level))</font>
+<font color="green"> 766.         if not incremental:</font>
+<font color="black"> 767.             #Remove any existing handlers</font>
+<font color="green"> 768.             for h in logger.handlers[:]:</font>
+<font color="red"> 769.                 logger.removeHandler(h)</font>
+<font color="green"> 770.             handlers = config.get('handlers', None)</font>
+<font color="green"> 771.             if handlers:</font>
+<font color="green"> 772.                 self.add_handlers(logger, handlers)</font>
+<font color="green"> 773.             filters = config.get('filters', None)</font>
+<font color="green"> 774.             if filters:</font>
+<font color="red"> 775.                 self.add_filters(logger, filters)</font>
+<font color="black"> 776. </font>
+<font color="green"> 777.     def configure_logger(self, name, config, incremental=False):</font>
+<font color="black"> 778.         &quot;&quot;&quot;Configure a non-root logger from a dictionary.&quot;&quot;&quot;</font>
+<font color="green"> 779.         logger = logging.getLogger(name)</font>
+<font color="green"> 780.         self.common_logger_config(logger, config, incremental)</font>
+<font color="green"> 781.         propagate = config.get('propagate', None)</font>
+<font color="green"> 782.         if propagate is not None:</font>
+<font color="red"> 783.             logger.propagate = propagate</font>
+<font color="black"> 784. </font>
+<font color="green"> 785.     def configure_root(self, config, incremental=False):</font>
+<font color="black"> 786.         &quot;&quot;&quot;Configure a root logger from a dictionary.&quot;&quot;&quot;</font>
+<font color="red"> 787.         root = logging.getLogger()</font>
+<font color="red"> 788.         self.common_logger_config(root, config, incremental)</font>
+<font color="black"> 789. </font>
+<font color="green"> 790. dictConfigClass = DictConfigurator</font>
+<font color="black"> 791. </font>
+<font color="green"> 792. def dictConfig(config):</font>
+<font color="black"> 793.     &quot;&quot;&quot;Configure logging using a dictionary.&quot;&quot;&quot;</font>
+<font color="green"> 794.     dictConfigClass(config).configure()</font>
+<font color="black"> 795. </font>
+<font color="black"> 796. </font>
+<font color="green"> 797. def listen(port=DEFAULT_LOGGING_CONFIG_PORT):</font>
+<font color="black"> 798.     &quot;&quot;&quot;</font>
+<font color="black"> 799.     Start up a socket server on the specified port, and listen for new</font>
+<font color="black"> 800.     configurations.</font>
+<font color="black"> 801. </font>
+<font color="black"> 802.     These will be sent as a file suitable for processing by fileConfig().</font>
+<font color="black"> 803.     Returns a Thread object on which you can call start() to start the server,</font>
+<font color="black"> 804.     and which you can join() when appropriate. To stop the server, call</font>
+<font color="black"> 805.     stopListening().</font>
+<font color="black"> 806.     &quot;&quot;&quot;</font>
+<font color="red"> 807.     if not thread:</font>
+<font color="red"> 808.         raise NotImplementedError(&quot;listen() needs threading to work&quot;)</font>
+<font color="black"> 809. </font>
+<font color="red"> 810.     class ConfigStreamHandler(StreamRequestHandler):</font>
+<font color="black"> 811.         &quot;&quot;&quot;</font>
+<font color="black"> 812.         Handler for a logging configuration request.</font>
+<font color="black"> 813. </font>
+<font color="black"> 814.         It expects a completely new logging configuration and uses fileConfig</font>
+<font color="black"> 815.         to install it.</font>
+<font color="red"> 816.         &quot;&quot;&quot;</font>
+<font color="red"> 817.         def handle(self):</font>
+<font color="black"> 818.             &quot;&quot;&quot;</font>
+<font color="black"> 819.             Handle a request.</font>
+<font color="black"> 820. </font>
+<font color="black"> 821.             Each request is expected to be a 4-byte length, packed using</font>
+<font color="black"> 822.             struct.pack(&quot;&gt;L&quot;, n), followed by the config file.</font>
+<font color="black"> 823.             Uses fileConfig() to do the grunt work.</font>
+<font color="black"> 824.             &quot;&quot;&quot;</font>
+<font color="red"> 825.             import tempfile</font>
+<font color="red"> 826.             try:</font>
+<font color="red"> 827.                 conn = self.connection</font>
+<font color="red"> 828.                 chunk = conn.recv(4)</font>
+<font color="red"> 829.                 if len(chunk) == 4:</font>
+<font color="red"> 830.                     slen = struct.unpack(&quot;&gt;L&quot;, chunk)[0]</font>
+<font color="red"> 831.                     chunk = self.connection.recv(slen)</font>
+<font color="red"> 832.                     while len(chunk) &lt; slen:</font>
+<font color="red"> 833.                         chunk = chunk + conn.recv(slen - len(chunk))</font>
+<font color="red"> 834.                     try:</font>
+<font color="red"> 835.                         import json</font>
+<font color="red"> 836.                         d =json.loads(chunk)</font>
+<font color="red"> 837.                         assert isinstance(d, dict)</font>
+<font color="red"> 838.                         dictConfig(d)</font>
+<font color="red"> 839.                     except:</font>
+<font color="black"> 840.                         #Apply new configuration.</font>
+<font color="black"> 841. </font>
+<font color="red"> 842.                         file = cStringIO.StringIO(chunk)</font>
+<font color="red"> 843.                         try:</font>
+<font color="red"> 844.                             fileConfig(file)</font>
+<font color="red"> 845.                         except (KeyboardInterrupt, SystemExit):</font>
+<font color="red"> 846.                             raise</font>
+<font color="red"> 847.                         except:</font>
+<font color="red"> 848.                             traceback.print_exc()</font>
+<font color="red"> 849.                     if self.server.ready:</font>
+<font color="red"> 850.                         self.server.ready.set()</font>
+<font color="red"> 851.             except socket.error as e:</font>
+<font color="red"> 852.                 if e.errno != RESET_ERROR:</font>
+<font color="red"> 853.                     raise</font>
+<font color="black"> 854. </font>
+<font color="red"> 855.     class ConfigSocketReceiver(ThreadingTCPServer):</font>
+<font color="black"> 856.         &quot;&quot;&quot;</font>
+<font color="black"> 857.         A simple TCP socket-based logging config receiver.</font>
+<font color="red"> 858.         &quot;&quot;&quot;</font>
+<font color="black"> 859. </font>
+<font color="red"> 860.         allow_reuse_address = 1</font>
+<font color="black"> 861. </font>
+<font color="red"> 862.         def __init__(self, host='localhost', port=DEFAULT_LOGGING_CONFIG_PORT,</font>
+<font color="red"> 863.                      handler=None, ready=None):</font>
+<font color="red"> 864.             ThreadingTCPServer.__init__(self, (host, port), handler)</font>
+<font color="red"> 865.             logging._acquireLock()</font>
+<font color="red"> 866.             self.abort = 0</font>
+<font color="red"> 867.             logging._releaseLock()</font>
+<font color="red"> 868.             self.timeout = 1</font>
+<font color="red"> 869.             self.ready = ready</font>
+<font color="black"> 870. </font>
+<font color="red"> 871.         def serve_until_stopped(self):</font>
+<font color="red"> 872.             import select</font>
+<font color="red"> 873.             abort = 0</font>
+<font color="red"> 874.             while not abort:</font>
+<font color="red"> 875.                 rd, wr, ex = select.select([self.socket.fileno()],</font>
+<font color="red"> 876.                                            [], [],</font>
+<font color="red"> 877.                                            self.timeout)</font>
+<font color="red"> 878.                 if rd:</font>
+<font color="red"> 879.                     self.handle_request()</font>
+<font color="red"> 880.                 logging._acquireLock()</font>
+<font color="red"> 881.                 abort = self.abort</font>
+<font color="red"> 882.                 logging._releaseLock()</font>
+<font color="red"> 883.             self.socket.close()</font>
+<font color="black"> 884. </font>
+<font color="red"> 885.     class Server(threading.Thread):</font>
+<font color="black"> 886. </font>
+<font color="red"> 887.         def __init__(self, rcvr, hdlr, port):</font>
+<font color="red"> 888.             super(Server, self).__init__()</font>
+<font color="red"> 889.             self.rcvr = rcvr</font>
+<font color="red"> 890.             self.hdlr = hdlr</font>
+<font color="red"> 891.             self.port = port</font>
+<font color="red"> 892.             self.ready = threading.Event()</font>
+<font color="black"> 893. </font>
+<font color="red"> 894.         def run(self):</font>
+<font color="red"> 895.             server = self.rcvr(port=self.port, handler=self.hdlr,</font>
+<font color="red"> 896.                                ready=self.ready)</font>
+<font color="red"> 897.             if self.port == 0:</font>
+<font color="red"> 898.                 self.port = server.server_address[1]</font>
+<font color="red"> 899.             self.ready.set()</font>
+<font color="black"> 900.             global _listener</font>
+<font color="red"> 901.             logging._acquireLock()</font>
+<font color="red"> 902.             _listener = server</font>
+<font color="red"> 903.             logging._releaseLock()</font>
+<font color="red"> 904.             server.serve_until_stopped()</font>
+<font color="black"> 905. </font>
+<font color="red"> 906.     return Server(ConfigSocketReceiver, ConfigStreamHandler, port)</font>
+<font color="black"> 907. </font>
+<font color="green"> 908. def stopListening():</font>
+<font color="black"> 909.     &quot;&quot;&quot;</font>
+<font color="black"> 910.     Stop the listening server which was created with a call to listen().</font>
+<font color="black"> 911.     &quot;&quot;&quot;</font>
+<font color="black"> 912.     global _listener</font>
+<font color="red"> 913.     logging._acquireLock()</font>
+<font color="red"> 914.     try:</font>
+<font color="red"> 915.         if _listener:</font>
+<font color="red"> 916.             _listener.abort = 1</font>
+<font color="red"> 917.             _listener = None</font>
+<font color="black"> 918.     finally:</font>
+<font color="red"> 919.         logging._releaseLock()</font>
+</pre>
+

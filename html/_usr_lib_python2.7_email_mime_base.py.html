@@ -1,0 +1,33 @@
+source file: <b>/usr/lib/python2.7/email/mime/base.py</b><br>
+
+
+file stats: <b>10 lines, 6 executed: 60.0% covered</b>
+<pre>
+<font color="black">   1. # Copyright (C) 2001-2006 Python Software Foundation</font>
+<font color="black">   2. # Author: Barry Warsaw</font>
+<font color="black">   3. # Contact: email-sig@python.org</font>
+<font color="black">   4. </font>
+<font color="green">   5. &quot;&quot;&quot;Base class for MIME specializations.&quot;&quot;&quot;</font>
+<font color="black">   6. </font>
+<font color="green">   7. __all__ = ['MIMEBase']</font>
+<font color="black">   8. </font>
+<font color="green">   9. from email import message</font>
+<font color="black">  10. </font>
+<font color="black">  11. </font>
+<font color="black">  12. </font>
+<font color="green">  13. class MIMEBase(message.Message):</font>
+<font color="green">  14.     &quot;&quot;&quot;Base class for MIME specializations.&quot;&quot;&quot;</font>
+<font color="black">  15. </font>
+<font color="green">  16.     def __init__(self, _maintype, _subtype, **_params):</font>
+<font color="black">  17.         &quot;&quot;&quot;This constructor adds a Content-Type: and a MIME-Version: header.</font>
+<font color="black">  18. </font>
+<font color="black">  19.         The Content-Type: header is taken from the _maintype and _subtype</font>
+<font color="black">  20.         arguments.  Additional parameters for this header are taken from the</font>
+<font color="black">  21.         keyword arguments.</font>
+<font color="black">  22.         &quot;&quot;&quot;</font>
+<font color="red">  23.         message.Message.__init__(self)</font>
+<font color="red">  24.         ctype = '%s/%s' % (_maintype, _subtype)</font>
+<font color="red">  25.         self.add_header('Content-Type', ctype, **_params)</font>
+<font color="red">  26.         self['MIME-Version'] = '1.0'</font>
+</pre>
+

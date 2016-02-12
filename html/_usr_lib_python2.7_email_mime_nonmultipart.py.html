@@ -1,0 +1,29 @@
+source file: <b>/usr/lib/python2.7/email/mime/nonmultipart.py</b><br>
+
+
+file stats: <b>9 lines, 7 executed: 77.8% covered</b>
+<pre>
+<font color="black">   1. # Copyright (C) 2002-2006 Python Software Foundation</font>
+<font color="black">   2. # Author: Barry Warsaw</font>
+<font color="black">   3. # Contact: email-sig@python.org</font>
+<font color="black">   4. </font>
+<font color="green">   5. &quot;&quot;&quot;Base class for MIME type messages that are not multipart.&quot;&quot;&quot;</font>
+<font color="black">   6. </font>
+<font color="green">   7. __all__ = ['MIMENonMultipart']</font>
+<font color="black">   8. </font>
+<font color="green">   9. from email import errors</font>
+<font color="green">  10. from email.mime.base import MIMEBase</font>
+<font color="black">  11. </font>
+<font color="black">  12. </font>
+<font color="black">  13. </font>
+<font color="green">  14. class MIMENonMultipart(MIMEBase):</font>
+<font color="green">  15.     &quot;&quot;&quot;Base class for MIME multipart/* type messages.&quot;&quot;&quot;</font>
+<font color="black">  16. </font>
+<font color="green">  17.     def attach(self, payload):</font>
+<font color="black">  18.         # The public API prohibits attaching multiple subparts to MIMEBase</font>
+<font color="black">  19.         # derived subtypes since none of them are, by definition, of content</font>
+<font color="black">  20.         # type multipart/*</font>
+<font color="red">  21.         raise errors.MultipartConversionError(</font>
+<font color="red">  22.             'Cannot attach additional subparts to non-multipart/*')</font>
+</pre>
+

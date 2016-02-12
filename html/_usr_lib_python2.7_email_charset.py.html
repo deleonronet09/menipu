@@ -1,0 +1,404 @@
+source file: <b>/usr/lib/python2.7/email/charset.py</b><br>
+
+
+file stats: <b>171 lines, 101 executed: 59.1% covered</b>
+<pre>
+<font color="black">   1. # Copyright (C) 2001-2006 Python Software Foundation</font>
+<font color="black">   2. # Author: Ben Gertzfield, Barry Warsaw</font>
+<font color="black">   3. # Contact: email-sig@python.org</font>
+<font color="black">   4. </font>
+<font color="black">   5. __all__ = [</font>
+<font color="green">   6.     'Charset',</font>
+<font color="green">   7.     'add_alias',</font>
+<font color="green">   8.     'add_charset',</font>
+<font color="green">   9.     'add_codec',</font>
+<font color="black">  10.     ]</font>
+<font color="black">  11. </font>
+<font color="green">  12. import codecs</font>
+<font color="green">  13. import email.base64mime</font>
+<font color="green">  14. import email.quoprimime</font>
+<font color="black">  15. </font>
+<font color="green">  16. from email import errors</font>
+<font color="green">  17. from email.encoders import encode_7or8bit</font>
+<font color="black">  18. </font>
+<font color="black">  19. </font>
+<font color="black">  20. </font>
+<font color="black">  21. # Flags for types of header encodings</font>
+<font color="green">  22. QP          = 1 # Quoted-Printable</font>
+<font color="green">  23. BASE64      = 2 # Base64</font>
+<font color="green">  24. SHORTEST    = 3 # the shorter of QP and base64, but only for headers</font>
+<font color="black">  25. </font>
+<font color="black">  26. # In &quot;=?charset?q?hello_world?=&quot;, the =?, ?q?, and ?= add up to 7</font>
+<font color="green">  27. MISC_LEN = 7</font>
+<font color="black">  28. </font>
+<font color="green">  29. DEFAULT_CHARSET = 'us-ascii'</font>
+<font color="black">  30. </font>
+<font color="black">  31. </font>
+<font color="black">  32. </font>
+<font color="black">  33. # Defaults</font>
+<font color="green">  34. CHARSETS = {</font>
+<font color="black">  35.     # input        header enc  body enc output conv</font>
+<font color="green">  36.     'iso-8859-1':  (QP,        QP,      None),</font>
+<font color="green">  37.     'iso-8859-2':  (QP,        QP,      None),</font>
+<font color="green">  38.     'iso-8859-3':  (QP,        QP,      None),</font>
+<font color="green">  39.     'iso-8859-4':  (QP,        QP,      None),</font>
+<font color="black">  40.     # iso-8859-5 is Cyrillic, and not especially used</font>
+<font color="black">  41.     # iso-8859-6 is Arabic, also not particularly used</font>
+<font color="black">  42.     # iso-8859-7 is Greek, QP will not make it readable</font>
+<font color="black">  43.     # iso-8859-8 is Hebrew, QP will not make it readable</font>
+<font color="green">  44.     'iso-8859-9':  (QP,        QP,      None),</font>
+<font color="green">  45.     'iso-8859-10': (QP,        QP,      None),</font>
+<font color="black">  46.     # iso-8859-11 is Thai, QP will not make it readable</font>
+<font color="green">  47.     'iso-8859-13': (QP,        QP,      None),</font>
+<font color="green">  48.     'iso-8859-14': (QP,        QP,      None),</font>
+<font color="green">  49.     'iso-8859-15': (QP,        QP,      None),</font>
+<font color="green">  50.     'iso-8859-16': (QP,        QP,      None),</font>
+<font color="green">  51.     'windows-1252':(QP,        QP,      None),</font>
+<font color="green">  52.     'viscii':      (QP,        QP,      None),</font>
+<font color="green">  53.     'us-ascii':    (None,      None,    None),</font>
+<font color="green">  54.     'big5':        (BASE64,    BASE64,  None),</font>
+<font color="green">  55.     'gb2312':      (BASE64,    BASE64,  None),</font>
+<font color="green">  56.     'euc-jp':      (BASE64,    None,    'iso-2022-jp'),</font>
+<font color="green">  57.     'shift_jis':   (BASE64,    None,    'iso-2022-jp'),</font>
+<font color="green">  58.     'iso-2022-jp': (BASE64,    None,    None),</font>
+<font color="green">  59.     'koi8-r':      (BASE64,    BASE64,  None),</font>
+<font color="green">  60.     'utf-8':       (SHORTEST,  BASE64, 'utf-8'),</font>
+<font color="black">  61.     # We're making this one up to represent raw unencoded 8-bit</font>
+<font color="green">  62.     '8bit':        (None,      BASE64, 'utf-8'),</font>
+<font color="black">  63.     }</font>
+<font color="black">  64. </font>
+<font color="black">  65. # Aliases for other commonly-used names for character sets.  Map</font>
+<font color="black">  66. # them to the real ones used in email.</font>
+<font color="green">  67. ALIASES = {</font>
+<font color="green">  68.     'latin_1': 'iso-8859-1',</font>
+<font color="green">  69.     'latin-1': 'iso-8859-1',</font>
+<font color="green">  70.     'latin_2': 'iso-8859-2',</font>
+<font color="green">  71.     'latin-2': 'iso-8859-2',</font>
+<font color="green">  72.     'latin_3': 'iso-8859-3',</font>
+<font color="green">  73.     'latin-3': 'iso-8859-3',</font>
+<font color="green">  74.     'latin_4': 'iso-8859-4',</font>
+<font color="green">  75.     'latin-4': 'iso-8859-4',</font>
+<font color="green">  76.     'latin_5': 'iso-8859-9',</font>
+<font color="green">  77.     'latin-5': 'iso-8859-9',</font>
+<font color="green">  78.     'latin_6': 'iso-8859-10',</font>
+<font color="green">  79.     'latin-6': 'iso-8859-10',</font>
+<font color="green">  80.     'latin_7': 'iso-8859-13',</font>
+<font color="green">  81.     'latin-7': 'iso-8859-13',</font>
+<font color="green">  82.     'latin_8': 'iso-8859-14',</font>
+<font color="green">  83.     'latin-8': 'iso-8859-14',</font>
+<font color="green">  84.     'latin_9': 'iso-8859-15',</font>
+<font color="green">  85.     'latin-9': 'iso-8859-15',</font>
+<font color="green">  86.     'latin_10':'iso-8859-16',</font>
+<font color="green">  87.     'latin-10':'iso-8859-16',</font>
+<font color="green">  88.     'cp949':   'ks_c_5601-1987',</font>
+<font color="green">  89.     'euc_jp':  'euc-jp',</font>
+<font color="green">  90.     'euc_kr':  'euc-kr',</font>
+<font color="green">  91.     'ascii':   'us-ascii',</font>
+<font color="black">  92.     }</font>
+<font color="black">  93. </font>
+<font color="black">  94. </font>
+<font color="black">  95. # Map charsets to their Unicode codec strings.</font>
+<font color="green">  96. CODEC_MAP = {</font>
+<font color="green">  97.     'gb2312':      'eucgb2312_cn',</font>
+<font color="green">  98.     'big5':        'big5_tw',</font>
+<font color="black">  99.     # Hack: We don't want *any* conversion for stuff marked us-ascii, as all</font>
+<font color="black"> 100.     # sorts of garbage might be sent to us in the guise of 7-bit us-ascii.</font>
+<font color="black"> 101.     # Let that stuff pass through without conversion to/from Unicode.</font>
+<font color="green"> 102.     'us-ascii':    None,</font>
+<font color="black"> 103.     }</font>
+<font color="black"> 104. </font>
+<font color="black"> 105. </font>
+<font color="black"> 106. </font>
+<font color="black"> 107. # Convenience functions for extending the above mappings</font>
+<font color="green"> 108. def add_charset(charset, header_enc=None, body_enc=None, output_charset=None):</font>
+<font color="black"> 109.     &quot;&quot;&quot;Add character set properties to the global registry.</font>
+<font color="black"> 110. </font>
+<font color="black"> 111.     charset is the input character set, and must be the canonical name of a</font>
+<font color="black"> 112.     character set.</font>
+<font color="black"> 113. </font>
+<font color="black"> 114.     Optional header_enc and body_enc is either Charset.QP for</font>
+<font color="black"> 115.     quoted-printable, Charset.BASE64 for base64 encoding, Charset.SHORTEST for</font>
+<font color="black"> 116.     the shortest of qp or base64 encoding, or None for no encoding.  SHORTEST</font>
+<font color="black"> 117.     is only valid for header_enc.  It describes how message headers and</font>
+<font color="black"> 118.     message bodies in the input charset are to be encoded.  Default is no</font>
+<font color="black"> 119.     encoding.</font>
+<font color="black"> 120. </font>
+<font color="black"> 121.     Optional output_charset is the character set that the output should be</font>
+<font color="black"> 122.     in.  Conversions will proceed from input charset, to Unicode, to the</font>
+<font color="black"> 123.     output charset when the method Charset.convert() is called.  The default</font>
+<font color="black"> 124.     is to output in the same character set as the input.</font>
+<font color="black"> 125. </font>
+<font color="black"> 126.     Both input_charset and output_charset must have Unicode codec entries in</font>
+<font color="black"> 127.     the module's charset-to-codec mapping; use add_codec(charset, codecname)</font>
+<font color="black"> 128.     to add codecs the module does not know about.  See the codecs module's</font>
+<font color="black"> 129.     documentation for more information.</font>
+<font color="black"> 130.     &quot;&quot;&quot;</font>
+<font color="red"> 131.     if body_enc == SHORTEST:</font>
+<font color="red"> 132.         raise ValueError('SHORTEST not allowed for body_enc')</font>
+<font color="red"> 133.     CHARSETS[charset] = (header_enc, body_enc, output_charset)</font>
+<font color="black"> 134. </font>
+<font color="black"> 135. </font>
+<font color="green"> 136. def add_alias(alias, canonical):</font>
+<font color="black"> 137.     &quot;&quot;&quot;Add a character set alias.</font>
+<font color="black"> 138. </font>
+<font color="black"> 139.     alias is the alias name, e.g. latin-1</font>
+<font color="black"> 140.     canonical is the character set's canonical name, e.g. iso-8859-1</font>
+<font color="black"> 141.     &quot;&quot;&quot;</font>
+<font color="red"> 142.     ALIASES[alias] = canonical</font>
+<font color="black"> 143. </font>
+<font color="black"> 144. </font>
+<font color="green"> 145. def add_codec(charset, codecname):</font>
+<font color="black"> 146.     &quot;&quot;&quot;Add a codec that map characters in the given charset to/from Unicode.</font>
+<font color="black"> 147. </font>
+<font color="black"> 148.     charset is the canonical name of a character set.  codecname is the name</font>
+<font color="black"> 149.     of a Python codec, as appropriate for the second argument to the unicode()</font>
+<font color="black"> 150.     built-in, or to the encode() method of a Unicode string.</font>
+<font color="black"> 151.     &quot;&quot;&quot;</font>
+<font color="red"> 152.     CODEC_MAP[charset] = codecname</font>
+<font color="black"> 153. </font>
+<font color="black"> 154. </font>
+<font color="black"> 155. </font>
+<font color="green"> 156. class Charset:</font>
+<font color="black"> 157.     &quot;&quot;&quot;Map character sets to their email properties.</font>
+<font color="black"> 158. </font>
+<font color="black"> 159.     This class provides information about the requirements imposed on email</font>
+<font color="black"> 160.     for a specific character set.  It also provides convenience routines for</font>
+<font color="black"> 161.     converting between character sets, given the availability of the</font>
+<font color="black"> 162.     applicable codecs.  Given a character set, it will do its best to provide</font>
+<font color="black"> 163.     information on how to use that character set in an email in an</font>
+<font color="black"> 164.     RFC-compliant way.</font>
+<font color="black"> 165. </font>
+<font color="black"> 166.     Certain character sets must be encoded with quoted-printable or base64</font>
+<font color="black"> 167.     when used in email headers or bodies.  Certain character sets must be</font>
+<font color="black"> 168.     converted outright, and are not allowed in email.  Instances of this</font>
+<font color="black"> 169.     module expose the following information about a character set:</font>
+<font color="black"> 170. </font>
+<font color="black"> 171.     input_charset: The initial character set specified.  Common aliases</font>
+<font color="black"> 172.                    are converted to their `official' email names (e.g. latin_1</font>
+<font color="black"> 173.                    is converted to iso-8859-1).  Defaults to 7-bit us-ascii.</font>
+<font color="black"> 174. </font>
+<font color="black"> 175.     header_encoding: If the character set must be encoded before it can be</font>
+<font color="black"> 176.                      used in an email header, this attribute will be set to</font>
+<font color="black"> 177.                      Charset.QP (for quoted-printable), Charset.BASE64 (for</font>
+<font color="black"> 178.                      base64 encoding), or Charset.SHORTEST for the shortest of</font>
+<font color="black"> 179.                      QP or BASE64 encoding.  Otherwise, it will be None.</font>
+<font color="black"> 180. </font>
+<font color="black"> 181.     body_encoding: Same as header_encoding, but describes the encoding for the</font>
+<font color="black"> 182.                    mail message's body, which indeed may be different than the</font>
+<font color="black"> 183.                    header encoding.  Charset.SHORTEST is not allowed for</font>
+<font color="black"> 184.                    body_encoding.</font>
+<font color="black"> 185. </font>
+<font color="black"> 186.     output_charset: Some character sets must be converted before they can be</font>
+<font color="black"> 187.                     used in email headers or bodies.  If the input_charset is</font>
+<font color="black"> 188.                     one of them, this attribute will contain the name of the</font>
+<font color="black"> 189.                     charset output will be converted to.  Otherwise, it will</font>
+<font color="black"> 190.                     be None.</font>
+<font color="black"> 191. </font>
+<font color="black"> 192.     input_codec: The name of the Python codec used to convert the</font>
+<font color="black"> 193.                  input_charset to Unicode.  If no conversion codec is</font>
+<font color="black"> 194.                  necessary, this attribute will be None.</font>
+<font color="black"> 195. </font>
+<font color="black"> 196.     output_codec: The name of the Python codec used to convert Unicode</font>
+<font color="black"> 197.                   to the output_charset.  If no conversion codec is necessary,</font>
+<font color="black"> 198.                   this attribute will have the same value as the input_codec.</font>
+<font color="green"> 199.     &quot;&quot;&quot;</font>
+<font color="green"> 200.     def __init__(self, input_charset=DEFAULT_CHARSET):</font>
+<font color="black"> 201.         # RFC 2046, $4.1.2 says charsets are not case sensitive.  We coerce to</font>
+<font color="black"> 202.         # unicode because its .lower() is locale insensitive.  If the argument</font>
+<font color="black"> 203.         # is already a unicode, we leave it at that, but ensure that the</font>
+<font color="black"> 204.         # charset is ASCII, as the standard (RFC XXX) requires.</font>
+<font color="green"> 205.         try:</font>
+<font color="green"> 206.             if isinstance(input_charset, unicode):</font>
+<font color="green"> 207.                 input_charset.encode('ascii')</font>
+<font color="black"> 208.             else:</font>
+<font color="green"> 209.                 input_charset = unicode(input_charset, 'ascii')</font>
+<font color="red"> 210.         except UnicodeError:</font>
+<font color="red"> 211.             raise errors.CharsetError(input_charset)</font>
+<font color="green"> 212.         input_charset = input_charset.lower().encode('ascii')</font>
+<font color="black"> 213.         # Set the input charset after filtering through the aliases and/or codecs</font>
+<font color="green"> 214.         if not (input_charset in ALIASES or input_charset in CHARSETS):</font>
+<font color="red"> 215.             try:</font>
+<font color="red"> 216.                 input_charset = codecs.lookup(input_charset).name</font>
+<font color="red"> 217.             except LookupError:</font>
+<font color="red"> 218.                 pass</font>
+<font color="green"> 219.         self.input_charset = ALIASES.get(input_charset, input_charset)</font>
+<font color="black"> 220.         # We can try to guess which encoding and conversion to use by the</font>
+<font color="black"> 221.         # charset_map dictionary.  Try that first, but let the user override</font>
+<font color="black"> 222.         # it.</font>
+<font color="green"> 223.         henc, benc, conv = CHARSETS.get(self.input_charset,</font>
+<font color="green"> 224.                                         (SHORTEST, BASE64, None))</font>
+<font color="green"> 225.         if not conv:</font>
+<font color="green"> 226.             conv = self.input_charset</font>
+<font color="black"> 227.         # Set the attributes, allowing the arguments to override the default.</font>
+<font color="green"> 228.         self.header_encoding = henc</font>
+<font color="green"> 229.         self.body_encoding = benc</font>
+<font color="green"> 230.         self.output_charset = ALIASES.get(conv, conv)</font>
+<font color="black"> 231.         # Now set the codecs.  If one isn't defined for input_charset,</font>
+<font color="black"> 232.         # guess and try a Unicode codec with the same name as input_codec.</font>
+<font color="green"> 233.         self.input_codec = CODEC_MAP.get(self.input_charset,</font>
+<font color="green"> 234.                                          self.input_charset)</font>
+<font color="green"> 235.         self.output_codec = CODEC_MAP.get(self.output_charset,</font>
+<font color="green"> 236.                                           self.output_charset)</font>
+<font color="black"> 237. </font>
+<font color="green"> 238.     def __str__(self):</font>
+<font color="red"> 239.         return self.input_charset.lower()</font>
+<font color="black"> 240. </font>
+<font color="green"> 241.     __repr__ = __str__</font>
+<font color="black"> 242. </font>
+<font color="green"> 243.     def __eq__(self, other):</font>
+<font color="red"> 244.         return str(self) == str(other).lower()</font>
+<font color="black"> 245. </font>
+<font color="green"> 246.     def __ne__(self, other):</font>
+<font color="red"> 247.         return not self.__eq__(other)</font>
+<font color="black"> 248. </font>
+<font color="green"> 249.     def get_body_encoding(self):</font>
+<font color="black"> 250.         &quot;&quot;&quot;Return the content-transfer-encoding used for body encoding.</font>
+<font color="black"> 251. </font>
+<font color="black"> 252.         This is either the string `quoted-printable' or `base64' depending on</font>
+<font color="black"> 253.         the encoding used, or it is a function in which case you should call</font>
+<font color="black"> 254.         the function with a single argument, the Message object being</font>
+<font color="black"> 255.         encoded.  The function should then set the Content-Transfer-Encoding</font>
+<font color="black"> 256.         header itself to whatever is appropriate.</font>
+<font color="black"> 257. </font>
+<font color="black"> 258.         Returns &quot;quoted-printable&quot; if self.body_encoding is QP.</font>
+<font color="black"> 259.         Returns &quot;base64&quot; if self.body_encoding is BASE64.</font>
+<font color="black"> 260.         Returns &quot;7bit&quot; otherwise.</font>
+<font color="black"> 261.         &quot;&quot;&quot;</font>
+<font color="red"> 262.         assert self.body_encoding != SHORTEST</font>
+<font color="red"> 263.         if self.body_encoding == QP:</font>
+<font color="red"> 264.             return 'quoted-printable'</font>
+<font color="red"> 265.         elif self.body_encoding == BASE64:</font>
+<font color="red"> 266.             return 'base64'</font>
+<font color="black"> 267.         else:</font>
+<font color="red"> 268.             return encode_7or8bit</font>
+<font color="black"> 269. </font>
+<font color="green"> 270.     def convert(self, s):</font>
+<font color="black"> 271.         &quot;&quot;&quot;Convert a string from the input_codec to the output_codec.&quot;&quot;&quot;</font>
+<font color="red"> 272.         if self.input_codec != self.output_codec:</font>
+<font color="red"> 273.             return unicode(s, self.input_codec).encode(self.output_codec)</font>
+<font color="black"> 274.         else:</font>
+<font color="red"> 275.             return s</font>
+<font color="black"> 276. </font>
+<font color="green"> 277.     def to_splittable(self, s):</font>
+<font color="black"> 278.         &quot;&quot;&quot;Convert a possibly multibyte string to a safely splittable format.</font>
+<font color="black"> 279. </font>
+<font color="black"> 280.         Uses the input_codec to try and convert the string to Unicode, so it</font>
+<font color="black"> 281.         can be safely split on character boundaries (even for multibyte</font>
+<font color="black"> 282.         characters).</font>
+<font color="black"> 283. </font>
+<font color="black"> 284.         Returns the string as-is if it isn't known how to convert it to</font>
+<font color="black"> 285.         Unicode with the input_charset.</font>
+<font color="black"> 286. </font>
+<font color="black"> 287.         Characters that could not be converted to Unicode will be replaced</font>
+<font color="black"> 288.         with the Unicode replacement character U+FFFD.</font>
+<font color="black"> 289.         &quot;&quot;&quot;</font>
+<font color="red"> 290.         if isinstance(s, unicode) or self.input_codec is None:</font>
+<font color="red"> 291.             return s</font>
+<font color="red"> 292.         try:</font>
+<font color="red"> 293.             return unicode(s, self.input_codec, 'replace')</font>
+<font color="red"> 294.         except LookupError:</font>
+<font color="black"> 295.             # Input codec not installed on system, so return the original</font>
+<font color="black"> 296.             # string unchanged.</font>
+<font color="red"> 297.             return s</font>
+<font color="black"> 298. </font>
+<font color="green"> 299.     def from_splittable(self, ustr, to_output=True):</font>
+<font color="black"> 300.         &quot;&quot;&quot;Convert a splittable string back into an encoded string.</font>
+<font color="black"> 301. </font>
+<font color="black"> 302.         Uses the proper codec to try and convert the string from Unicode back</font>
+<font color="black"> 303.         into an encoded format.  Return the string as-is if it is not Unicode,</font>
+<font color="black"> 304.         or if it could not be converted from Unicode.</font>
+<font color="black"> 305. </font>
+<font color="black"> 306.         Characters that could not be converted from Unicode will be replaced</font>
+<font color="black"> 307.         with an appropriate character (usually '?').</font>
+<font color="black"> 308. </font>
+<font color="black"> 309.         If to_output is True (the default), uses output_codec to convert to an</font>
+<font color="black"> 310.         encoded format.  If to_output is False, uses input_codec.</font>
+<font color="black"> 311.         &quot;&quot;&quot;</font>
+<font color="red"> 312.         if to_output:</font>
+<font color="red"> 313.             codec = self.output_codec</font>
+<font color="black"> 314.         else:</font>
+<font color="red"> 315.             codec = self.input_codec</font>
+<font color="red"> 316.         if not isinstance(ustr, unicode) or codec is None:</font>
+<font color="red"> 317.             return ustr</font>
+<font color="red"> 318.         try:</font>
+<font color="red"> 319.             return ustr.encode(codec, 'replace')</font>
+<font color="red"> 320.         except LookupError:</font>
+<font color="black"> 321.             # Output codec not installed</font>
+<font color="red"> 322.             return ustr</font>
+<font color="black"> 323. </font>
+<font color="green"> 324.     def get_output_charset(self):</font>
+<font color="black"> 325.         &quot;&quot;&quot;Return the output character set.</font>
+<font color="black"> 326. </font>
+<font color="black"> 327.         This is self.output_charset if that is not None, otherwise it is</font>
+<font color="black"> 328.         self.input_charset.</font>
+<font color="black"> 329.         &quot;&quot;&quot;</font>
+<font color="red"> 330.         return self.output_charset or self.input_charset</font>
+<font color="black"> 331. </font>
+<font color="green"> 332.     def encoded_header_len(self, s):</font>
+<font color="black"> 333.         &quot;&quot;&quot;Return the length of the encoded header string.&quot;&quot;&quot;</font>
+<font color="red"> 334.         cset = self.get_output_charset()</font>
+<font color="black"> 335.         # The len(s) of a 7bit encoding is len(s)</font>
+<font color="red"> 336.         if self.header_encoding == BASE64:</font>
+<font color="red"> 337.             return email.base64mime.base64_len(s) + len(cset) + MISC_LEN</font>
+<font color="red"> 338.         elif self.header_encoding == QP:</font>
+<font color="red"> 339.             return email.quoprimime.header_quopri_len(s) + len(cset) + MISC_LEN</font>
+<font color="red"> 340.         elif self.header_encoding == SHORTEST:</font>
+<font color="red"> 341.             lenb64 = email.base64mime.base64_len(s)</font>
+<font color="red"> 342.             lenqp = email.quoprimime.header_quopri_len(s)</font>
+<font color="red"> 343.             return min(lenb64, lenqp) + len(cset) + MISC_LEN</font>
+<font color="black"> 344.         else:</font>
+<font color="red"> 345.             return len(s)</font>
+<font color="black"> 346. </font>
+<font color="green"> 347.     def header_encode(self, s, convert=False):</font>
+<font color="black"> 348.         &quot;&quot;&quot;Header-encode a string, optionally converting it to output_charset.</font>
+<font color="black"> 349. </font>
+<font color="black"> 350.         If convert is True, the string will be converted from the input</font>
+<font color="black"> 351.         charset to the output charset automatically.  This is not useful for</font>
+<font color="black"> 352.         multibyte character sets, which have line length issues (multibyte</font>
+<font color="black"> 353.         characters must be split on a character, not a byte boundary); use the</font>
+<font color="black"> 354.         high-level Header class to deal with these issues.  convert defaults</font>
+<font color="black"> 355.         to False.</font>
+<font color="black"> 356. </font>
+<font color="black"> 357.         The type of encoding (base64 or quoted-printable) will be based on</font>
+<font color="black"> 358.         self.header_encoding.</font>
+<font color="black"> 359.         &quot;&quot;&quot;</font>
+<font color="red"> 360.         cset = self.get_output_charset()</font>
+<font color="red"> 361.         if convert:</font>
+<font color="red"> 362.             s = self.convert(s)</font>
+<font color="black"> 363.         # 7bit/8bit encodings return the string unchanged (modulo conversions)</font>
+<font color="red"> 364.         if self.header_encoding == BASE64:</font>
+<font color="red"> 365.             return email.base64mime.header_encode(s, cset)</font>
+<font color="red"> 366.         elif self.header_encoding == QP:</font>
+<font color="red"> 367.             return email.quoprimime.header_encode(s, cset, maxlinelen=None)</font>
+<font color="red"> 368.         elif self.header_encoding == SHORTEST:</font>
+<font color="red"> 369.             lenb64 = email.base64mime.base64_len(s)</font>
+<font color="red"> 370.             lenqp = email.quoprimime.header_quopri_len(s)</font>
+<font color="red"> 371.             if lenb64 &lt; lenqp:</font>
+<font color="red"> 372.                 return email.base64mime.header_encode(s, cset)</font>
+<font color="black"> 373.             else:</font>
+<font color="red"> 374.                 return email.quoprimime.header_encode(s, cset, maxlinelen=None)</font>
+<font color="black"> 375.         else:</font>
+<font color="red"> 376.             return s</font>
+<font color="black"> 377. </font>
+<font color="green"> 378.     def body_encode(self, s, convert=True):</font>
+<font color="black"> 379.         &quot;&quot;&quot;Body-encode a string and convert it to output_charset.</font>
+<font color="black"> 380. </font>
+<font color="black"> 381.         If convert is True (the default), the string will be converted from</font>
+<font color="black"> 382.         the input charset to output charset automatically.  Unlike</font>
+<font color="black"> 383.         header_encode(), there are no issues with byte boundaries and</font>
+<font color="black"> 384.         multibyte charsets in email bodies, so this is usually pretty safe.</font>
+<font color="black"> 385. </font>
+<font color="black"> 386.         The type of encoding (base64 or quoted-printable) will be based on</font>
+<font color="black"> 387.         self.body_encoding.</font>
+<font color="black"> 388.         &quot;&quot;&quot;</font>
+<font color="red"> 389.         if convert:</font>
+<font color="red"> 390.             s = self.convert(s)</font>
+<font color="black"> 391.         # 7bit/8bit encodings return the string unchanged (module conversions)</font>
+<font color="red"> 392.         if self.body_encoding is BASE64:</font>
+<font color="red"> 393.             return email.base64mime.body_encode(s)</font>
+<font color="red"> 394.         elif self.body_encoding is QP:</font>
+<font color="red"> 395.             return email.quoprimime.body_encode(s)</font>
+<font color="black"> 396.         else:</font>
+<font color="red"> 397.             return s</font>
+</pre>
+

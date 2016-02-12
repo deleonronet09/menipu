@@ -1,0 +1,86 @@
+source file: <b>/usr/lib/python2.7/encodings/hex_codec.py</b><br>
+
+
+file stats: <b>36 lines, 27 executed: 75.0% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot; Python 'hex_codec' Codec - 2-digit hex content transfer encoding</font>
+<font color="black">   2. </font>
+<font color="black">   3.     Unlike most of the other codecs which target Unicode, this codec</font>
+<font color="black">   4.     will return Python string objects for both encode and decode.</font>
+<font color="black">   5. </font>
+<font color="black">   6.     Written by Marc-Andre Lemburg (mal@lemburg.com).</font>
+<font color="black">   7. </font>
+<font color="green">   8. &quot;&quot;&quot;</font>
+<font color="green">   9. import codecs, binascii</font>
+<font color="black">  10. </font>
+<font color="black">  11. ### Codec APIs</font>
+<font color="black">  12. </font>
+<font color="green">  13. def hex_encode(input,errors='strict'):</font>
+<font color="black">  14. </font>
+<font color="black">  15.     &quot;&quot;&quot; Encodes the object input and returns a tuple (output</font>
+<font color="black">  16.         object, length consumed).</font>
+<font color="black">  17. </font>
+<font color="black">  18.         errors defines the error handling to apply. It defaults to</font>
+<font color="black">  19.         'strict' handling which is the only currently supported</font>
+<font color="black">  20.         error handling for this codec.</font>
+<font color="black">  21. </font>
+<font color="black">  22.     &quot;&quot;&quot;</font>
+<font color="red">  23.     assert errors == 'strict'</font>
+<font color="red">  24.     output = binascii.b2a_hex(input)</font>
+<font color="red">  25.     return (output, len(input))</font>
+<font color="black">  26. </font>
+<font color="green">  27. def hex_decode(input,errors='strict'):</font>
+<font color="black">  28. </font>
+<font color="black">  29.     &quot;&quot;&quot; Decodes the object input and returns a tuple (output</font>
+<font color="black">  30.         object, length consumed).</font>
+<font color="black">  31. </font>
+<font color="black">  32.         input must be an object which provides the bf_getreadbuf</font>
+<font color="black">  33.         buffer slot. Python strings, buffer objects and memory</font>
+<font color="black">  34.         mapped files are examples of objects providing this slot.</font>
+<font color="black">  35. </font>
+<font color="black">  36.         errors defines the error handling to apply. It defaults to</font>
+<font color="black">  37.         'strict' handling which is the only currently supported</font>
+<font color="black">  38.         error handling for this codec.</font>
+<font color="black">  39. </font>
+<font color="black">  40.     &quot;&quot;&quot;</font>
+<font color="green">  41.     assert errors == 'strict'</font>
+<font color="green">  42.     output = binascii.a2b_hex(input)</font>
+<font color="green">  43.     return (output, len(input))</font>
+<font color="black">  44. </font>
+<font color="green">  45. class Codec(codecs.Codec):</font>
+<font color="black">  46. </font>
+<font color="green">  47.     def encode(self, input,errors='strict'):</font>
+<font color="red">  48.         return hex_encode(input,errors)</font>
+<font color="green">  49.     def decode(self, input,errors='strict'):</font>
+<font color="red">  50.         return hex_decode(input,errors)</font>
+<font color="black">  51. </font>
+<font color="green">  52. class IncrementalEncoder(codecs.IncrementalEncoder):</font>
+<font color="green">  53.     def encode(self, input, final=False):</font>
+<font color="red">  54.         assert self.errors == 'strict'</font>
+<font color="red">  55.         return binascii.b2a_hex(input)</font>
+<font color="black">  56. </font>
+<font color="green">  57. class IncrementalDecoder(codecs.IncrementalDecoder):</font>
+<font color="green">  58.     def decode(self, input, final=False):</font>
+<font color="red">  59.         assert self.errors == 'strict'</font>
+<font color="red">  60.         return binascii.a2b_hex(input)</font>
+<font color="black">  61. </font>
+<font color="green">  62. class StreamWriter(Codec,codecs.StreamWriter):</font>
+<font color="green">  63.     pass</font>
+<font color="black">  64. </font>
+<font color="green">  65. class StreamReader(Codec,codecs.StreamReader):</font>
+<font color="green">  66.     pass</font>
+<font color="black">  67. </font>
+<font color="black">  68. ### encodings module API</font>
+<font color="black">  69. </font>
+<font color="green">  70. def getregentry():</font>
+<font color="green">  71.     return codecs.CodecInfo(</font>
+<font color="green">  72.         name='hex',</font>
+<font color="green">  73.         encode=hex_encode,</font>
+<font color="green">  74.         decode=hex_decode,</font>
+<font color="green">  75.         incrementalencoder=IncrementalEncoder,</font>
+<font color="green">  76.         incrementaldecoder=IncrementalDecoder,</font>
+<font color="green">  77.         streamwriter=StreamWriter,</font>
+<font color="green">  78.         streamreader=StreamReader,</font>
+<font color="black">  79.     )</font>
+</pre>
+

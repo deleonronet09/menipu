@@ -1,0 +1,95 @@
+source file: <b>/usr/lib/python2.7/UserList.py</b><br>
+
+
+file stats: <b>79 lines, 37 executed: 46.8% covered</b>
+<pre>
+<font color="green">   1. &quot;&quot;&quot;A more or less complete user-defined wrapper around list objects.&quot;&quot;&quot;</font>
+<font color="black">   2. </font>
+<font color="green">   3. import collections</font>
+<font color="black">   4. </font>
+<font color="green">   5. class UserList(collections.MutableSequence):</font>
+<font color="green">   6.     def __init__(self, initlist=None):</font>
+<font color="red">   7.         self.data = []</font>
+<font color="red">   8.         if initlist is not None:</font>
+<font color="black">   9.             # XXX should this accept an arbitrary sequence?</font>
+<font color="red">  10.             if type(initlist) == type(self.data):</font>
+<font color="red">  11.                 self.data[:] = initlist</font>
+<font color="red">  12.             elif isinstance(initlist, UserList):</font>
+<font color="red">  13.                 self.data[:] = initlist.data[:]</font>
+<font color="black">  14.             else:</font>
+<font color="red">  15.                 self.data = list(initlist)</font>
+<font color="green">  16.     def __repr__(self): return repr(self.data)</font>
+<font color="green">  17.     def __lt__(self, other): return self.data &lt;  self.__cast(other)</font>
+<font color="green">  18.     def __le__(self, other): return self.data &lt;= self.__cast(other)</font>
+<font color="green">  19.     def __eq__(self, other): return self.data == self.__cast(other)</font>
+<font color="green">  20.     def __ne__(self, other): return self.data != self.__cast(other)</font>
+<font color="green">  21.     def __gt__(self, other): return self.data &gt;  self.__cast(other)</font>
+<font color="green">  22.     def __ge__(self, other): return self.data &gt;= self.__cast(other)</font>
+<font color="green">  23.     def __cast(self, other):</font>
+<font color="red">  24.         if isinstance(other, UserList): return other.data</font>
+<font color="red">  25.         else: return other</font>
+<font color="green">  26.     def __cmp__(self, other):</font>
+<font color="red">  27.         return cmp(self.data, self.__cast(other))</font>
+<font color="green">  28.     __hash__ = None # Mutable sequence, so not hashable</font>
+<font color="green">  29.     def __contains__(self, item): return item in self.data</font>
+<font color="green">  30.     def __len__(self): return len(self.data)</font>
+<font color="green">  31.     def __getitem__(self, i): return self.data[i]</font>
+<font color="green">  32.     def __setitem__(self, i, item): self.data[i] = item</font>
+<font color="green">  33.     def __delitem__(self, i): del self.data[i]</font>
+<font color="green">  34.     def __getslice__(self, i, j):</font>
+<font color="red">  35.         i = max(i, 0); j = max(j, 0)</font>
+<font color="red">  36.         return self.__class__(self.data[i:j])</font>
+<font color="green">  37.     def __setslice__(self, i, j, other):</font>
+<font color="red">  38.         i = max(i, 0); j = max(j, 0)</font>
+<font color="red">  39.         if isinstance(other, UserList):</font>
+<font color="red">  40.             self.data[i:j] = other.data</font>
+<font color="red">  41.         elif isinstance(other, type(self.data)):</font>
+<font color="red">  42.             self.data[i:j] = other</font>
+<font color="black">  43.         else:</font>
+<font color="red">  44.             self.data[i:j] = list(other)</font>
+<font color="green">  45.     def __delslice__(self, i, j):</font>
+<font color="red">  46.         i = max(i, 0); j = max(j, 0)</font>
+<font color="red">  47.         del self.data[i:j]</font>
+<font color="green">  48.     def __add__(self, other):</font>
+<font color="red">  49.         if isinstance(other, UserList):</font>
+<font color="red">  50.             return self.__class__(self.data + other.data)</font>
+<font color="red">  51.         elif isinstance(other, type(self.data)):</font>
+<font color="red">  52.             return self.__class__(self.data + other)</font>
+<font color="black">  53.         else:</font>
+<font color="red">  54.             return self.__class__(self.data + list(other))</font>
+<font color="green">  55.     def __radd__(self, other):</font>
+<font color="red">  56.         if isinstance(other, UserList):</font>
+<font color="red">  57.             return self.__class__(other.data + self.data)</font>
+<font color="red">  58.         elif isinstance(other, type(self.data)):</font>
+<font color="red">  59.             return self.__class__(other + self.data)</font>
+<font color="black">  60.         else:</font>
+<font color="red">  61.             return self.__class__(list(other) + self.data)</font>
+<font color="green">  62.     def __iadd__(self, other):</font>
+<font color="red">  63.         if isinstance(other, UserList):</font>
+<font color="red">  64.             self.data += other.data</font>
+<font color="red">  65.         elif isinstance(other, type(self.data)):</font>
+<font color="red">  66.             self.data += other</font>
+<font color="black">  67.         else:</font>
+<font color="red">  68.             self.data += list(other)</font>
+<font color="red">  69.         return self</font>
+<font color="green">  70.     def __mul__(self, n):</font>
+<font color="red">  71.         return self.__class__(self.data*n)</font>
+<font color="green">  72.     __rmul__ = __mul__</font>
+<font color="green">  73.     def __imul__(self, n):</font>
+<font color="red">  74.         self.data *= n</font>
+<font color="red">  75.         return self</font>
+<font color="green">  76.     def append(self, item): self.data.append(item)</font>
+<font color="green">  77.     def insert(self, i, item): self.data.insert(i, item)</font>
+<font color="green">  78.     def pop(self, i=-1): return self.data.pop(i)</font>
+<font color="green">  79.     def remove(self, item): self.data.remove(item)</font>
+<font color="green">  80.     def count(self, item): return self.data.count(item)</font>
+<font color="green">  81.     def index(self, item, *args): return self.data.index(item, *args)</font>
+<font color="green">  82.     def reverse(self): self.data.reverse()</font>
+<font color="green">  83.     def sort(self, *args, **kwds): self.data.sort(*args, **kwds)</font>
+<font color="green">  84.     def extend(self, other):</font>
+<font color="red">  85.         if isinstance(other, UserList):</font>
+<font color="red">  86.             self.data.extend(other.data)</font>
+<font color="black">  87.         else:</font>
+<font color="red">  88.             self.data.extend(other)</font>
+</pre>
+

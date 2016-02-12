@@ -1,0 +1,407 @@
+source file: <b>/usr/lib/python2.7/warnings.py</b><br>
+
+
+file stats: <b>270 lines, 20 executed: 7.4% covered</b>
+<pre>
+<font color="red">   1. &quot;&quot;&quot;Python part of the warnings subsystem.&quot;&quot;&quot;</font>
+<font color="black">   2. </font>
+<font color="black">   3. # Note: function level imports should *not* be used</font>
+<font color="black">   4. # in this module as it may cause import lock deadlock.</font>
+<font color="black">   5. # See bug 683658.</font>
+<font color="red">   6. import linecache</font>
+<font color="red">   7. import sys</font>
+<font color="red">   8. import types</font>
+<font color="black">   9. </font>
+<font color="red">  10. __all__ = [&quot;warn&quot;, &quot;showwarning&quot;, &quot;formatwarning&quot;, &quot;filterwarnings&quot;,</font>
+<font color="red">  11.            &quot;resetwarnings&quot;, &quot;catch_warnings&quot;]</font>
+<font color="black">  12. </font>
+<font color="black">  13. </font>
+<font color="red">  14. def warnpy3k(message, category=None, stacklevel=1):</font>
+<font color="black">  15.     &quot;&quot;&quot;Issue a deprecation warning for Python 3.x related changes.</font>
+<font color="black">  16. </font>
+<font color="black">  17.     Warnings are omitted unless Python is started with the -3 option.</font>
+<font color="black">  18.     &quot;&quot;&quot;</font>
+<font color="green">  19.     if sys.py3kwarning:</font>
+<font color="red">  20.         if category is None:</font>
+<font color="red">  21.             category = DeprecationWarning</font>
+<font color="red">  22.         warn(message, category, stacklevel+1)</font>
+<font color="black">  23. </font>
+<font color="red">  24. def _show_warning(message, category, filename, lineno, file=None, line=None):</font>
+<font color="black">  25.     &quot;&quot;&quot;Hook to write a warning to a file; replace if you like.&quot;&quot;&quot;</font>
+<font color="red">  26.     if file is None:</font>
+<font color="red">  27.         file = sys.stderr</font>
+<font color="red">  28.     try:</font>
+<font color="red">  29.         file.write(formatwarning(message, category, filename, lineno, line))</font>
+<font color="red">  30.     except IOError:</font>
+<font color="red">  31.         pass # the file (probably stderr) is invalid - this warning gets lost.</font>
+<font color="black">  32. # Keep a working version around in case the deprecation of the old API is</font>
+<font color="black">  33. # triggered.</font>
+<font color="red">  34. showwarning = _show_warning</font>
+<font color="black">  35. </font>
+<font color="red">  36. def formatwarning(message, category, filename, lineno, line=None):</font>
+<font color="black">  37.     &quot;&quot;&quot;Function to format a warning the standard way.&quot;&quot;&quot;</font>
+<font color="red">  38.     s =  &quot;%s:%s: %s: %s\n&quot; % (filename, lineno, category.__name__, message)</font>
+<font color="red">  39.     line = linecache.getline(filename, lineno) if line is None else line</font>
+<font color="red">  40.     if line:</font>
+<font color="red">  41.         line = line.strip()</font>
+<font color="red">  42.         s += &quot;  %s\n&quot; % line</font>
+<font color="red">  43.     return s</font>
+<font color="black">  44. </font>
+<font color="red">  45. def filterwarnings(action, message=&quot;&quot;, category=Warning, module=&quot;&quot;, lineno=0,</font>
+<font color="red">  46.                    append=0):</font>
+<font color="black">  47.     &quot;&quot;&quot;Insert an entry into the list of warnings filters (at the front).</font>
+<font color="black">  48. </font>
+<font color="black">  49.     'action' -- one of &quot;error&quot;, &quot;ignore&quot;, &quot;always&quot;, &quot;default&quot;, &quot;module&quot;,</font>
+<font color="black">  50.                 or &quot;once&quot;</font>
+<font color="black">  51.     'message' -- a regex that the warning message must match</font>
+<font color="black">  52.     'category' -- a class that the warning must be a subclass of</font>
+<font color="black">  53.     'module' -- a regex that the module name must match</font>
+<font color="black">  54.     'lineno' -- an integer line number, 0 matches all warnings</font>
+<font color="black">  55.     'append' -- if true, append to the list of filters</font>
+<font color="black">  56.     &quot;&quot;&quot;</font>
+<font color="red">  57.     import re</font>
+<font color="red">  58.     assert action in (&quot;error&quot;, &quot;ignore&quot;, &quot;always&quot;, &quot;default&quot;, &quot;module&quot;,</font>
+<font color="red">  59.                       &quot;once&quot;), &quot;invalid action: %r&quot; % (action,)</font>
+<font color="red">  60.     assert isinstance(message, basestring), &quot;message must be a string&quot;</font>
+<font color="red">  61.     assert isinstance(category, (type, types.ClassType)), \</font>
+<font color="red">  62.            &quot;category must be a class&quot;</font>
+<font color="red">  63.     assert issubclass(category, Warning), &quot;category must be a Warning subclass&quot;</font>
+<font color="red">  64.     assert isinstance(module, basestring), &quot;module must be a string&quot;</font>
+<font color="red">  65.     assert isinstance(lineno, int) and lineno &gt;= 0, \</font>
+<font color="red">  66.            &quot;lineno must be an int &gt;= 0&quot;</font>
+<font color="red">  67.     item = (action, re.compile(message, re.I), category,</font>
+<font color="red">  68.             re.compile(module), lineno)</font>
+<font color="red">  69.     if append:</font>
+<font color="red">  70.         filters.append(item)</font>
+<font color="black">  71.     else:</font>
+<font color="red">  72.         filters.insert(0, item)</font>
+<font color="black">  73. </font>
+<font color="red">  74. def simplefilter(action, category=Warning, lineno=0, append=0):</font>
+<font color="black">  75.     &quot;&quot;&quot;Insert a simple entry into the list of warnings filters (at the front).</font>
+<font color="black">  76. </font>
+<font color="black">  77.     A simple filter matches all modules and messages.</font>
+<font color="black">  78.     'action' -- one of &quot;error&quot;, &quot;ignore&quot;, &quot;always&quot;, &quot;default&quot;, &quot;module&quot;,</font>
+<font color="black">  79.                 or &quot;once&quot;</font>
+<font color="black">  80.     'category' -- a class that the warning must be a subclass of</font>
+<font color="black">  81.     'lineno' -- an integer line number, 0 matches all warnings</font>
+<font color="black">  82.     'append' -- if true, append to the list of filters</font>
+<font color="black">  83.     &quot;&quot;&quot;</font>
+<font color="green">  84.     assert action in (&quot;error&quot;, &quot;ignore&quot;, &quot;always&quot;, &quot;default&quot;, &quot;module&quot;,</font>
+<font color="green">  85.                       &quot;once&quot;), &quot;invalid action: %r&quot; % (action,)</font>
+<font color="green">  86.     assert isinstance(lineno, int) and lineno &gt;= 0, \</font>
+<font color="red">  87.            &quot;lineno must be an int &gt;= 0&quot;</font>
+<font color="green">  88.     item = (action, None, category, None, lineno)</font>
+<font color="green">  89.     if append:</font>
+<font color="red">  90.         filters.append(item)</font>
+<font color="black">  91.     else:</font>
+<font color="green">  92.         filters.insert(0, item)</font>
+<font color="black">  93. </font>
+<font color="red">  94. def resetwarnings():</font>
+<font color="black">  95.     &quot;&quot;&quot;Clear the list of warning filters, so that no filters are active.&quot;&quot;&quot;</font>
+<font color="red">  96.     filters[:] = []</font>
+<font color="black">  97. </font>
+<font color="red">  98. class _OptionError(Exception):</font>
+<font color="red">  99.     &quot;&quot;&quot;Exception used by option processing helpers.&quot;&quot;&quot;</font>
+<font color="red"> 100.     pass</font>
+<font color="black"> 101. </font>
+<font color="black"> 102. # Helper to process -W options passed via sys.warnoptions</font>
+<font color="red"> 103. def _processoptions(args):</font>
+<font color="red"> 104.     for arg in args:</font>
+<font color="red"> 105.         try:</font>
+<font color="red"> 106.             _setoption(arg)</font>
+<font color="red"> 107.         except _OptionError, msg:</font>
+<font color="red"> 108.             print &gt;&gt;sys.stderr, &quot;Invalid -W option ignored:&quot;, msg</font>
+<font color="black"> 109. </font>
+<font color="black"> 110. # Helper for _processoptions()</font>
+<font color="red"> 111. def _setoption(arg):</font>
+<font color="red"> 112.     import re</font>
+<font color="red"> 113.     parts = arg.split(':')</font>
+<font color="red"> 114.     if len(parts) &gt; 5:</font>
+<font color="red"> 115.         raise _OptionError(&quot;too many fields (max 5): %r&quot; % (arg,))</font>
+<font color="red"> 116.     while len(parts) &lt; 5:</font>
+<font color="red"> 117.         parts.append('')</font>
+<font color="red"> 118.     action, message, category, module, lineno = [s.strip()</font>
+<font color="red"> 119.                                                  for s in parts]</font>
+<font color="red"> 120.     action = _getaction(action)</font>
+<font color="red"> 121.     message = re.escape(message)</font>
+<font color="red"> 122.     category = _getcategory(category)</font>
+<font color="red"> 123.     module = re.escape(module)</font>
+<font color="red"> 124.     if module:</font>
+<font color="red"> 125.         module = module + '$'</font>
+<font color="red"> 126.     if lineno:</font>
+<font color="red"> 127.         try:</font>
+<font color="red"> 128.             lineno = int(lineno)</font>
+<font color="red"> 129.             if lineno &lt; 0:</font>
+<font color="red"> 130.                 raise ValueError</font>
+<font color="red"> 131.         except (ValueError, OverflowError):</font>
+<font color="red"> 132.             raise _OptionError(&quot;invalid lineno %r&quot; % (lineno,))</font>
+<font color="black"> 133.     else:</font>
+<font color="red"> 134.         lineno = 0</font>
+<font color="red"> 135.     filterwarnings(action, message, category, module, lineno)</font>
+<font color="black"> 136. </font>
+<font color="black"> 137. # Helper for _setoption()</font>
+<font color="red"> 138. def _getaction(action):</font>
+<font color="red"> 139.     if not action:</font>
+<font color="red"> 140.         return &quot;default&quot;</font>
+<font color="red"> 141.     if action == &quot;all&quot;: return &quot;always&quot; # Alias</font>
+<font color="red"> 142.     for a in ('default', 'always', 'ignore', 'module', 'once', 'error'):</font>
+<font color="red"> 143.         if a.startswith(action):</font>
+<font color="red"> 144.             return a</font>
+<font color="red"> 145.     raise _OptionError(&quot;invalid action: %r&quot; % (action,))</font>
+<font color="black"> 146. </font>
+<font color="black"> 147. # Helper for _setoption()</font>
+<font color="red"> 148. def _getcategory(category):</font>
+<font color="red"> 149.     import re</font>
+<font color="red"> 150.     if not category:</font>
+<font color="red"> 151.         return Warning</font>
+<font color="red"> 152.     if re.match(&quot;^[a-zA-Z0-9_]+$&quot;, category):</font>
+<font color="red"> 153.         try:</font>
+<font color="red"> 154.             cat = eval(category)</font>
+<font color="red"> 155.         except NameError:</font>
+<font color="red"> 156.             raise _OptionError(&quot;unknown warning category: %r&quot; % (category,))</font>
+<font color="black"> 157.     else:</font>
+<font color="red"> 158.         i = category.rfind(&quot;.&quot;)</font>
+<font color="red"> 159.         module = category[:i]</font>
+<font color="red"> 160.         klass = category[i+1:]</font>
+<font color="red"> 161.         try:</font>
+<font color="red"> 162.             m = __import__(module, None, None, [klass])</font>
+<font color="red"> 163.         except ImportError:</font>
+<font color="red"> 164.             raise _OptionError(&quot;invalid module name: %r&quot; % (module,))</font>
+<font color="red"> 165.         try:</font>
+<font color="red"> 166.             cat = getattr(m, klass)</font>
+<font color="red"> 167.         except AttributeError:</font>
+<font color="red"> 168.             raise _OptionError(&quot;unknown warning category: %r&quot; % (category,))</font>
+<font color="red"> 169.     if not issubclass(cat, Warning):</font>
+<font color="red"> 170.         raise _OptionError(&quot;invalid warning category: %r&quot; % (category,))</font>
+<font color="red"> 171.     return cat</font>
+<font color="black"> 172. </font>
+<font color="black"> 173. </font>
+<font color="black"> 174. # Code typically replaced by _warnings</font>
+<font color="red"> 175. def warn(message, category=None, stacklevel=1):</font>
+<font color="black"> 176.     &quot;&quot;&quot;Issue a warning, or maybe ignore it or raise an exception.&quot;&quot;&quot;</font>
+<font color="black"> 177.     # Check if message is already a Warning object</font>
+<font color="red"> 178.     if isinstance(message, Warning):</font>
+<font color="red"> 179.         category = message.__class__</font>
+<font color="black"> 180.     # Check category argument</font>
+<font color="red"> 181.     if category is None:</font>
+<font color="red"> 182.         category = UserWarning</font>
+<font color="red"> 183.     assert issubclass(category, Warning)</font>
+<font color="black"> 184.     # Get context information</font>
+<font color="red"> 185.     try:</font>
+<font color="red"> 186.         caller = sys._getframe(stacklevel)</font>
+<font color="red"> 187.     except ValueError:</font>
+<font color="red"> 188.         globals = sys.__dict__</font>
+<font color="red"> 189.         lineno = 1</font>
+<font color="black"> 190.     else:</font>
+<font color="red"> 191.         globals = caller.f_globals</font>
+<font color="red"> 192.         lineno = caller.f_lineno</font>
+<font color="red"> 193.     if '__name__' in globals:</font>
+<font color="red"> 194.         module = globals['__name__']</font>
+<font color="black"> 195.     else:</font>
+<font color="red"> 196.         module = &quot;&lt;string&gt;&quot;</font>
+<font color="red"> 197.     filename = globals.get('__file__')</font>
+<font color="red"> 198.     if filename:</font>
+<font color="red"> 199.         fnl = filename.lower()</font>
+<font color="red"> 200.         if fnl.endswith((&quot;.pyc&quot;, &quot;.pyo&quot;)):</font>
+<font color="red"> 201.             filename = filename[:-1]</font>
+<font color="black"> 202.     else:</font>
+<font color="red"> 203.         if module == &quot;__main__&quot;:</font>
+<font color="red"> 204.             try:</font>
+<font color="red"> 205.                 filename = sys.argv[0]</font>
+<font color="red"> 206.             except AttributeError:</font>
+<font color="black"> 207.                 # embedded interpreters don't have sys.argv, see bug #839151</font>
+<font color="red"> 208.                 filename = '__main__'</font>
+<font color="red"> 209.         if not filename:</font>
+<font color="red"> 210.             filename = module</font>
+<font color="red"> 211.     registry = globals.setdefault(&quot;__warningregistry__&quot;, {})</font>
+<font color="red"> 212.     warn_explicit(message, category, filename, lineno, module, registry,</font>
+<font color="red"> 213.                   globals)</font>
+<font color="black"> 214. </font>
+<font color="black"> 215. def warn_explicit(message, category, filename, lineno,</font>
+<font color="red"> 216.                   module=None, registry=None, module_globals=None):</font>
+<font color="red"> 217.     lineno = int(lineno)</font>
+<font color="red"> 218.     if module is None:</font>
+<font color="red"> 219.         module = filename or &quot;&lt;unknown&gt;&quot;</font>
+<font color="red"> 220.         if module[-3:].lower() == &quot;.py&quot;:</font>
+<font color="red"> 221.             module = module[:-3] # XXX What about leading pathname?</font>
+<font color="red"> 222.     if registry is None:</font>
+<font color="red"> 223.         registry = {}</font>
+<font color="red"> 224.     if isinstance(message, Warning):</font>
+<font color="red"> 225.         text = str(message)</font>
+<font color="red"> 226.         category = message.__class__</font>
+<font color="black"> 227.     else:</font>
+<font color="red"> 228.         text = message</font>
+<font color="red"> 229.         message = category(message)</font>
+<font color="red"> 230.     key = (text, category, lineno)</font>
+<font color="black"> 231.     # Quick test for common case</font>
+<font color="red"> 232.     if registry.get(key):</font>
+<font color="red"> 233.         return</font>
+<font color="black"> 234.     # Search the filters</font>
+<font color="red"> 235.     for item in filters:</font>
+<font color="red"> 236.         action, msg, cat, mod, ln = item</font>
+<font color="red"> 237.         if ((msg is None or msg.match(text)) and</font>
+<font color="red"> 238.             issubclass(category, cat) and</font>
+<font color="red"> 239.             (mod is None or mod.match(module)) and</font>
+<font color="red"> 240.             (ln == 0 or lineno == ln)):</font>
+<font color="red"> 241.             break</font>
+<font color="black"> 242.     else:</font>
+<font color="red"> 243.         action = defaultaction</font>
+<font color="black"> 244.     # Early exit actions</font>
+<font color="red"> 245.     if action == &quot;ignore&quot;:</font>
+<font color="red"> 246.         registry[key] = 1</font>
+<font color="red"> 247.         return</font>
+<font color="black"> 248. </font>
+<font color="black"> 249.     # Prime the linecache for formatting, in case the</font>
+<font color="black"> 250.     # &quot;file&quot; is actually in a zipfile or something.</font>
+<font color="red"> 251.     linecache.getlines(filename, module_globals)</font>
+<font color="black"> 252. </font>
+<font color="red"> 253.     if action == &quot;error&quot;:</font>
+<font color="red"> 254.         raise message</font>
+<font color="black"> 255.     # Other actions</font>
+<font color="red"> 256.     if action == &quot;once&quot;:</font>
+<font color="red"> 257.         registry[key] = 1</font>
+<font color="red"> 258.         oncekey = (text, category)</font>
+<font color="red"> 259.         if onceregistry.get(oncekey):</font>
+<font color="red"> 260.             return</font>
+<font color="red"> 261.         onceregistry[oncekey] = 1</font>
+<font color="red"> 262.     elif action == &quot;always&quot;:</font>
+<font color="red"> 263.         pass</font>
+<font color="red"> 264.     elif action == &quot;module&quot;:</font>
+<font color="red"> 265.         registry[key] = 1</font>
+<font color="red"> 266.         altkey = (text, category, 0)</font>
+<font color="red"> 267.         if registry.get(altkey):</font>
+<font color="red"> 268.             return</font>
+<font color="red"> 269.         registry[altkey] = 1</font>
+<font color="red"> 270.     elif action == &quot;default&quot;:</font>
+<font color="red"> 271.         registry[key] = 1</font>
+<font color="black"> 272.     else:</font>
+<font color="black"> 273.         # Unrecognized actions are errors</font>
+<font color="red"> 274.         raise RuntimeError(</font>
+<font color="red"> 275.               &quot;Unrecognized action (%r) in warnings.filters:\n %s&quot; %</font>
+<font color="red"> 276.               (action, item))</font>
+<font color="black"> 277.     # Print message and context</font>
+<font color="red"> 278.     showwarning(message, category, filename, lineno)</font>
+<font color="black"> 279. </font>
+<font color="black"> 280. </font>
+<font color="red"> 281. class WarningMessage(object):</font>
+<font color="black"> 282. </font>
+<font color="red"> 283.     &quot;&quot;&quot;Holds the result of a single showwarning() call.&quot;&quot;&quot;</font>
+<font color="black"> 284. </font>
+<font color="black"> 285.     _WARNING_DETAILS = (&quot;message&quot;, &quot;category&quot;, &quot;filename&quot;, &quot;lineno&quot;, &quot;file&quot;,</font>
+<font color="red"> 286.                         &quot;line&quot;)</font>
+<font color="black"> 287. </font>
+<font color="red"> 288.     def __init__(self, message, category, filename, lineno, file=None,</font>
+<font color="red"> 289.                     line=None):</font>
+<font color="red"> 290.         local_values = locals()</font>
+<font color="red"> 291.         for attr in self._WARNING_DETAILS:</font>
+<font color="red"> 292.             setattr(self, attr, local_values[attr])</font>
+<font color="red"> 293.         self._category_name = category.__name__ if category else None</font>
+<font color="black"> 294. </font>
+<font color="red"> 295.     def __str__(self):</font>
+<font color="red"> 296.         return (&quot;{message : %r, category : %r, filename : %r, lineno : %s, &quot;</font>
+<font color="red"> 297.                     &quot;line : %r}&quot; % (self.message, self._category_name,</font>
+<font color="red"> 298.                                     self.filename, self.lineno, self.line))</font>
+<font color="black"> 299. </font>
+<font color="black"> 300. </font>
+<font color="red"> 301. class catch_warnings(object):</font>
+<font color="black"> 302. </font>
+<font color="black"> 303.     &quot;&quot;&quot;A context manager that copies and restores the warnings filter upon</font>
+<font color="black"> 304.     exiting the context.</font>
+<font color="black"> 305. </font>
+<font color="black"> 306.     The 'record' argument specifies whether warnings should be captured by a</font>
+<font color="black"> 307.     custom implementation of warnings.showwarning() and be appended to a list</font>
+<font color="black"> 308.     returned by the context manager. Otherwise None is returned by the context</font>
+<font color="black"> 309.     manager. The objects appended to the list are arguments whose attributes</font>
+<font color="black"> 310.     mirror the arguments to showwarning().</font>
+<font color="black"> 311. </font>
+<font color="black"> 312.     The 'module' argument is to specify an alternative module to the module</font>
+<font color="black"> 313.     named 'warnings' and imported under that name. This argument is only useful</font>
+<font color="black"> 314.     when testing the warnings module itself.</font>
+<font color="black"> 315. </font>
+<font color="red"> 316.     &quot;&quot;&quot;</font>
+<font color="black"> 317. </font>
+<font color="red"> 318.     def __init__(self, record=False, module=None):</font>
+<font color="black"> 319.         &quot;&quot;&quot;Specify whether to record warnings and if an alternative module</font>
+<font color="black"> 320.         should be used other than sys.modules['warnings'].</font>
+<font color="black"> 321. </font>
+<font color="black"> 322.         For compatibility with Python 3.0, please consider all arguments to be</font>
+<font color="black"> 323.         keyword-only.</font>
+<font color="black"> 324. </font>
+<font color="black"> 325.         &quot;&quot;&quot;</font>
+<font color="green"> 326.         self._record = record</font>
+<font color="green"> 327.         self._module = sys.modules['warnings'] if module is None else module</font>
+<font color="green"> 328.         self._entered = False</font>
+<font color="black"> 329. </font>
+<font color="red"> 330.     def __repr__(self):</font>
+<font color="red"> 331.         args = []</font>
+<font color="red"> 332.         if self._record:</font>
+<font color="red"> 333.             args.append(&quot;record=True&quot;)</font>
+<font color="red"> 334.         if self._module is not sys.modules['warnings']:</font>
+<font color="red"> 335.             args.append(&quot;module=%r&quot; % self._module)</font>
+<font color="red"> 336.         name = type(self).__name__</font>
+<font color="red"> 337.         return &quot;%s(%s)&quot; % (name, &quot;, &quot;.join(args))</font>
+<font color="black"> 338. </font>
+<font color="red"> 339.     def __enter__(self):</font>
+<font color="green"> 340.         if self._entered:</font>
+<font color="red"> 341.             raise RuntimeError(&quot;Cannot enter %r twice&quot; % self)</font>
+<font color="green"> 342.         self._entered = True</font>
+<font color="green"> 343.         self._filters = self._module.filters</font>
+<font color="green"> 344.         self._module.filters = self._filters[:]</font>
+<font color="green"> 345.         self._showwarning = self._module.showwarning</font>
+<font color="green"> 346.         if self._record:</font>
+<font color="red"> 347.             log = []</font>
+<font color="red"> 348.             def showwarning(*args, **kwargs):</font>
+<font color="red"> 349.                 log.append(WarningMessage(*args, **kwargs))</font>
+<font color="red"> 350.             self._module.showwarning = showwarning</font>
+<font color="red"> 351.             return log</font>
+<font color="black"> 352.         else:</font>
+<font color="green"> 353.             return None</font>
+<font color="black"> 354. </font>
+<font color="red"> 355.     def __exit__(self, *exc_info):</font>
+<font color="green"> 356.         if not self._entered:</font>
+<font color="red"> 357.             raise RuntimeError(&quot;Cannot exit %r without entering first&quot; % self)</font>
+<font color="green"> 358.         self._module.filters = self._filters</font>
+<font color="green"> 359.         self._module.showwarning = self._showwarning</font>
+<font color="black"> 360. </font>
+<font color="black"> 361. </font>
+<font color="black"> 362. # filters contains a sequence of filter 5-tuples</font>
+<font color="black"> 363. # The components of the 5-tuple are:</font>
+<font color="black"> 364. # - an action: error, ignore, always, default, module, or once</font>
+<font color="black"> 365. # - a compiled regex that must match the warning message</font>
+<font color="black"> 366. # - a class representing the warning category</font>
+<font color="black"> 367. # - a compiled regex that must match the module that is being warned</font>
+<font color="black"> 368. # - a line number for the line being warning, or 0 to mean any line</font>
+<font color="black"> 369. # If either if the compiled regexs are None, match anything.</font>
+<font color="red"> 370. _warnings_defaults = False</font>
+<font color="red"> 371. try:</font>
+<font color="red"> 372.     from _warnings import (filters, default_action, once_registry,</font>
+<font color="black"> 373.                             warn, warn_explicit)</font>
+<font color="red"> 374.     defaultaction = default_action</font>
+<font color="red"> 375.     onceregistry = once_registry</font>
+<font color="red"> 376.     _warnings_defaults = True</font>
+<font color="red"> 377. except ImportError:</font>
+<font color="red"> 378.     filters = []</font>
+<font color="red"> 379.     defaultaction = &quot;default&quot;</font>
+<font color="red"> 380.     onceregistry = {}</font>
+<font color="black"> 381. </font>
+<font color="black"> 382. </font>
+<font color="black"> 383. # Module initialization</font>
+<font color="red"> 384. _processoptions(sys.warnoptions)</font>
+<font color="red"> 385. if not _warnings_defaults:</font>
+<font color="red"> 386.     silence = [ImportWarning, PendingDeprecationWarning]</font>
+<font color="black"> 387.     # Don't silence DeprecationWarning if -3 or -Q was used.</font>
+<font color="red"> 388.     if not sys.py3kwarning and not sys.flags.division_warning:</font>
+<font color="red"> 389.         silence.append(DeprecationWarning)</font>
+<font color="red"> 390.     for cls in silence:</font>
+<font color="red"> 391.         simplefilter(&quot;ignore&quot;, category=cls)</font>
+<font color="red"> 392.     bytes_warning = sys.flags.bytes_warning</font>
+<font color="red"> 393.     if bytes_warning &gt; 1:</font>
+<font color="red"> 394.         bytes_action = &quot;error&quot;</font>
+<font color="red"> 395.     elif bytes_warning:</font>
+<font color="red"> 396.         bytes_action = &quot;default&quot;</font>
+<font color="black"> 397.     else:</font>
+<font color="red"> 398.         bytes_action = &quot;ignore&quot;</font>
+<font color="red"> 399.     simplefilter(bytes_action, category=BytesWarning, append=1)</font>
+<font color="red"> 400. del _warnings_defaults</font>
+</pre>
+

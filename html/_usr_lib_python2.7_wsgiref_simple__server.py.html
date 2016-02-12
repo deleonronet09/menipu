@@ -1,0 +1,163 @@
+source file: <b>/usr/lib/python2.7/wsgiref/simple_server.py</b><br>
+
+
+file stats: <b>96 lines, 27 executed: 28.1% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;BaseHTTPServer that implements the Python WSGI protocol (PEP 333, rev 1.21)</font>
+<font color="black">   2. </font>
+<font color="black">   3. This is both an example of how WSGI can be implemented, and a basis for running</font>
+<font color="black">   4. simple web applications on a local machine, such as might be done when testing</font>
+<font color="black">   5. or debugging an application.  It has not been reviewed for security issues,</font>
+<font color="black">   6. however, and we strongly recommend that you use a &quot;real&quot; web server for</font>
+<font color="black">   7. production use.</font>
+<font color="black">   8. </font>
+<font color="black">   9. For example usage, see the 'if __name__==&quot;__main__&quot;' block at the end of the</font>
+<font color="black">  10. module.  See also the BaseHTTPServer module docs for other API information.</font>
+<font color="green">  11. &quot;&quot;&quot;</font>
+<font color="black">  12. </font>
+<font color="green">  13. from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer</font>
+<font color="green">  14. import urllib, sys</font>
+<font color="green">  15. from wsgiref.handlers import SimpleHandler</font>
+<font color="black">  16. </font>
+<font color="green">  17. __version__ = &quot;0.1&quot;</font>
+<font color="green">  18. __all__ = ['WSGIServer', 'WSGIRequestHandler', 'demo_app', 'make_server']</font>
+<font color="black">  19. </font>
+<font color="black">  20. </font>
+<font color="green">  21. server_version = &quot;WSGIServer/&quot; + __version__</font>
+<font color="green">  22. sys_version = &quot;Python/&quot; + sys.version.split()[0]</font>
+<font color="green">  23. software_version = server_version + ' ' + sys_version</font>
+<font color="black">  24. </font>
+<font color="black">  25. </font>
+<font color="green">  26. class ServerHandler(SimpleHandler):</font>
+<font color="black">  27. </font>
+<font color="green">  28.     server_software = software_version</font>
+<font color="black">  29. </font>
+<font color="green">  30.     def close(self):</font>
+<font color="red">  31.         try:</font>
+<font color="red">  32.             self.request_handler.log_request(</font>
+<font color="red">  33.                 self.status.split(' ',1)[0], self.bytes_sent</font>
+<font color="black">  34.             )</font>
+<font color="black">  35.         finally:</font>
+<font color="red">  36.             SimpleHandler.close(self)</font>
+<font color="black">  37. </font>
+<font color="black">  38. </font>
+<font color="black">  39. </font>
+<font color="green">  40. class WSGIServer(HTTPServer):</font>
+<font color="black">  41. </font>
+<font color="green">  42.     &quot;&quot;&quot;BaseHTTPServer that implements the Python WSGI protocol&quot;&quot;&quot;</font>
+<font color="black">  43. </font>
+<font color="green">  44.     application = None</font>
+<font color="black">  45. </font>
+<font color="green">  46.     def server_bind(self):</font>
+<font color="black">  47.         &quot;&quot;&quot;Override server_bind to store the server name.&quot;&quot;&quot;</font>
+<font color="red">  48.         HTTPServer.server_bind(self)</font>
+<font color="red">  49.         self.setup_environ()</font>
+<font color="black">  50. </font>
+<font color="green">  51.     def setup_environ(self):</font>
+<font color="black">  52.         # Set up base environment</font>
+<font color="red">  53.         env = self.base_environ = {}</font>
+<font color="red">  54.         env['SERVER_NAME'] = self.server_name</font>
+<font color="red">  55.         env['GATEWAY_INTERFACE'] = 'CGI/1.1'</font>
+<font color="red">  56.         env['SERVER_PORT'] = str(self.server_port)</font>
+<font color="red">  57.         env['REMOTE_HOST']=''</font>
+<font color="red">  58.         env['CONTENT_LENGTH']=''</font>
+<font color="red">  59.         env['SCRIPT_NAME'] = ''</font>
+<font color="black">  60. </font>
+<font color="green">  61.     def get_app(self):</font>
+<font color="red">  62.         return self.application</font>
+<font color="black">  63. </font>
+<font color="green">  64.     def set_app(self,application):</font>
+<font color="red">  65.         self.application = application</font>
+<font color="black">  66. </font>
+<font color="black">  67. </font>
+<font color="black">  68. </font>
+<font color="green">  69. class WSGIRequestHandler(BaseHTTPRequestHandler):</font>
+<font color="black">  70. </font>
+<font color="green">  71.     server_version = &quot;WSGIServer/&quot; + __version__</font>
+<font color="black">  72. </font>
+<font color="green">  73.     def get_environ(self):</font>
+<font color="red">  74.         env = self.server.base_environ.copy()</font>
+<font color="red">  75.         env['SERVER_PROTOCOL'] = self.request_version</font>
+<font color="red">  76.         env['REQUEST_METHOD'] = self.command</font>
+<font color="red">  77.         if '?' in self.path:</font>
+<font color="red">  78.             path,query = self.path.split('?',1)</font>
+<font color="black">  79.         else:</font>
+<font color="red">  80.             path,query = self.path,''</font>
+<font color="black">  81. </font>
+<font color="red">  82.         env['PATH_INFO'] = urllib.unquote(path)</font>
+<font color="red">  83.         env['QUERY_STRING'] = query</font>
+<font color="black">  84. </font>
+<font color="red">  85.         host = self.address_string()</font>
+<font color="red">  86.         if host != self.client_address[0]:</font>
+<font color="red">  87.             env['REMOTE_HOST'] = host</font>
+<font color="red">  88.         env['REMOTE_ADDR'] = self.client_address[0]</font>
+<font color="black">  89. </font>
+<font color="red">  90.         if self.headers.typeheader is None:</font>
+<font color="red">  91.             env['CONTENT_TYPE'] = self.headers.type</font>
+<font color="black">  92.         else:</font>
+<font color="red">  93.             env['CONTENT_TYPE'] = self.headers.typeheader</font>
+<font color="black">  94. </font>
+<font color="red">  95.         length = self.headers.getheader('content-length')</font>
+<font color="red">  96.         if length:</font>
+<font color="red">  97.             env['CONTENT_LENGTH'] = length</font>
+<font color="black">  98. </font>
+<font color="red">  99.         for h in self.headers.headers:</font>
+<font color="red"> 100.             k,v = h.split(':',1)</font>
+<font color="red"> 101.             k=k.replace('-','_').upper(); v=v.strip()</font>
+<font color="red"> 102.             if k in env:</font>
+<font color="red"> 103.                 continue                    # skip content length, type,etc.</font>
+<font color="red"> 104.             if 'HTTP_'+k in env:</font>
+<font color="red"> 105.                 env['HTTP_'+k] += ','+v     # comma-separate multiple headers</font>
+<font color="black"> 106.             else:</font>
+<font color="red"> 107.                 env['HTTP_'+k] = v</font>
+<font color="red"> 108.         return env</font>
+<font color="black"> 109. </font>
+<font color="green"> 110.     def get_stderr(self):</font>
+<font color="red"> 111.         return sys.stderr</font>
+<font color="black"> 112. </font>
+<font color="green"> 113.     def handle(self):</font>
+<font color="black"> 114.         &quot;&quot;&quot;Handle a single HTTP request&quot;&quot;&quot;</font>
+<font color="black"> 115. </font>
+<font color="red"> 116.         self.raw_requestline = self.rfile.readline()</font>
+<font color="red"> 117.         if not self.parse_request(): # An error code has been sent, just exit</font>
+<font color="red"> 118.             return</font>
+<font color="black"> 119. </font>
+<font color="red"> 120.         handler = ServerHandler(</font>
+<font color="red"> 121.             self.rfile, self.wfile, self.get_stderr(), self.get_environ()</font>
+<font color="black"> 122.         )</font>
+<font color="red"> 123.         handler.request_handler = self      # backpointer for logging</font>
+<font color="red"> 124.         handler.run(self.server.get_app())</font>
+<font color="black"> 125. </font>
+<font color="black"> 126. </font>
+<font color="black"> 127. </font>
+<font color="green"> 128. def demo_app(environ,start_response):</font>
+<font color="red"> 129.     from StringIO import StringIO</font>
+<font color="red"> 130.     stdout = StringIO()</font>
+<font color="red"> 131.     print &gt;&gt;stdout, &quot;Hello world!&quot;</font>
+<font color="red"> 132.     print &gt;&gt;stdout</font>
+<font color="red"> 133.     h = environ.items(); h.sort()</font>
+<font color="red"> 134.     for k,v in h:</font>
+<font color="red"> 135.         print &gt;&gt;stdout, k,'=', repr(v)</font>
+<font color="red"> 136.     start_response(&quot;200 OK&quot;, [('Content-Type','text/plain')])</font>
+<font color="red"> 137.     return [stdout.getvalue()]</font>
+<font color="black"> 138. </font>
+<font color="black"> 139. </font>
+<font color="black"> 140. def make_server(</font>
+<font color="green"> 141.     host, port, app, server_class=WSGIServer, handler_class=WSGIRequestHandler</font>
+<font color="black"> 142. ):</font>
+<font color="black"> 143.     &quot;&quot;&quot;Create a new WSGI server listening on `host` and `port` for `app`&quot;&quot;&quot;</font>
+<font color="red"> 144.     server = server_class((host, port), handler_class)</font>
+<font color="red"> 145.     server.set_app(app)</font>
+<font color="red"> 146.     return server</font>
+<font color="black"> 147. </font>
+<font color="black"> 148. </font>
+<font color="green"> 149. if __name__ == '__main__':</font>
+<font color="red"> 150.     httpd = make_server('', 8000, demo_app)</font>
+<font color="red"> 151.     sa = httpd.socket.getsockname()</font>
+<font color="red"> 152.     print &quot;Serving HTTP on&quot;, sa[0], &quot;port&quot;, sa[1], &quot;...&quot;</font>
+<font color="red"> 153.     import webbrowser</font>
+<font color="red"> 154.     webbrowser.open('http://localhost:8000/xyz?abc')</font>
+<font color="red"> 155.     httpd.handle_request()  # serve one request, then exit</font>
+<font color="red"> 156.     httpd.server_close()</font>
+</pre>
+

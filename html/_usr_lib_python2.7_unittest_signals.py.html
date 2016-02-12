@@ -1,0 +1,78 @@
+source file: <b>/usr/lib/python2.7/unittest/signals.py</b><br>
+
+
+file stats: <b>47 lines, 25 executed: 53.2% covered</b>
+<pre>
+<font color="green">   1. import signal</font>
+<font color="green">   2. import weakref</font>
+<font color="black">   3. </font>
+<font color="green">   4. from functools import wraps</font>
+<font color="black">   5. </font>
+<font color="green">   6. __unittest = True</font>
+<font color="black">   7. </font>
+<font color="black">   8. </font>
+<font color="green">   9. class _InterruptHandler(object):</font>
+<font color="green">  10.     def __init__(self, default_handler):</font>
+<font color="green">  11.         self.called = False</font>
+<font color="green">  12.         self.original_handler = default_handler</font>
+<font color="green">  13.         if isinstance(default_handler, int):</font>
+<font color="red">  14.             if default_handler == signal.SIG_DFL:</font>
+<font color="black">  15.                 # Pretend it's signal.default_int_handler instead.</font>
+<font color="red">  16.                 default_handler = signal.default_int_handler</font>
+<font color="red">  17.             elif default_handler == signal.SIG_IGN:</font>
+<font color="black">  18.                 # Not quite the same thing as SIG_IGN, but the closest we</font>
+<font color="black">  19.                 # can make it: do nothing.</font>
+<font color="red">  20.                 def default_handler(unused_signum, unused_frame):</font>
+<font color="red">  21.                     pass</font>
+<font color="black">  22.             else:</font>
+<font color="red">  23.                 raise TypeError(&quot;expected SIGINT signal handler to be &quot;</font>
+<font color="black">  24.                                 &quot;signal.SIG_IGN, signal.SIG_DFL, or a &quot;</font>
+<font color="black">  25.                                 &quot;callable object&quot;)</font>
+<font color="green">  26.         self.default_handler = default_handler</font>
+<font color="black">  27. </font>
+<font color="green">  28.     def __call__(self, signum, frame):</font>
+<font color="red">  29.         installed_handler = signal.getsignal(signal.SIGINT)</font>
+<font color="red">  30.         if installed_handler is not self:</font>
+<font color="black">  31.             # if we aren't the installed handler, then delegate immediately</font>
+<font color="black">  32.             # to the default handler</font>
+<font color="red">  33.             self.default_handler(signum, frame)</font>
+<font color="black">  34. </font>
+<font color="red">  35.         if self.called:</font>
+<font color="red">  36.             self.default_handler(signum, frame)</font>
+<font color="red">  37.         self.called = True</font>
+<font color="red">  38.         for result in _results.keys():</font>
+<font color="red">  39.             result.stop()</font>
+<font color="black">  40. </font>
+<font color="green">  41. _results = weakref.WeakKeyDictionary()</font>
+<font color="green">  42. def registerResult(result):</font>
+<font color="green">  43.     _results[result] = 1</font>
+<font color="black">  44. </font>
+<font color="green">  45. def removeResult(result):</font>
+<font color="red">  46.     return bool(_results.pop(result, None))</font>
+<font color="black">  47. </font>
+<font color="green">  48. _interrupt_handler = None</font>
+<font color="green">  49. def installHandler():</font>
+<font color="black">  50.     global _interrupt_handler</font>
+<font color="green">  51.     if _interrupt_handler is None:</font>
+<font color="green">  52.         default_handler = signal.getsignal(signal.SIGINT)</font>
+<font color="green">  53.         _interrupt_handler = _InterruptHandler(default_handler)</font>
+<font color="green">  54.         signal.signal(signal.SIGINT, _interrupt_handler)</font>
+<font color="black">  55. </font>
+<font color="black">  56. </font>
+<font color="green">  57. def removeHandler(method=None):</font>
+<font color="green">  58.     if method is not None:</font>
+<font color="red">  59.         @wraps(method)</font>
+<font color="black">  60.         def inner(*args, **kwargs):</font>
+<font color="red">  61.             initial = signal.getsignal(signal.SIGINT)</font>
+<font color="red">  62.             removeHandler()</font>
+<font color="red">  63.             try:</font>
+<font color="red">  64.                 return method(*args, **kwargs)</font>
+<font color="black">  65.             finally:</font>
+<font color="red">  66.                 signal.signal(signal.SIGINT, initial)</font>
+<font color="red">  67.         return inner</font>
+<font color="black">  68. </font>
+<font color="black">  69.     global _interrupt_handler</font>
+<font color="green">  70.     if _interrupt_handler is not None:</font>
+<font color="green">  71.         signal.signal(signal.SIGINT, _interrupt_handler.original_handler)</font>
+</pre>
+

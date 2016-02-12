@@ -1,0 +1,367 @@
+source file: <b>/usr/lib/python2.7/base64.py</b><br>
+
+
+file stats: <b>182 lines, 45 executed: 24.7% covered</b>
+<pre>
+<font color="black">   1. #! /usr/bin/python2.7</font>
+<font color="black">   2. </font>
+<font color="green">   3. &quot;&quot;&quot;RFC 3548: Base16, Base32, Base64 Data Encodings&quot;&quot;&quot;</font>
+<font color="black">   4. </font>
+<font color="black">   5. # Modified 04-Oct-1995 by Jack Jansen to use binascii module</font>
+<font color="black">   6. # Modified 30-Dec-2003 by Barry Warsaw to add full RFC 3548 support</font>
+<font color="black">   7. </font>
+<font color="green">   8. import re</font>
+<font color="green">   9. import struct</font>
+<font color="green">  10. import binascii</font>
+<font color="black">  11. </font>
+<font color="black">  12. </font>
+<font color="black">  13. __all__ = [</font>
+<font color="black">  14.     # Legacy interface exports traditional RFC 1521 Base64 encodings</font>
+<font color="green">  15.     'encode', 'decode', 'encodestring', 'decodestring',</font>
+<font color="black">  16.     # Generalized interface for other encodings</font>
+<font color="green">  17.     'b64encode', 'b64decode', 'b32encode', 'b32decode',</font>
+<font color="green">  18.     'b16encode', 'b16decode',</font>
+<font color="black">  19.     # Standard Base64 encoding</font>
+<font color="green">  20.     'standard_b64encode', 'standard_b64decode',</font>
+<font color="black">  21.     # Some common Base64 alternatives.  As referenced by RFC 3458, see thread</font>
+<font color="black">  22.     # starting at:</font>
+<font color="black">  23.     #</font>
+<font color="black">  24.     # http://zgp.org/pipermail/p2p-hackers/2001-September/000316.html</font>
+<font color="green">  25.     'urlsafe_b64encode', 'urlsafe_b64decode',</font>
+<font color="black">  26.     ]</font>
+<font color="black">  27. </font>
+<font color="green">  28. _translation = [chr(_x) for _x in range(256)]</font>
+<font color="green">  29. EMPTYSTRING = ''</font>
+<font color="black">  30. </font>
+<font color="black">  31. </font>
+<font color="green">  32. def _translate(s, altchars):</font>
+<font color="red">  33.     translation = _translation[:]</font>
+<font color="red">  34.     for k, v in altchars.items():</font>
+<font color="red">  35.         translation[ord(k)] = v</font>
+<font color="red">  36.     return s.translate(''.join(translation))</font>
+<font color="black">  37. </font>
+<font color="black">  38. </font>
+<font color="black">  39. </font>
+<font color="black">  40. # Base64 encoding/decoding uses binascii</font>
+<font color="black">  41. </font>
+<font color="green">  42. def b64encode(s, altchars=None):</font>
+<font color="black">  43.     &quot;&quot;&quot;Encode a string using Base64.</font>
+<font color="black">  44. </font>
+<font color="black">  45.     s is the string to encode.  Optional altchars must be a string of at least</font>
+<font color="black">  46.     length 2 (additional characters are ignored) which specifies an</font>
+<font color="black">  47.     alternative alphabet for the '+' and '/' characters.  This allows an</font>
+<font color="black">  48.     application to e.g. generate url or filesystem safe Base64 strings.</font>
+<font color="black">  49. </font>
+<font color="black">  50.     The encoded string is returned.</font>
+<font color="black">  51.     &quot;&quot;&quot;</font>
+<font color="black">  52.     # Strip off the trailing newline</font>
+<font color="red">  53.     encoded = binascii.b2a_base64(s)[:-1]</font>
+<font color="red">  54.     if altchars is not None:</font>
+<font color="red">  55.         return _translate(encoded, {'+': altchars[0], '/': altchars[1]})</font>
+<font color="red">  56.     return encoded</font>
+<font color="black">  57. </font>
+<font color="black">  58. </font>
+<font color="green">  59. def b64decode(s, altchars=None):</font>
+<font color="black">  60.     &quot;&quot;&quot;Decode a Base64 encoded string.</font>
+<font color="black">  61. </font>
+<font color="black">  62.     s is the string to decode.  Optional altchars must be a string of at least</font>
+<font color="black">  63.     length 2 (additional characters are ignored) which specifies the</font>
+<font color="black">  64.     alternative alphabet used instead of the '+' and '/' characters.</font>
+<font color="black">  65. </font>
+<font color="black">  66.     The decoded string is returned.  A TypeError is raised if s were</font>
+<font color="black">  67.     incorrectly padded or if there are non-alphabet characters present in the</font>
+<font color="black">  68.     string.</font>
+<font color="black">  69.     &quot;&quot;&quot;</font>
+<font color="red">  70.     if altchars is not None:</font>
+<font color="red">  71.         s = _translate(s, {altchars[0]: '+', altchars[1]: '/'})</font>
+<font color="red">  72.     try:</font>
+<font color="red">  73.         return binascii.a2b_base64(s)</font>
+<font color="red">  74.     except binascii.Error, msg:</font>
+<font color="black">  75.         # Transform this exception for consistency</font>
+<font color="red">  76.         raise TypeError(msg)</font>
+<font color="black">  77. </font>
+<font color="black">  78. </font>
+<font color="green">  79. def standard_b64encode(s):</font>
+<font color="black">  80.     &quot;&quot;&quot;Encode a string using the standard Base64 alphabet.</font>
+<font color="black">  81. </font>
+<font color="black">  82.     s is the string to encode.  The encoded string is returned.</font>
+<font color="black">  83.     &quot;&quot;&quot;</font>
+<font color="red">  84.     return b64encode(s)</font>
+<font color="black">  85. </font>
+<font color="green">  86. def standard_b64decode(s):</font>
+<font color="black">  87.     &quot;&quot;&quot;Decode a string encoded with the standard Base64 alphabet.</font>
+<font color="black">  88. </font>
+<font color="black">  89.     s is the string to decode.  The decoded string is returned.  A TypeError</font>
+<font color="black">  90.     is raised if the string is incorrectly padded or if there are non-alphabet</font>
+<font color="black">  91.     characters present in the string.</font>
+<font color="black">  92.     &quot;&quot;&quot;</font>
+<font color="red">  93.     return b64decode(s)</font>
+<font color="black">  94. </font>
+<font color="green">  95. def urlsafe_b64encode(s):</font>
+<font color="black">  96.     &quot;&quot;&quot;Encode a string using a url-safe Base64 alphabet.</font>
+<font color="black">  97. </font>
+<font color="black">  98.     s is the string to encode.  The encoded string is returned.  The alphabet</font>
+<font color="black">  99.     uses '-' instead of '+' and '_' instead of '/'.</font>
+<font color="black"> 100.     &quot;&quot;&quot;</font>
+<font color="red"> 101.     return b64encode(s, '-_')</font>
+<font color="black"> 102. </font>
+<font color="green"> 103. def urlsafe_b64decode(s):</font>
+<font color="black"> 104.     &quot;&quot;&quot;Decode a string encoded with the standard Base64 alphabet.</font>
+<font color="black"> 105. </font>
+<font color="black"> 106.     s is the string to decode.  The decoded string is returned.  A TypeError</font>
+<font color="black"> 107.     is raised if the string is incorrectly padded or if there are non-alphabet</font>
+<font color="black"> 108.     characters present in the string.</font>
+<font color="black"> 109. </font>
+<font color="black"> 110.     The alphabet uses '-' instead of '+' and '_' instead of '/'.</font>
+<font color="black"> 111.     &quot;&quot;&quot;</font>
+<font color="red"> 112.     return b64decode(s, '-_')</font>
+<font color="black"> 113. </font>
+<font color="black"> 114. </font>
+<font color="black"> 115. </font>
+<font color="black"> 116. # Base32 encoding/decoding must be done in Python</font>
+<font color="green"> 117. _b32alphabet = {</font>
+<font color="green"> 118.     0: 'A',  9: 'J', 18: 'S', 27: '3',</font>
+<font color="green"> 119.     1: 'B', 10: 'K', 19: 'T', 28: '4',</font>
+<font color="green"> 120.     2: 'C', 11: 'L', 20: 'U', 29: '5',</font>
+<font color="green"> 121.     3: 'D', 12: 'M', 21: 'V', 30: '6',</font>
+<font color="green"> 122.     4: 'E', 13: 'N', 22: 'W', 31: '7',</font>
+<font color="green"> 123.     5: 'F', 14: 'O', 23: 'X',</font>
+<font color="green"> 124.     6: 'G', 15: 'P', 24: 'Y',</font>
+<font color="green"> 125.     7: 'H', 16: 'Q', 25: 'Z',</font>
+<font color="green"> 126.     8: 'I', 17: 'R', 26: '2',</font>
+<font color="black"> 127.     }</font>
+<font color="black"> 128. </font>
+<font color="green"> 129. _b32tab = _b32alphabet.items()</font>
+<font color="green"> 130. _b32tab.sort()</font>
+<font color="green"> 131. _b32tab = [v for k, v in _b32tab]</font>
+<font color="green"> 132. _b32rev = dict([(v, long(k)) for k, v in _b32alphabet.items()])</font>
+<font color="black"> 133. </font>
+<font color="black"> 134. </font>
+<font color="green"> 135. def b32encode(s):</font>
+<font color="black"> 136.     &quot;&quot;&quot;Encode a string using Base32.</font>
+<font color="black"> 137. </font>
+<font color="black"> 138.     s is the string to encode.  The encoded string is returned.</font>
+<font color="black"> 139.     &quot;&quot;&quot;</font>
+<font color="red"> 140.     parts = []</font>
+<font color="red"> 141.     quanta, leftover = divmod(len(s), 5)</font>
+<font color="black"> 142.     # Pad the last quantum with zero bits if necessary</font>
+<font color="red"> 143.     if leftover:</font>
+<font color="red"> 144.         s += ('\0' * (5 - leftover))</font>
+<font color="red"> 145.         quanta += 1</font>
+<font color="red"> 146.     for i in range(quanta):</font>
+<font color="black"> 147.         # c1 and c2 are 16 bits wide, c3 is 8 bits wide.  The intent of this</font>
+<font color="black"> 148.         # code is to process the 40 bits in units of 5 bits.  So we take the 1</font>
+<font color="black"> 149.         # leftover bit of c1 and tack it onto c2.  Then we take the 2 leftover</font>
+<font color="black"> 150.         # bits of c2 and tack them onto c3.  The shifts and masks are intended</font>
+<font color="black"> 151.         # to give us values of exactly 5 bits in width.</font>
+<font color="red"> 152.         c1, c2, c3 = struct.unpack('!HHB', s[i*5:(i+1)*5])</font>
+<font color="red"> 153.         c2 += (c1 &amp; 1) &lt;&lt; 16 # 17 bits wide</font>
+<font color="red"> 154.         c3 += (c2 &amp; 3) &lt;&lt; 8  # 10 bits wide</font>
+<font color="red"> 155.         parts.extend([_b32tab[c1 &gt;&gt; 11],         # bits 1 - 5</font>
+<font color="red"> 156.                       _b32tab[(c1 &gt;&gt; 6) &amp; 0x1f], # bits 6 - 10</font>
+<font color="red"> 157.                       _b32tab[(c1 &gt;&gt; 1) &amp; 0x1f], # bits 11 - 15</font>
+<font color="red"> 158.                       _b32tab[c2 &gt;&gt; 12],         # bits 16 - 20 (1 - 5)</font>
+<font color="red"> 159.                       _b32tab[(c2 &gt;&gt; 7) &amp; 0x1f], # bits 21 - 25 (6 - 10)</font>
+<font color="red"> 160.                       _b32tab[(c2 &gt;&gt; 2) &amp; 0x1f], # bits 26 - 30 (11 - 15)</font>
+<font color="red"> 161.                       _b32tab[c3 &gt;&gt; 5],          # bits 31 - 35 (1 - 5)</font>
+<font color="red"> 162.                       _b32tab[c3 &amp; 0x1f],        # bits 36 - 40 (1 - 5)</font>
+<font color="black"> 163.                       ])</font>
+<font color="red"> 164.     encoded = EMPTYSTRING.join(parts)</font>
+<font color="black"> 165.     # Adjust for any leftover partial quanta</font>
+<font color="red"> 166.     if leftover == 1:</font>
+<font color="red"> 167.         return encoded[:-6] + '======'</font>
+<font color="red"> 168.     elif leftover == 2:</font>
+<font color="red"> 169.         return encoded[:-4] + '===='</font>
+<font color="red"> 170.     elif leftover == 3:</font>
+<font color="red"> 171.         return encoded[:-3] + '==='</font>
+<font color="red"> 172.     elif leftover == 4:</font>
+<font color="red"> 173.         return encoded[:-1] + '='</font>
+<font color="red"> 174.     return encoded</font>
+<font color="black"> 175. </font>
+<font color="black"> 176. </font>
+<font color="green"> 177. def b32decode(s, casefold=False, map01=None):</font>
+<font color="black"> 178.     &quot;&quot;&quot;Decode a Base32 encoded string.</font>
+<font color="black"> 179. </font>
+<font color="black"> 180.     s is the string to decode.  Optional casefold is a flag specifying whether</font>
+<font color="black"> 181.     a lowercase alphabet is acceptable as input.  For security purposes, the</font>
+<font color="black"> 182.     default is False.</font>
+<font color="black"> 183. </font>
+<font color="black"> 184.     RFC 3548 allows for optional mapping of the digit 0 (zero) to the letter O</font>
+<font color="black"> 185.     (oh), and for optional mapping of the digit 1 (one) to either the letter I</font>
+<font color="black"> 186.     (eye) or letter L (el).  The optional argument map01 when not None,</font>
+<font color="black"> 187.     specifies which letter the digit 1 should be mapped to (when map01 is not</font>
+<font color="black"> 188.     None, the digit 0 is always mapped to the letter O).  For security</font>
+<font color="black"> 189.     purposes the default is None, so that 0 and 1 are not allowed in the</font>
+<font color="black"> 190.     input.</font>
+<font color="black"> 191. </font>
+<font color="black"> 192.     The decoded string is returned.  A TypeError is raised if s were</font>
+<font color="black"> 193.     incorrectly padded or if there are non-alphabet characters present in the</font>
+<font color="black"> 194.     string.</font>
+<font color="black"> 195.     &quot;&quot;&quot;</font>
+<font color="red"> 196.     quanta, leftover = divmod(len(s), 8)</font>
+<font color="red"> 197.     if leftover:</font>
+<font color="red"> 198.         raise TypeError('Incorrect padding')</font>
+<font color="black"> 199.     # Handle section 2.4 zero and one mapping.  The flag map01 will be either</font>
+<font color="black"> 200.     # False, or the character to map the digit 1 (one) to.  It should be</font>
+<font color="black"> 201.     # either L (el) or I (eye).</font>
+<font color="red"> 202.     if map01:</font>
+<font color="red"> 203.         s = _translate(s, {'0': 'O', '1': map01})</font>
+<font color="red"> 204.     if casefold:</font>
+<font color="red"> 205.         s = s.upper()</font>
+<font color="black"> 206.     # Strip off pad characters from the right.  We need to count the pad</font>
+<font color="black"> 207.     # characters because this will tell us how many null bytes to remove from</font>
+<font color="black"> 208.     # the end of the decoded string.</font>
+<font color="red"> 209.     padchars = 0</font>
+<font color="red"> 210.     mo = re.search('(?P&lt;pad&gt;[=]*)$', s)</font>
+<font color="red"> 211.     if mo:</font>
+<font color="red"> 212.         padchars = len(mo.group('pad'))</font>
+<font color="red"> 213.         if padchars &gt; 0:</font>
+<font color="red"> 214.             s = s[:-padchars]</font>
+<font color="black"> 215.     # Now decode the full quanta</font>
+<font color="red"> 216.     parts = []</font>
+<font color="red"> 217.     acc = 0</font>
+<font color="red"> 218.     shift = 35</font>
+<font color="red"> 219.     for c in s:</font>
+<font color="red"> 220.         val = _b32rev.get(c)</font>
+<font color="red"> 221.         if val is None:</font>
+<font color="red"> 222.             raise TypeError('Non-base32 digit found')</font>
+<font color="red"> 223.         acc += _b32rev[c] &lt;&lt; shift</font>
+<font color="red"> 224.         shift -= 5</font>
+<font color="red"> 225.         if shift &lt; 0:</font>
+<font color="red"> 226.             parts.append(binascii.unhexlify('%010x' % acc))</font>
+<font color="red"> 227.             acc = 0</font>
+<font color="red"> 228.             shift = 35</font>
+<font color="black"> 229.     # Process the last, partial quanta</font>
+<font color="red"> 230.     last = binascii.unhexlify('%010x' % acc)</font>
+<font color="red"> 231.     if padchars == 0:</font>
+<font color="red"> 232.         last = ''                       # No characters</font>
+<font color="red"> 233.     elif padchars == 1:</font>
+<font color="red"> 234.         last = last[:-1]</font>
+<font color="red"> 235.     elif padchars == 3:</font>
+<font color="red"> 236.         last = last[:-2]</font>
+<font color="red"> 237.     elif padchars == 4:</font>
+<font color="red"> 238.         last = last[:-3]</font>
+<font color="red"> 239.     elif padchars == 6:</font>
+<font color="red"> 240.         last = last[:-4]</font>
+<font color="black"> 241.     else:</font>
+<font color="red"> 242.         raise TypeError('Incorrect padding')</font>
+<font color="red"> 243.     parts.append(last)</font>
+<font color="red"> 244.     return EMPTYSTRING.join(parts)</font>
+<font color="black"> 245. </font>
+<font color="black"> 246. </font>
+<font color="black"> 247. </font>
+<font color="black"> 248. # RFC 3548, Base 16 Alphabet specifies uppercase, but hexlify() returns</font>
+<font color="black"> 249. # lowercase.  The RFC also recommends against accepting input case</font>
+<font color="black"> 250. # insensitively.</font>
+<font color="green"> 251. def b16encode(s):</font>
+<font color="black"> 252.     &quot;&quot;&quot;Encode a string using Base16.</font>
+<font color="black"> 253. </font>
+<font color="black"> 254.     s is the string to encode.  The encoded string is returned.</font>
+<font color="black"> 255.     &quot;&quot;&quot;</font>
+<font color="red"> 256.     return binascii.hexlify(s).upper()</font>
+<font color="black"> 257. </font>
+<font color="black"> 258. </font>
+<font color="green"> 259. def b16decode(s, casefold=False):</font>
+<font color="black"> 260.     &quot;&quot;&quot;Decode a Base16 encoded string.</font>
+<font color="black"> 261. </font>
+<font color="black"> 262.     s is the string to decode.  Optional casefold is a flag specifying whether</font>
+<font color="black"> 263.     a lowercase alphabet is acceptable as input.  For security purposes, the</font>
+<font color="black"> 264.     default is False.</font>
+<font color="black"> 265. </font>
+<font color="black"> 266.     The decoded string is returned.  A TypeError is raised if s were</font>
+<font color="black"> 267.     incorrectly padded or if there are non-alphabet characters present in the</font>
+<font color="black"> 268.     string.</font>
+<font color="black"> 269.     &quot;&quot;&quot;</font>
+<font color="red"> 270.     if casefold:</font>
+<font color="red"> 271.         s = s.upper()</font>
+<font color="red"> 272.     if re.search('[^0-9A-F]', s):</font>
+<font color="red"> 273.         raise TypeError('Non-base16 digit found')</font>
+<font color="red"> 274.     return binascii.unhexlify(s)</font>
+<font color="black"> 275. </font>
+<font color="black"> 276. </font>
+<font color="black"> 277. </font>
+<font color="black"> 278. # Legacy interface.  This code could be cleaned up since I don't believe</font>
+<font color="black"> 279. # binascii has any line length limitations.  It just doesn't seem worth it</font>
+<font color="black"> 280. # though.</font>
+<font color="black"> 281. </font>
+<font color="green"> 282. MAXLINESIZE = 76 # Excluding the CRLF</font>
+<font color="green"> 283. MAXBINSIZE = (MAXLINESIZE//4)*3</font>
+<font color="black"> 284. </font>
+<font color="green"> 285. def encode(input, output):</font>
+<font color="black"> 286.     &quot;&quot;&quot;Encode a file.&quot;&quot;&quot;</font>
+<font color="red"> 287.     while True:</font>
+<font color="red"> 288.         s = input.read(MAXBINSIZE)</font>
+<font color="red"> 289.         if not s:</font>
+<font color="red"> 290.             break</font>
+<font color="red"> 291.         while len(s) &lt; MAXBINSIZE:</font>
+<font color="red"> 292.             ns = input.read(MAXBINSIZE-len(s))</font>
+<font color="red"> 293.             if not ns:</font>
+<font color="red"> 294.                 break</font>
+<font color="red"> 295.             s += ns</font>
+<font color="red"> 296.         line = binascii.b2a_base64(s)</font>
+<font color="red"> 297.         output.write(line)</font>
+<font color="black"> 298. </font>
+<font color="black"> 299. </font>
+<font color="green"> 300. def decode(input, output):</font>
+<font color="black"> 301.     &quot;&quot;&quot;Decode a file.&quot;&quot;&quot;</font>
+<font color="red"> 302.     while True:</font>
+<font color="red"> 303.         line = input.readline()</font>
+<font color="red"> 304.         if not line:</font>
+<font color="red"> 305.             break</font>
+<font color="red"> 306.         s = binascii.a2b_base64(line)</font>
+<font color="red"> 307.         output.write(s)</font>
+<font color="black"> 308. </font>
+<font color="black"> 309. </font>
+<font color="green"> 310. def encodestring(s):</font>
+<font color="black"> 311.     &quot;&quot;&quot;Encode a string into multiple lines of base-64 data.&quot;&quot;&quot;</font>
+<font color="red"> 312.     pieces = []</font>
+<font color="red"> 313.     for i in range(0, len(s), MAXBINSIZE):</font>
+<font color="red"> 314.         chunk = s[i : i + MAXBINSIZE]</font>
+<font color="red"> 315.         pieces.append(binascii.b2a_base64(chunk))</font>
+<font color="red"> 316.     return &quot;&quot;.join(pieces)</font>
+<font color="black"> 317. </font>
+<font color="black"> 318. </font>
+<font color="green"> 319. def decodestring(s):</font>
+<font color="black"> 320.     &quot;&quot;&quot;Decode a string.&quot;&quot;&quot;</font>
+<font color="red"> 321.     return binascii.a2b_base64(s)</font>
+<font color="black"> 322. </font>
+<font color="black"> 323. </font>
+<font color="black"> 324. </font>
+<font color="black"> 325. # Useable as a script...</font>
+<font color="green"> 326. def test():</font>
+<font color="black"> 327.     &quot;&quot;&quot;Small test program&quot;&quot;&quot;</font>
+<font color="red"> 328.     import sys, getopt</font>
+<font color="red"> 329.     try:</font>
+<font color="red"> 330.         opts, args = getopt.getopt(sys.argv[1:], 'deut')</font>
+<font color="red"> 331.     except getopt.error, msg:</font>
+<font color="red"> 332.         sys.stdout = sys.stderr</font>
+<font color="red"> 333.         print msg</font>
+<font color="black"> 334.         print &quot;&quot;&quot;usage: %s [-d|-e|-u|-t] [file|-]</font>
+<font color="black"> 335.         -d, -u: decode</font>
+<font color="black"> 336.         -e: encode (default)</font>
+<font color="red"> 337.         -t: encode and decode string 'Aladdin:open sesame'&quot;&quot;&quot;%sys.argv[0]</font>
+<font color="red"> 338.         sys.exit(2)</font>
+<font color="red"> 339.     func = encode</font>
+<font color="red"> 340.     for o, a in opts:</font>
+<font color="red"> 341.         if o == '-e': func = encode</font>
+<font color="red"> 342.         if o == '-d': func = decode</font>
+<font color="red"> 343.         if o == '-u': func = decode</font>
+<font color="red"> 344.         if o == '-t': test1(); return</font>
+<font color="red"> 345.     if args and args[0] != '-':</font>
+<font color="red"> 346.         with open(args[0], 'rb') as f:</font>
+<font color="red"> 347.             func(f, sys.stdout)</font>
+<font color="black"> 348.     else:</font>
+<font color="red"> 349.         func(sys.stdin, sys.stdout)</font>
+<font color="black"> 350. </font>
+<font color="black"> 351. </font>
+<font color="green"> 352. def test1():</font>
+<font color="red"> 353.     s0 = &quot;Aladdin:open sesame&quot;</font>
+<font color="red"> 354.     s1 = encodestring(s0)</font>
+<font color="red"> 355.     s2 = decodestring(s1)</font>
+<font color="red"> 356.     print s0, repr(s1), s2</font>
+<font color="black"> 357. </font>
+<font color="black"> 358. </font>
+<font color="green"> 359. if __name__ == '__main__':</font>
+<font color="red"> 360.     test()</font>
+</pre>
+

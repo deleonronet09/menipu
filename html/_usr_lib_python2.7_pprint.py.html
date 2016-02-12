@@ -1,0 +1,353 @@
+source file: <b>/usr/lib/python2.7/pprint.py</b><br>
+
+
+file stats: <b>242 lines, 30 executed: 12.4% covered</b>
+<pre>
+<font color="black">   1. #  Author:      Fred L. Drake, Jr.</font>
+<font color="black">   2. #               fdrake@acm.org</font>
+<font color="black">   3. #</font>
+<font color="black">   4. #  This is a simple little module I wrote to make life easier.  I didn't</font>
+<font color="black">   5. #  see anything quite like it in the library, though I may have overlooked</font>
+<font color="black">   6. #  something.  I wrote this when I was trying to read some heavily nested</font>
+<font color="black">   7. #  tuples with fairly non-descriptive content.  This is modeled very much</font>
+<font color="black">   8. #  after Lisp/Scheme - style pretty-printing of lists.  If you find it</font>
+<font color="black">   9. #  useful, thank small children who sleep at night.</font>
+<font color="black">  10. </font>
+<font color="black">  11. &quot;&quot;&quot;Support to pretty-print lists, tuples, &amp; dictionaries recursively.</font>
+<font color="black">  12. </font>
+<font color="black">  13. Very simple, but useful, especially in debugging data structures.</font>
+<font color="black">  14. </font>
+<font color="black">  15. Classes</font>
+<font color="black">  16. -------</font>
+<font color="black">  17. </font>
+<font color="black">  18. PrettyPrinter()</font>
+<font color="black">  19.     Handle pretty-printing operations onto a stream using a configured</font>
+<font color="black">  20.     set of formatting parameters.</font>
+<font color="black">  21. </font>
+<font color="black">  22. Functions</font>
+<font color="black">  23. ---------</font>
+<font color="black">  24. </font>
+<font color="black">  25. pformat()</font>
+<font color="black">  26.     Format a Python object into a pretty-printed representation.</font>
+<font color="black">  27. </font>
+<font color="black">  28. pprint()</font>
+<font color="black">  29.     Pretty-print a Python object to a stream [default is sys.stdout].</font>
+<font color="black">  30. </font>
+<font color="black">  31. saferepr()</font>
+<font color="black">  32.     Generate a 'standard' repr()-like value, but protect against recursive</font>
+<font color="black">  33.     data structures.</font>
+<font color="black">  34. </font>
+<font color="green">  35. &quot;&quot;&quot;</font>
+<font color="black">  36. </font>
+<font color="green">  37. import sys as _sys</font>
+<font color="green">  38. import warnings</font>
+<font color="black">  39. </font>
+<font color="green">  40. try:</font>
+<font color="green">  41.     from cStringIO import StringIO as _StringIO</font>
+<font color="red">  42. except ImportError:</font>
+<font color="red">  43.     from StringIO import StringIO as _StringIO</font>
+<font color="black">  44. </font>
+<font color="green">  45. __all__ = [&quot;pprint&quot;,&quot;pformat&quot;,&quot;isreadable&quot;,&quot;isrecursive&quot;,&quot;saferepr&quot;,</font>
+<font color="green">  46.            &quot;PrettyPrinter&quot;]</font>
+<font color="black">  47. </font>
+<font color="black">  48. # cache these for faster access:</font>
+<font color="green">  49. _commajoin = &quot;, &quot;.join</font>
+<font color="green">  50. _id = id</font>
+<font color="green">  51. _len = len</font>
+<font color="green">  52. _type = type</font>
+<font color="black">  53. </font>
+<font color="black">  54. </font>
+<font color="green">  55. def pprint(object, stream=None, indent=1, width=80, depth=None):</font>
+<font color="black">  56.     &quot;&quot;&quot;Pretty-print a Python object to a stream [default is sys.stdout].&quot;&quot;&quot;</font>
+<font color="red">  57.     printer = PrettyPrinter(</font>
+<font color="red">  58.         stream=stream, indent=indent, width=width, depth=depth)</font>
+<font color="red">  59.     printer.pprint(object)</font>
+<font color="black">  60. </font>
+<font color="green">  61. def pformat(object, indent=1, width=80, depth=None):</font>
+<font color="black">  62.     &quot;&quot;&quot;Format a Python object into a pretty-printed representation.&quot;&quot;&quot;</font>
+<font color="red">  63.     return PrettyPrinter(indent=indent, width=width, depth=depth).pformat(object)</font>
+<font color="black">  64. </font>
+<font color="green">  65. def saferepr(object):</font>
+<font color="black">  66.     &quot;&quot;&quot;Version of repr() which can handle recursive data structures.&quot;&quot;&quot;</font>
+<font color="red">  67.     return _safe_repr(object, {}, None, 0)[0]</font>
+<font color="black">  68. </font>
+<font color="green">  69. def isreadable(object):</font>
+<font color="black">  70.     &quot;&quot;&quot;Determine if saferepr(object) is readable by eval().&quot;&quot;&quot;</font>
+<font color="red">  71.     return _safe_repr(object, {}, None, 0)[1]</font>
+<font color="black">  72. </font>
+<font color="green">  73. def isrecursive(object):</font>
+<font color="black">  74.     &quot;&quot;&quot;Determine if object requires a recursive representation.&quot;&quot;&quot;</font>
+<font color="red">  75.     return _safe_repr(object, {}, None, 0)[2]</font>
+<font color="black">  76. </font>
+<font color="green">  77. def _sorted(iterable):</font>
+<font color="red">  78.     with warnings.catch_warnings():</font>
+<font color="red">  79.         if _sys.py3kwarning:</font>
+<font color="red">  80.             warnings.filterwarnings(&quot;ignore&quot;, &quot;comparing unequal types &quot;</font>
+<font color="red">  81.                                     &quot;not supported&quot;, DeprecationWarning)</font>
+<font color="red">  82.         return sorted(iterable)</font>
+<font color="black">  83. </font>
+<font color="green">  84. class PrettyPrinter:</font>
+<font color="green">  85.     def __init__(self, indent=1, width=80, depth=None, stream=None):</font>
+<font color="black">  86.         &quot;&quot;&quot;Handle pretty printing operations onto a stream using a set of</font>
+<font color="black">  87.         configured parameters.</font>
+<font color="black">  88. </font>
+<font color="black">  89.         indent</font>
+<font color="black">  90.             Number of spaces to indent for each level of nesting.</font>
+<font color="black">  91. </font>
+<font color="black">  92.         width</font>
+<font color="black">  93.             Attempted maximum number of columns in the output.</font>
+<font color="black">  94. </font>
+<font color="black">  95.         depth</font>
+<font color="black">  96.             The maximum depth to print out nested structures.</font>
+<font color="black">  97. </font>
+<font color="black">  98.         stream</font>
+<font color="black">  99.             The desired output stream.  If omitted (or false), the standard</font>
+<font color="black"> 100.             output stream available at construction will be used.</font>
+<font color="black"> 101. </font>
+<font color="black"> 102.         &quot;&quot;&quot;</font>
+<font color="red"> 103.         indent = int(indent)</font>
+<font color="red"> 104.         width = int(width)</font>
+<font color="red"> 105.         assert indent &gt;= 0, &quot;indent must be &gt;= 0&quot;</font>
+<font color="red"> 106.         assert depth is None or depth &gt; 0, &quot;depth must be &gt; 0&quot;</font>
+<font color="red"> 107.         assert width, &quot;width must be != 0&quot;</font>
+<font color="red"> 108.         self._depth = depth</font>
+<font color="red"> 109.         self._indent_per_level = indent</font>
+<font color="red"> 110.         self._width = width</font>
+<font color="red"> 111.         if stream is not None:</font>
+<font color="red"> 112.             self._stream = stream</font>
+<font color="black"> 113.         else:</font>
+<font color="red"> 114.             self._stream = _sys.stdout</font>
+<font color="black"> 115. </font>
+<font color="green"> 116.     def pprint(self, object):</font>
+<font color="red"> 117.         self._format(object, self._stream, 0, 0, {}, 0)</font>
+<font color="red"> 118.         self._stream.write(&quot;\n&quot;)</font>
+<font color="black"> 119. </font>
+<font color="green"> 120.     def pformat(self, object):</font>
+<font color="red"> 121.         sio = _StringIO()</font>
+<font color="red"> 122.         self._format(object, sio, 0, 0, {}, 0)</font>
+<font color="red"> 123.         return sio.getvalue()</font>
+<font color="black"> 124. </font>
+<font color="green"> 125.     def isrecursive(self, object):</font>
+<font color="red"> 126.         return self.format(object, {}, 0, 0)[2]</font>
+<font color="black"> 127. </font>
+<font color="green"> 128.     def isreadable(self, object):</font>
+<font color="red"> 129.         s, readable, recursive = self.format(object, {}, 0, 0)</font>
+<font color="red"> 130.         return readable and not recursive</font>
+<font color="black"> 131. </font>
+<font color="green"> 132.     def _format(self, object, stream, indent, allowance, context, level):</font>
+<font color="red"> 133.         level = level + 1</font>
+<font color="red"> 134.         objid = _id(object)</font>
+<font color="red"> 135.         if objid in context:</font>
+<font color="red"> 136.             stream.write(_recursion(object))</font>
+<font color="red"> 137.             self._recursive = True</font>
+<font color="red"> 138.             self._readable = False</font>
+<font color="red"> 139.             return</font>
+<font color="red"> 140.         rep = self._repr(object, context, level - 1)</font>
+<font color="red"> 141.         typ = _type(object)</font>
+<font color="red"> 142.         sepLines = _len(rep) &gt; (self._width - 1 - indent - allowance)</font>
+<font color="red"> 143.         write = stream.write</font>
+<font color="black"> 144. </font>
+<font color="red"> 145.         if self._depth and level &gt; self._depth:</font>
+<font color="red"> 146.             write(rep)</font>
+<font color="red"> 147.             return</font>
+<font color="black"> 148. </font>
+<font color="red"> 149.         r = getattr(typ, &quot;__repr__&quot;, None)</font>
+<font color="red"> 150.         if issubclass(typ, dict) and r is dict.__repr__:</font>
+<font color="red"> 151.             write('{')</font>
+<font color="red"> 152.             if self._indent_per_level &gt; 1:</font>
+<font color="red"> 153.                 write((self._indent_per_level - 1) * ' ')</font>
+<font color="red"> 154.             length = _len(object)</font>
+<font color="red"> 155.             if length:</font>
+<font color="red"> 156.                 context[objid] = 1</font>
+<font color="red"> 157.                 indent = indent + self._indent_per_level</font>
+<font color="red"> 158.                 items = _sorted(object.items())</font>
+<font color="red"> 159.                 key, ent = items[0]</font>
+<font color="red"> 160.                 rep = self._repr(key, context, level)</font>
+<font color="red"> 161.                 write(rep)</font>
+<font color="red"> 162.                 write(': ')</font>
+<font color="red"> 163.                 self._format(ent, stream, indent + _len(rep) + 2,</font>
+<font color="red"> 164.                               allowance + 1, context, level)</font>
+<font color="red"> 165.                 if length &gt; 1:</font>
+<font color="red"> 166.                     for key, ent in items[1:]:</font>
+<font color="red"> 167.                         rep = self._repr(key, context, level)</font>
+<font color="red"> 168.                         if sepLines:</font>
+<font color="red"> 169.                             write(',\n%s%s: ' % (' '*indent, rep))</font>
+<font color="black"> 170.                         else:</font>
+<font color="red"> 171.                             write(', %s: ' % rep)</font>
+<font color="red"> 172.                         self._format(ent, stream, indent + _len(rep) + 2,</font>
+<font color="red"> 173.                                       allowance + 1, context, level)</font>
+<font color="red"> 174.                 indent = indent - self._indent_per_level</font>
+<font color="red"> 175.                 del context[objid]</font>
+<font color="red"> 176.             write('}')</font>
+<font color="red"> 177.             return</font>
+<font color="black"> 178. </font>
+<font color="red"> 179.         if ((issubclass(typ, list) and r is list.__repr__) or</font>
+<font color="red"> 180.             (issubclass(typ, tuple) and r is tuple.__repr__) or</font>
+<font color="red"> 181.             (issubclass(typ, set) and r is set.__repr__) or</font>
+<font color="red"> 182.             (issubclass(typ, frozenset) and r is frozenset.__repr__)</font>
+<font color="black"> 183.            ):</font>
+<font color="red"> 184.             length = _len(object)</font>
+<font color="red"> 185.             if issubclass(typ, list):</font>
+<font color="red"> 186.                 write('[')</font>
+<font color="red"> 187.                 endchar = ']'</font>
+<font color="red"> 188.             elif issubclass(typ, tuple):</font>
+<font color="red"> 189.                 write('(')</font>
+<font color="red"> 190.                 endchar = ')'</font>
+<font color="black"> 191.             else:</font>
+<font color="red"> 192.                 if not length:</font>
+<font color="red"> 193.                     write(rep)</font>
+<font color="red"> 194.                     return</font>
+<font color="red"> 195.                 write(typ.__name__)</font>
+<font color="red"> 196.                 write('([')</font>
+<font color="red"> 197.                 endchar = '])'</font>
+<font color="red"> 198.                 indent += len(typ.__name__) + 1</font>
+<font color="red"> 199.                 object = _sorted(object)</font>
+<font color="red"> 200.             if self._indent_per_level &gt; 1 and sepLines:</font>
+<font color="red"> 201.                 write((self._indent_per_level - 1) * ' ')</font>
+<font color="red"> 202.             if length:</font>
+<font color="red"> 203.                 context[objid] = 1</font>
+<font color="red"> 204.                 indent = indent + self._indent_per_level</font>
+<font color="red"> 205.                 self._format(object[0], stream, indent, allowance + 1,</font>
+<font color="red"> 206.                              context, level)</font>
+<font color="red"> 207.                 if length &gt; 1:</font>
+<font color="red"> 208.                     for ent in object[1:]:</font>
+<font color="red"> 209.                         if sepLines:</font>
+<font color="red"> 210.                             write(',\n' + ' '*indent)</font>
+<font color="black"> 211.                         else:</font>
+<font color="red"> 212.                             write(', ')</font>
+<font color="red"> 213.                         self._format(ent, stream, indent,</font>
+<font color="red"> 214.                                       allowance + 1, context, level)</font>
+<font color="red"> 215.                 indent = indent - self._indent_per_level</font>
+<font color="red"> 216.                 del context[objid]</font>
+<font color="red"> 217.             if issubclass(typ, tuple) and length == 1:</font>
+<font color="red"> 218.                 write(',')</font>
+<font color="red"> 219.             write(endchar)</font>
+<font color="red"> 220.             return</font>
+<font color="black"> 221. </font>
+<font color="red"> 222.         write(rep)</font>
+<font color="black"> 223. </font>
+<font color="green"> 224.     def _repr(self, object, context, level):</font>
+<font color="red"> 225.         repr, readable, recursive = self.format(object, context.copy(),</font>
+<font color="red"> 226.                                                 self._depth, level)</font>
+<font color="red"> 227.         if not readable:</font>
+<font color="red"> 228.             self._readable = False</font>
+<font color="red"> 229.         if recursive:</font>
+<font color="red"> 230.             self._recursive = True</font>
+<font color="red"> 231.         return repr</font>
+<font color="black"> 232. </font>
+<font color="green"> 233.     def format(self, object, context, maxlevels, level):</font>
+<font color="black"> 234.         &quot;&quot;&quot;Format object for a specific context, returning a string</font>
+<font color="black"> 235.         and flags indicating whether the representation is 'readable'</font>
+<font color="black"> 236.         and whether the object represents a recursive construct.</font>
+<font color="black"> 237.         &quot;&quot;&quot;</font>
+<font color="red"> 238.         return _safe_repr(object, context, maxlevels, level)</font>
+<font color="black"> 239. </font>
+<font color="black"> 240. </font>
+<font color="black"> 241. # Return triple (repr_string, isreadable, isrecursive).</font>
+<font color="black"> 242. </font>
+<font color="green"> 243. def _safe_repr(object, context, maxlevels, level):</font>
+<font color="red"> 244.     typ = _type(object)</font>
+<font color="red"> 245.     if typ is str:</font>
+<font color="red"> 246.         if 'locale' not in _sys.modules:</font>
+<font color="red"> 247.             return repr(object), True, False</font>
+<font color="red"> 248.         if &quot;'&quot; in object and '&quot;' not in object:</font>
+<font color="red"> 249.             closure = '&quot;'</font>
+<font color="red"> 250.             quotes = {'&quot;': '\\&quot;'}</font>
+<font color="black"> 251.         else:</font>
+<font color="red"> 252.             closure = &quot;'&quot;</font>
+<font color="red"> 253.             quotes = {&quot;'&quot;: &quot;\\'&quot;}</font>
+<font color="red"> 254.         qget = quotes.get</font>
+<font color="red"> 255.         sio = _StringIO()</font>
+<font color="red"> 256.         write = sio.write</font>
+<font color="red"> 257.         for char in object:</font>
+<font color="red"> 258.             if char.isalpha():</font>
+<font color="red"> 259.                 write(char)</font>
+<font color="black"> 260.             else:</font>
+<font color="red"> 261.                 write(qget(char, repr(char)[1:-1]))</font>
+<font color="red"> 262.         return (&quot;%s%s%s&quot; % (closure, sio.getvalue(), closure)), True, False</font>
+<font color="black"> 263. </font>
+<font color="red"> 264.     r = getattr(typ, &quot;__repr__&quot;, None)</font>
+<font color="red"> 265.     if issubclass(typ, dict) and r is dict.__repr__:</font>
+<font color="red"> 266.         if not object:</font>
+<font color="red"> 267.             return &quot;{}&quot;, True, False</font>
+<font color="red"> 268.         objid = _id(object)</font>
+<font color="red"> 269.         if maxlevels and level &gt;= maxlevels:</font>
+<font color="red"> 270.             return &quot;{...}&quot;, False, objid in context</font>
+<font color="red"> 271.         if objid in context:</font>
+<font color="red"> 272.             return _recursion(object), False, True</font>
+<font color="red"> 273.         context[objid] = 1</font>
+<font color="red"> 274.         readable = True</font>
+<font color="red"> 275.         recursive = False</font>
+<font color="red"> 276.         components = []</font>
+<font color="red"> 277.         append = components.append</font>
+<font color="red"> 278.         level += 1</font>
+<font color="red"> 279.         saferepr = _safe_repr</font>
+<font color="red"> 280.         for k, v in _sorted(object.items()):</font>
+<font color="red"> 281.             krepr, kreadable, krecur = saferepr(k, context, maxlevels, level)</font>
+<font color="red"> 282.             vrepr, vreadable, vrecur = saferepr(v, context, maxlevels, level)</font>
+<font color="red"> 283.             append(&quot;%s: %s&quot; % (krepr, vrepr))</font>
+<font color="red"> 284.             readable = readable and kreadable and vreadable</font>
+<font color="red"> 285.             if krecur or vrecur:</font>
+<font color="red"> 286.                 recursive = True</font>
+<font color="red"> 287.         del context[objid]</font>
+<font color="red"> 288.         return &quot;{%s}&quot; % _commajoin(components), readable, recursive</font>
+<font color="black"> 289. </font>
+<font color="red"> 290.     if (issubclass(typ, list) and r is list.__repr__) or \</font>
+<font color="red"> 291.        (issubclass(typ, tuple) and r is tuple.__repr__):</font>
+<font color="red"> 292.         if issubclass(typ, list):</font>
+<font color="red"> 293.             if not object:</font>
+<font color="red"> 294.                 return &quot;[]&quot;, True, False</font>
+<font color="red"> 295.             format = &quot;[%s]&quot;</font>
+<font color="red"> 296.         elif _len(object) == 1:</font>
+<font color="red"> 297.             format = &quot;(%s,)&quot;</font>
+<font color="black"> 298.         else:</font>
+<font color="red"> 299.             if not object:</font>
+<font color="red"> 300.                 return &quot;()&quot;, True, False</font>
+<font color="red"> 301.             format = &quot;(%s)&quot;</font>
+<font color="red"> 302.         objid = _id(object)</font>
+<font color="red"> 303.         if maxlevels and level &gt;= maxlevels:</font>
+<font color="red"> 304.             return format % &quot;...&quot;, False, objid in context</font>
+<font color="red"> 305.         if objid in context:</font>
+<font color="red"> 306.             return _recursion(object), False, True</font>
+<font color="red"> 307.         context[objid] = 1</font>
+<font color="red"> 308.         readable = True</font>
+<font color="red"> 309.         recursive = False</font>
+<font color="red"> 310.         components = []</font>
+<font color="red"> 311.         append = components.append</font>
+<font color="red"> 312.         level += 1</font>
+<font color="red"> 313.         for o in object:</font>
+<font color="red"> 314.             orepr, oreadable, orecur = _safe_repr(o, context, maxlevels, level)</font>
+<font color="red"> 315.             append(orepr)</font>
+<font color="red"> 316.             if not oreadable:</font>
+<font color="red"> 317.                 readable = False</font>
+<font color="red"> 318.             if orecur:</font>
+<font color="red"> 319.                 recursive = True</font>
+<font color="red"> 320.         del context[objid]</font>
+<font color="red"> 321.         return format % _commajoin(components), readable, recursive</font>
+<font color="black"> 322. </font>
+<font color="red"> 323.     rep = repr(object)</font>
+<font color="red"> 324.     return rep, (rep and not rep.startswith('&lt;')), False</font>
+<font color="black"> 325. </font>
+<font color="black"> 326. </font>
+<font color="green"> 327. def _recursion(object):</font>
+<font color="red"> 328.     return (&quot;&lt;Recursion on %s with id=%s&gt;&quot;</font>
+<font color="red"> 329.             % (_type(object).__name__, _id(object)))</font>
+<font color="black"> 330. </font>
+<font color="black"> 331. </font>
+<font color="green"> 332. def _perfcheck(object=None):</font>
+<font color="red"> 333.     import time</font>
+<font color="red"> 334.     if object is None:</font>
+<font color="red"> 335.         object = [(&quot;string&quot;, (1, 2), [3, 4], {5: 6, 7: 8})] * 100000</font>
+<font color="red"> 336.     p = PrettyPrinter()</font>
+<font color="red"> 337.     t1 = time.time()</font>
+<font color="red"> 338.     _safe_repr(object, {}, None, 0)</font>
+<font color="red"> 339.     t2 = time.time()</font>
+<font color="red"> 340.     p.pformat(object)</font>
+<font color="red"> 341.     t3 = time.time()</font>
+<font color="red"> 342.     print &quot;_safe_repr:&quot;, t2 - t1</font>
+<font color="red"> 343.     print &quot;pformat:&quot;, t3 - t2</font>
+<font color="black"> 344. </font>
+<font color="green"> 345. if __name__ == &quot;__main__&quot;:</font>
+<font color="red"> 346.     _perfcheck()</font>
+</pre>
+

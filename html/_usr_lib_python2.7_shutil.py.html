@@ -1,0 +1,562 @@
+source file: <b>/usr/lib/python2.7/shutil.py</b><br>
+
+
+file stats: <b>335 lines, 56 executed: 16.7% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Utility functions for copying and archiving files and directory trees.</font>
+<font color="black">   2. </font>
+<font color="black">   3. XXX The functions here don't copy the resource fork or other metadata on Mac.</font>
+<font color="black">   4. </font>
+<font color="green">   5. &quot;&quot;&quot;</font>
+<font color="black">   6. </font>
+<font color="green">   7. import os</font>
+<font color="green">   8. import sys</font>
+<font color="green">   9. import stat</font>
+<font color="green">  10. from os.path import abspath</font>
+<font color="green">  11. import fnmatch</font>
+<font color="green">  12. import collections</font>
+<font color="green">  13. import errno</font>
+<font color="black">  14. </font>
+<font color="green">  15. try:</font>
+<font color="green">  16.     from pwd import getpwnam</font>
+<font color="red">  17. except ImportError:</font>
+<font color="red">  18.     getpwnam = None</font>
+<font color="black">  19. </font>
+<font color="green">  20. try:</font>
+<font color="green">  21.     from grp import getgrnam</font>
+<font color="red">  22. except ImportError:</font>
+<font color="red">  23.     getgrnam = None</font>
+<font color="black">  24. </font>
+<font color="green">  25. __all__ = [&quot;copyfileobj&quot;, &quot;copyfile&quot;, &quot;copymode&quot;, &quot;copystat&quot;, &quot;copy&quot;, &quot;copy2&quot;,</font>
+<font color="green">  26.            &quot;copytree&quot;, &quot;move&quot;, &quot;rmtree&quot;, &quot;Error&quot;, &quot;SpecialFileError&quot;,</font>
+<font color="green">  27.            &quot;ExecError&quot;, &quot;make_archive&quot;, &quot;get_archive_formats&quot;,</font>
+<font color="green">  28.            &quot;register_archive_format&quot;, &quot;unregister_archive_format&quot;,</font>
+<font color="green">  29.            &quot;ignore_patterns&quot;]</font>
+<font color="black">  30. </font>
+<font color="green">  31. class Error(EnvironmentError):</font>
+<font color="green">  32.     pass</font>
+<font color="black">  33. </font>
+<font color="green">  34. class SpecialFileError(EnvironmentError):</font>
+<font color="black">  35.     &quot;&quot;&quot;Raised when trying to do a kind of operation (e.g. copying) which is</font>
+<font color="green">  36.     not supported on a special file (e.g. a named pipe)&quot;&quot;&quot;</font>
+<font color="black">  37. </font>
+<font color="green">  38. class ExecError(EnvironmentError):</font>
+<font color="green">  39.     &quot;&quot;&quot;Raised when a command could not be executed&quot;&quot;&quot;</font>
+<font color="black">  40. </font>
+<font color="green">  41. try:</font>
+<font color="green">  42.     WindowsError</font>
+<font color="green">  43. except NameError:</font>
+<font color="green">  44.     WindowsError = None</font>
+<font color="black">  45. </font>
+<font color="green">  46. def copyfileobj(fsrc, fdst, length=16*1024):</font>
+<font color="black">  47.     &quot;&quot;&quot;copy data from file-like object fsrc to file-like object fdst&quot;&quot;&quot;</font>
+<font color="red">  48.     while 1:</font>
+<font color="red">  49.         buf = fsrc.read(length)</font>
+<font color="red">  50.         if not buf:</font>
+<font color="red">  51.             break</font>
+<font color="red">  52.         fdst.write(buf)</font>
+<font color="black">  53. </font>
+<font color="green">  54. def _samefile(src, dst):</font>
+<font color="black">  55.     # Macintosh, Unix.</font>
+<font color="red">  56.     if hasattr(os.path, 'samefile'):</font>
+<font color="red">  57.         try:</font>
+<font color="red">  58.             return os.path.samefile(src, dst)</font>
+<font color="red">  59.         except OSError:</font>
+<font color="red">  60.             return False</font>
+<font color="black">  61. </font>
+<font color="black">  62.     # All other platforms: check for same pathname.</font>
+<font color="red">  63.     return (os.path.normcase(os.path.abspath(src)) ==</font>
+<font color="red">  64.             os.path.normcase(os.path.abspath(dst)))</font>
+<font color="black">  65. </font>
+<font color="green">  66. def copyfile(src, dst):</font>
+<font color="black">  67.     &quot;&quot;&quot;Copy data from src to dst&quot;&quot;&quot;</font>
+<font color="red">  68.     if _samefile(src, dst):</font>
+<font color="red">  69.         raise Error(&quot;`%s` and `%s` are the same file&quot; % (src, dst))</font>
+<font color="black">  70. </font>
+<font color="red">  71.     for fn in [src, dst]:</font>
+<font color="red">  72.         try:</font>
+<font color="red">  73.             st = os.stat(fn)</font>
+<font color="red">  74.         except OSError:</font>
+<font color="black">  75.             # File most likely does not exist</font>
+<font color="red">  76.             pass</font>
+<font color="black">  77.         else:</font>
+<font color="black">  78.             # XXX What about other special files? (sockets, devices...)</font>
+<font color="red">  79.             if stat.S_ISFIFO(st.st_mode):</font>
+<font color="red">  80.                 raise SpecialFileError(&quot;`%s` is a named pipe&quot; % fn)</font>
+<font color="black">  81. </font>
+<font color="red">  82.     with open(src, 'rb') as fsrc:</font>
+<font color="red">  83.         with open(dst, 'wb') as fdst:</font>
+<font color="red">  84.             copyfileobj(fsrc, fdst)</font>
+<font color="black">  85. </font>
+<font color="green">  86. def copymode(src, dst):</font>
+<font color="black">  87.     &quot;&quot;&quot;Copy mode bits from src to dst&quot;&quot;&quot;</font>
+<font color="red">  88.     if hasattr(os, 'chmod'):</font>
+<font color="red">  89.         st = os.stat(src)</font>
+<font color="red">  90.         mode = stat.S_IMODE(st.st_mode)</font>
+<font color="red">  91.         os.chmod(dst, mode)</font>
+<font color="black">  92. </font>
+<font color="green">  93. def copystat(src, dst):</font>
+<font color="black">  94.     &quot;&quot;&quot;Copy all stat info (mode bits, atime, mtime, flags) from src to dst&quot;&quot;&quot;</font>
+<font color="red">  95.     st = os.stat(src)</font>
+<font color="red">  96.     mode = stat.S_IMODE(st.st_mode)</font>
+<font color="red">  97.     if hasattr(os, 'utime'):</font>
+<font color="red">  98.         os.utime(dst, (st.st_atime, st.st_mtime))</font>
+<font color="red">  99.     if hasattr(os, 'chmod'):</font>
+<font color="red"> 100.         os.chmod(dst, mode)</font>
+<font color="red"> 101.     if hasattr(os, 'chflags') and hasattr(st, 'st_flags'):</font>
+<font color="red"> 102.         try:</font>
+<font color="red"> 103.             os.chflags(dst, st.st_flags)</font>
+<font color="red"> 104.         except OSError, why:</font>
+<font color="red"> 105.             for err in 'EOPNOTSUPP', 'ENOTSUP':</font>
+<font color="red"> 106.                 if hasattr(errno, err) and why.errno == getattr(errno, err):</font>
+<font color="red"> 107.                     break</font>
+<font color="black"> 108.             else:</font>
+<font color="red"> 109.                 raise</font>
+<font color="black"> 110. </font>
+<font color="green"> 111. def copy(src, dst):</font>
+<font color="black"> 112.     &quot;&quot;&quot;Copy data and mode bits (&quot;cp src dst&quot;).</font>
+<font color="black"> 113. </font>
+<font color="black"> 114.     The destination may be a directory.</font>
+<font color="black"> 115. </font>
+<font color="black"> 116.     &quot;&quot;&quot;</font>
+<font color="red"> 117.     if os.path.isdir(dst):</font>
+<font color="red"> 118.         dst = os.path.join(dst, os.path.basename(src))</font>
+<font color="red"> 119.     copyfile(src, dst)</font>
+<font color="red"> 120.     copymode(src, dst)</font>
+<font color="black"> 121. </font>
+<font color="green"> 122. def copy2(src, dst):</font>
+<font color="black"> 123.     &quot;&quot;&quot;Copy data and all stat info (&quot;cp -p src dst&quot;).</font>
+<font color="black"> 124. </font>
+<font color="black"> 125.     The destination may be a directory.</font>
+<font color="black"> 126. </font>
+<font color="black"> 127.     &quot;&quot;&quot;</font>
+<font color="red"> 128.     if os.path.isdir(dst):</font>
+<font color="red"> 129.         dst = os.path.join(dst, os.path.basename(src))</font>
+<font color="red"> 130.     copyfile(src, dst)</font>
+<font color="red"> 131.     copystat(src, dst)</font>
+<font color="black"> 132. </font>
+<font color="green"> 133. def ignore_patterns(*patterns):</font>
+<font color="black"> 134.     &quot;&quot;&quot;Function that can be used as copytree() ignore parameter.</font>
+<font color="black"> 135. </font>
+<font color="black"> 136.     Patterns is a sequence of glob-style patterns</font>
+<font color="black"> 137.     that are used to exclude files&quot;&quot;&quot;</font>
+<font color="red"> 138.     def _ignore_patterns(path, names):</font>
+<font color="red"> 139.         ignored_names = []</font>
+<font color="red"> 140.         for pattern in patterns:</font>
+<font color="red"> 141.             ignored_names.extend(fnmatch.filter(names, pattern))</font>
+<font color="red"> 142.         return set(ignored_names)</font>
+<font color="red"> 143.     return _ignore_patterns</font>
+<font color="black"> 144. </font>
+<font color="green"> 145. def copytree(src, dst, symlinks=False, ignore=None):</font>
+<font color="black"> 146.     &quot;&quot;&quot;Recursively copy a directory tree using copy2().</font>
+<font color="black"> 147. </font>
+<font color="black"> 148.     The destination directory must not already exist.</font>
+<font color="black"> 149.     If exception(s) occur, an Error is raised with a list of reasons.</font>
+<font color="black"> 150. </font>
+<font color="black"> 151.     If the optional symlinks flag is true, symbolic links in the</font>
+<font color="black"> 152.     source tree result in symbolic links in the destination tree; if</font>
+<font color="black"> 153.     it is false, the contents of the files pointed to by symbolic</font>
+<font color="black"> 154.     links are copied.</font>
+<font color="black"> 155. </font>
+<font color="black"> 156.     The optional ignore argument is a callable. If given, it</font>
+<font color="black"> 157.     is called with the `src` parameter, which is the directory</font>
+<font color="black"> 158.     being visited by copytree(), and `names` which is the list of</font>
+<font color="black"> 159.     `src` contents, as returned by os.listdir():</font>
+<font color="black"> 160. </font>
+<font color="black"> 161.         callable(src, names) -&gt; ignored_names</font>
+<font color="black"> 162. </font>
+<font color="black"> 163.     Since copytree() is called recursively, the callable will be</font>
+<font color="black"> 164.     called once for each directory that is copied. It returns a</font>
+<font color="black"> 165.     list of names relative to the `src` directory that should</font>
+<font color="black"> 166.     not be copied.</font>
+<font color="black"> 167. </font>
+<font color="black"> 168.     XXX Consider this example code rather than the ultimate tool.</font>
+<font color="black"> 169. </font>
+<font color="black"> 170.     &quot;&quot;&quot;</font>
+<font color="red"> 171.     names = os.listdir(src)</font>
+<font color="red"> 172.     if ignore is not None:</font>
+<font color="red"> 173.         ignored_names = ignore(src, names)</font>
+<font color="black"> 174.     else:</font>
+<font color="red"> 175.         ignored_names = set()</font>
+<font color="black"> 176. </font>
+<font color="red"> 177.     os.makedirs(dst)</font>
+<font color="red"> 178.     errors = []</font>
+<font color="red"> 179.     for name in names:</font>
+<font color="red"> 180.         if name in ignored_names:</font>
+<font color="red"> 181.             continue</font>
+<font color="red"> 182.         srcname = os.path.join(src, name)</font>
+<font color="red"> 183.         dstname = os.path.join(dst, name)</font>
+<font color="red"> 184.         try:</font>
+<font color="red"> 185.             if symlinks and os.path.islink(srcname):</font>
+<font color="red"> 186.                 linkto = os.readlink(srcname)</font>
+<font color="red"> 187.                 os.symlink(linkto, dstname)</font>
+<font color="red"> 188.             elif os.path.isdir(srcname):</font>
+<font color="red"> 189.                 copytree(srcname, dstname, symlinks, ignore)</font>
+<font color="black"> 190.             else:</font>
+<font color="black"> 191.                 # Will raise a SpecialFileError for unsupported file types</font>
+<font color="red"> 192.                 copy2(srcname, dstname)</font>
+<font color="black"> 193.         # catch the Error from the recursive copytree so that we can</font>
+<font color="black"> 194.         # continue with other files</font>
+<font color="red"> 195.         except Error, err:</font>
+<font color="red"> 196.             errors.extend(err.args[0])</font>
+<font color="red"> 197.         except EnvironmentError, why:</font>
+<font color="red"> 198.             errors.append((srcname, dstname, str(why)))</font>
+<font color="red"> 199.     try:</font>
+<font color="red"> 200.         copystat(src, dst)</font>
+<font color="red"> 201.     except OSError, why:</font>
+<font color="red"> 202.         if WindowsError is not None and isinstance(why, WindowsError):</font>
+<font color="black"> 203.             # Copying file access times may fail on Windows</font>
+<font color="red"> 204.             pass</font>
+<font color="black"> 205.         else:</font>
+<font color="red"> 206.             errors.append((src, dst, str(why)))</font>
+<font color="red"> 207.     if errors:</font>
+<font color="red"> 208.         raise Error, errors</font>
+<font color="black"> 209. </font>
+<font color="green"> 210. def rmtree(path, ignore_errors=False, onerror=None):</font>
+<font color="black"> 211.     &quot;&quot;&quot;Recursively delete a directory tree.</font>
+<font color="black"> 212. </font>
+<font color="black"> 213.     If ignore_errors is set, errors are ignored; otherwise, if onerror</font>
+<font color="black"> 214.     is set, it is called to handle the error with arguments (func,</font>
+<font color="black"> 215.     path, exc_info) where func is os.listdir, os.remove, or os.rmdir;</font>
+<font color="black"> 216.     path is the argument to that function that caused it to fail; and</font>
+<font color="black"> 217.     exc_info is a tuple returned by sys.exc_info().  If ignore_errors</font>
+<font color="black"> 218.     is false and onerror is None, an exception is raised.</font>
+<font color="black"> 219. </font>
+<font color="black"> 220.     &quot;&quot;&quot;</font>
+<font color="red"> 221.     if ignore_errors:</font>
+<font color="red"> 222.         def onerror(*args):</font>
+<font color="red"> 223.             pass</font>
+<font color="red"> 224.     elif onerror is None:</font>
+<font color="red"> 225.         def onerror(*args):</font>
+<font color="red"> 226.             raise</font>
+<font color="red"> 227.     try:</font>
+<font color="red"> 228.         if os.path.islink(path):</font>
+<font color="black"> 229.             # symlinks to directories are forbidden, see bug #1669</font>
+<font color="red"> 230.             raise OSError(&quot;Cannot call rmtree on a symbolic link&quot;)</font>
+<font color="red"> 231.     except OSError:</font>
+<font color="red"> 232.         onerror(os.path.islink, path, sys.exc_info())</font>
+<font color="black"> 233.         # can't continue even if onerror hook returns</font>
+<font color="red"> 234.         return</font>
+<font color="red"> 235.     names = []</font>
+<font color="red"> 236.     try:</font>
+<font color="red"> 237.         names = os.listdir(path)</font>
+<font color="red"> 238.     except os.error, err:</font>
+<font color="red"> 239.         onerror(os.listdir, path, sys.exc_info())</font>
+<font color="red"> 240.     for name in names:</font>
+<font color="red"> 241.         fullname = os.path.join(path, name)</font>
+<font color="red"> 242.         try:</font>
+<font color="red"> 243.             mode = os.lstat(fullname).st_mode</font>
+<font color="red"> 244.         except os.error:</font>
+<font color="red"> 245.             mode = 0</font>
+<font color="red"> 246.         if stat.S_ISDIR(mode):</font>
+<font color="red"> 247.             rmtree(fullname, ignore_errors, onerror)</font>
+<font color="black"> 248.         else:</font>
+<font color="red"> 249.             try:</font>
+<font color="red"> 250.                 os.remove(fullname)</font>
+<font color="red"> 251.             except os.error, err:</font>
+<font color="red"> 252.                 onerror(os.remove, fullname, sys.exc_info())</font>
+<font color="red"> 253.     try:</font>
+<font color="red"> 254.         os.rmdir(path)</font>
+<font color="red"> 255.     except os.error:</font>
+<font color="red"> 256.         onerror(os.rmdir, path, sys.exc_info())</font>
+<font color="black"> 257. </font>
+<font color="black"> 258. </font>
+<font color="green"> 259. def _basename(path):</font>
+<font color="black"> 260.     # A basename() variant which first strips the trailing slash, if present.</font>
+<font color="black"> 261.     # Thus we always get the last component of the path, even for directories.</font>
+<font color="red"> 262.     sep = os.path.sep + (os.path.altsep or '')</font>
+<font color="red"> 263.     return os.path.basename(path.rstrip(sep))</font>
+<font color="black"> 264. </font>
+<font color="green"> 265. def move(src, dst):</font>
+<font color="black"> 266.     &quot;&quot;&quot;Recursively move a file or directory to another location. This is</font>
+<font color="black"> 267.     similar to the Unix &quot;mv&quot; command.</font>
+<font color="black"> 268. </font>
+<font color="black"> 269.     If the destination is a directory or a symlink to a directory, the source</font>
+<font color="black"> 270.     is moved inside the directory. The destination path must not already</font>
+<font color="black"> 271.     exist.</font>
+<font color="black"> 272. </font>
+<font color="black"> 273.     If the destination already exists but is not a directory, it may be</font>
+<font color="black"> 274.     overwritten depending on os.rename() semantics.</font>
+<font color="black"> 275. </font>
+<font color="black"> 276.     If the destination is on our current filesystem, then rename() is used.</font>
+<font color="black"> 277.     Otherwise, src is copied to the destination and then removed.</font>
+<font color="black"> 278.     A lot more could be done here...  A look at a mv.c shows a lot of</font>
+<font color="black"> 279.     the issues this implementation glosses over.</font>
+<font color="black"> 280. </font>
+<font color="black"> 281.     &quot;&quot;&quot;</font>
+<font color="red"> 282.     real_dst = dst</font>
+<font color="red"> 283.     if os.path.isdir(dst):</font>
+<font color="red"> 284.         if _samefile(src, dst):</font>
+<font color="black"> 285.             # We might be on a case insensitive filesystem,</font>
+<font color="black"> 286.             # perform the rename anyway.</font>
+<font color="red"> 287.             os.rename(src, dst)</font>
+<font color="red"> 288.             return</font>
+<font color="black"> 289. </font>
+<font color="red"> 290.         real_dst = os.path.join(dst, _basename(src))</font>
+<font color="red"> 291.         if os.path.exists(real_dst):</font>
+<font color="red"> 292.             raise Error, &quot;Destination path '%s' already exists&quot; % real_dst</font>
+<font color="red"> 293.     try:</font>
+<font color="red"> 294.         os.rename(src, real_dst)</font>
+<font color="red"> 295.     except OSError:</font>
+<font color="red"> 296.         if os.path.isdir(src):</font>
+<font color="red"> 297.             if _destinsrc(src, dst):</font>
+<font color="red"> 298.                 raise Error, &quot;Cannot move a directory '%s' into itself '%s'.&quot; % (src, dst)</font>
+<font color="red"> 299.             copytree(src, real_dst, symlinks=True)</font>
+<font color="red"> 300.             rmtree(src)</font>
+<font color="black"> 301.         else:</font>
+<font color="red"> 302.             copy2(src, real_dst)</font>
+<font color="red"> 303.             os.unlink(src)</font>
+<font color="black"> 304. </font>
+<font color="green"> 305. def _destinsrc(src, dst):</font>
+<font color="red"> 306.     src = abspath(src)</font>
+<font color="red"> 307.     dst = abspath(dst)</font>
+<font color="red"> 308.     if not src.endswith(os.path.sep):</font>
+<font color="red"> 309.         src += os.path.sep</font>
+<font color="red"> 310.     if not dst.endswith(os.path.sep):</font>
+<font color="red"> 311.         dst += os.path.sep</font>
+<font color="red"> 312.     return dst.startswith(src)</font>
+<font color="black"> 313. </font>
+<font color="green"> 314. def _get_gid(name):</font>
+<font color="black"> 315.     &quot;&quot;&quot;Returns a gid, given a group name.&quot;&quot;&quot;</font>
+<font color="red"> 316.     if getgrnam is None or name is None:</font>
+<font color="red"> 317.         return None</font>
+<font color="red"> 318.     try:</font>
+<font color="red"> 319.         result = getgrnam(name)</font>
+<font color="red"> 320.     except KeyError:</font>
+<font color="red"> 321.         result = None</font>
+<font color="red"> 322.     if result is not None:</font>
+<font color="red"> 323.         return result[2]</font>
+<font color="red"> 324.     return None</font>
+<font color="black"> 325. </font>
+<font color="green"> 326. def _get_uid(name):</font>
+<font color="black"> 327.     &quot;&quot;&quot;Returns an uid, given a user name.&quot;&quot;&quot;</font>
+<font color="red"> 328.     if getpwnam is None or name is None:</font>
+<font color="red"> 329.         return None</font>
+<font color="red"> 330.     try:</font>
+<font color="red"> 331.         result = getpwnam(name)</font>
+<font color="red"> 332.     except KeyError:</font>
+<font color="red"> 333.         result = None</font>
+<font color="red"> 334.     if result is not None:</font>
+<font color="red"> 335.         return result[2]</font>
+<font color="red"> 336.     return None</font>
+<font color="black"> 337. </font>
+<font color="green"> 338. def _make_tarball(base_name, base_dir, compress=&quot;gzip&quot;, verbose=0, dry_run=0,</font>
+<font color="green"> 339.                   owner=None, group=None, logger=None):</font>
+<font color="black"> 340.     &quot;&quot;&quot;Create a (possibly compressed) tar file from all the files under</font>
+<font color="black"> 341.     'base_dir'.</font>
+<font color="black"> 342. </font>
+<font color="black"> 343.     'compress' must be &quot;gzip&quot; (the default), &quot;bzip2&quot;, or None.</font>
+<font color="black"> 344. </font>
+<font color="black"> 345.     'owner' and 'group' can be used to define an owner and a group for the</font>
+<font color="black"> 346.     archive that is being built. If not provided, the current owner and group</font>
+<font color="black"> 347.     will be used.</font>
+<font color="black"> 348. </font>
+<font color="black"> 349.     The output tar file will be named 'base_name' +  &quot;.tar&quot;, possibly plus</font>
+<font color="black"> 350.     the appropriate compression extension (&quot;.gz&quot;, or &quot;.bz2&quot;).</font>
+<font color="black"> 351. </font>
+<font color="black"> 352.     Returns the output filename.</font>
+<font color="black"> 353.     &quot;&quot;&quot;</font>
+<font color="red"> 354.     tar_compression = {'gzip': 'gz', 'bzip2': 'bz2', None: ''}</font>
+<font color="red"> 355.     compress_ext = {'gzip': '.gz', 'bzip2': '.bz2'}</font>
+<font color="black"> 356. </font>
+<font color="black"> 357.     # flags for compression program, each element of list will be an argument</font>
+<font color="red"> 358.     if compress is not None and compress not in compress_ext.keys():</font>
+<font color="red"> 359.         raise ValueError, \</font>
+<font color="red"> 360.               (&quot;bad value for 'compress': must be None, 'gzip' or 'bzip2'&quot;)</font>
+<font color="black"> 361. </font>
+<font color="red"> 362.     archive_name = base_name + '.tar' + compress_ext.get(compress, '')</font>
+<font color="red"> 363.     archive_dir = os.path.dirname(archive_name)</font>
+<font color="black"> 364. </font>
+<font color="red"> 365.     if not os.path.exists(archive_dir):</font>
+<font color="red"> 366.         if logger is not None:</font>
+<font color="red"> 367.             logger.info(&quot;creating %s&quot;, archive_dir)</font>
+<font color="red"> 368.         if not dry_run:</font>
+<font color="red"> 369.             os.makedirs(archive_dir)</font>
+<font color="black"> 370. </font>
+<font color="black"> 371. </font>
+<font color="black"> 372.     # creating the tarball</font>
+<font color="red"> 373.     import tarfile  # late import so Python build itself doesn't break</font>
+<font color="black"> 374. </font>
+<font color="red"> 375.     if logger is not None:</font>
+<font color="red"> 376.         logger.info('Creating tar archive')</font>
+<font color="black"> 377. </font>
+<font color="red"> 378.     uid = _get_uid(owner)</font>
+<font color="red"> 379.     gid = _get_gid(group)</font>
+<font color="black"> 380. </font>
+<font color="red"> 381.     def _set_uid_gid(tarinfo):</font>
+<font color="red"> 382.         if gid is not None:</font>
+<font color="red"> 383.             tarinfo.gid = gid</font>
+<font color="red"> 384.             tarinfo.gname = group</font>
+<font color="red"> 385.         if uid is not None:</font>
+<font color="red"> 386.             tarinfo.uid = uid</font>
+<font color="red"> 387.             tarinfo.uname = owner</font>
+<font color="red"> 388.         return tarinfo</font>
+<font color="black"> 389. </font>
+<font color="red"> 390.     if not dry_run:</font>
+<font color="red"> 391.         tar = tarfile.open(archive_name, 'w|%s' % tar_compression[compress])</font>
+<font color="red"> 392.         try:</font>
+<font color="red"> 393.             tar.add(base_dir, filter=_set_uid_gid)</font>
+<font color="black"> 394.         finally:</font>
+<font color="red"> 395.             tar.close()</font>
+<font color="black"> 396. </font>
+<font color="red"> 397.     return archive_name</font>
+<font color="black"> 398. </font>
+<font color="green"> 399. def _call_external_zip(base_dir, zip_filename, verbose=False, dry_run=False):</font>
+<font color="black"> 400.     # XXX see if we want to keep an external call here</font>
+<font color="red"> 401.     if verbose:</font>
+<font color="red"> 402.         zipoptions = &quot;-r&quot;</font>
+<font color="black"> 403.     else:</font>
+<font color="red"> 404.         zipoptions = &quot;-rq&quot;</font>
+<font color="red"> 405.     from distutils.errors import DistutilsExecError</font>
+<font color="red"> 406.     from distutils.spawn import spawn</font>
+<font color="red"> 407.     try:</font>
+<font color="red"> 408.         spawn([&quot;zip&quot;, zipoptions, zip_filename, base_dir], dry_run=dry_run)</font>
+<font color="red"> 409.     except DistutilsExecError:</font>
+<font color="black"> 410.         # XXX really should distinguish between &quot;couldn't find</font>
+<font color="black"> 411.         # external 'zip' command&quot; and &quot;zip failed&quot;.</font>
+<font color="red"> 412.         raise ExecError, \</font>
+<font color="red"> 413.             (&quot;unable to create zip file '%s': &quot;</font>
+<font color="black"> 414.             &quot;could neither import the 'zipfile' module nor &quot;</font>
+<font color="red"> 415.             &quot;find a standalone zip utility&quot;) % zip_filename</font>
+<font color="black"> 416. </font>
+<font color="green"> 417. def _make_zipfile(base_name, base_dir, verbose=0, dry_run=0, logger=None):</font>
+<font color="black"> 418.     &quot;&quot;&quot;Create a zip file from all the files under 'base_dir'.</font>
+<font color="black"> 419. </font>
+<font color="black"> 420.     The output zip file will be named 'base_name' + &quot;.zip&quot;.  Uses either the</font>
+<font color="black"> 421.     &quot;zipfile&quot; Python module (if available) or the InfoZIP &quot;zip&quot; utility</font>
+<font color="black"> 422.     (if installed and found on the default search path).  If neither tool is</font>
+<font color="black"> 423.     available, raises ExecError.  Returns the name of the output zip</font>
+<font color="black"> 424.     file.</font>
+<font color="black"> 425.     &quot;&quot;&quot;</font>
+<font color="red"> 426.     zip_filename = base_name + &quot;.zip&quot;</font>
+<font color="red"> 427.     archive_dir = os.path.dirname(base_name)</font>
+<font color="black"> 428. </font>
+<font color="red"> 429.     if not os.path.exists(archive_dir):</font>
+<font color="red"> 430.         if logger is not None:</font>
+<font color="red"> 431.             logger.info(&quot;creating %s&quot;, archive_dir)</font>
+<font color="red"> 432.         if not dry_run:</font>
+<font color="red"> 433.             os.makedirs(archive_dir)</font>
+<font color="black"> 434. </font>
+<font color="black"> 435.     # If zipfile module is not available, try spawning an external 'zip'</font>
+<font color="black"> 436.     # command.</font>
+<font color="red"> 437.     try:</font>
+<font color="red"> 438.         import zipfile</font>
+<font color="red"> 439.     except ImportError:</font>
+<font color="red"> 440.         zipfile = None</font>
+<font color="black"> 441. </font>
+<font color="red"> 442.     if zipfile is None:</font>
+<font color="red"> 443.         _call_external_zip(base_dir, zip_filename, verbose, dry_run)</font>
+<font color="black"> 444.     else:</font>
+<font color="red"> 445.         if logger is not None:</font>
+<font color="red"> 446.             logger.info(&quot;creating '%s' and adding '%s' to it&quot;,</font>
+<font color="red"> 447.                         zip_filename, base_dir)</font>
+<font color="black"> 448. </font>
+<font color="red"> 449.         if not dry_run:</font>
+<font color="red"> 450.             with zipfile.ZipFile(zip_filename, &quot;w&quot;,</font>
+<font color="red"> 451.                                  compression=zipfile.ZIP_DEFLATED) as zf:</font>
+<font color="red"> 452.                 for dirpath, dirnames, filenames in os.walk(base_dir):</font>
+<font color="red"> 453.                     for name in filenames:</font>
+<font color="red"> 454.                         path = os.path.normpath(os.path.join(dirpath, name))</font>
+<font color="red"> 455.                         if os.path.isfile(path):</font>
+<font color="red"> 456.                             zf.write(path, path)</font>
+<font color="red"> 457.                             if logger is not None:</font>
+<font color="red"> 458.                                 logger.info(&quot;adding '%s'&quot;, path)</font>
+<font color="black"> 459. </font>
+<font color="red"> 460.     return zip_filename</font>
+<font color="black"> 461. </font>
+<font color="green"> 462. _ARCHIVE_FORMATS = {</font>
+<font color="green"> 463.     'gztar': (_make_tarball, [('compress', 'gzip')], &quot;gzip'ed tar-file&quot;),</font>
+<font color="green"> 464.     'bztar': (_make_tarball, [('compress', 'bzip2')], &quot;bzip2'ed tar-file&quot;),</font>
+<font color="green"> 465.     'tar':   (_make_tarball, [('compress', None)], &quot;uncompressed tar file&quot;),</font>
+<font color="green"> 466.     'zip':   (_make_zipfile, [],&quot;ZIP file&quot;)</font>
+<font color="black"> 467.     }</font>
+<font color="black"> 468. </font>
+<font color="green"> 469. def get_archive_formats():</font>
+<font color="black"> 470.     &quot;&quot;&quot;Returns a list of supported formats for archiving and unarchiving.</font>
+<font color="black"> 471. </font>
+<font color="black"> 472.     Each element of the returned sequence is a tuple (name, description)</font>
+<font color="black"> 473.     &quot;&quot;&quot;</font>
+<font color="red"> 474.     formats = [(name, registry[2]) for name, registry in</font>
+<font color="red"> 475.                _ARCHIVE_FORMATS.items()]</font>
+<font color="red"> 476.     formats.sort()</font>
+<font color="red"> 477.     return formats</font>
+<font color="black"> 478. </font>
+<font color="green"> 479. def register_archive_format(name, function, extra_args=None, description=''):</font>
+<font color="black"> 480.     &quot;&quot;&quot;Registers an archive format.</font>
+<font color="black"> 481. </font>
+<font color="black"> 482.     name is the name of the format. function is the callable that will be</font>
+<font color="black"> 483.     used to create archives. If provided, extra_args is a sequence of</font>
+<font color="black"> 484.     (name, value) tuples that will be passed as arguments to the callable.</font>
+<font color="black"> 485.     description can be provided to describe the format, and will be returned</font>
+<font color="black"> 486.     by the get_archive_formats() function.</font>
+<font color="black"> 487.     &quot;&quot;&quot;</font>
+<font color="red"> 488.     if extra_args is None:</font>
+<font color="red"> 489.         extra_args = []</font>
+<font color="red"> 490.     if not isinstance(function, collections.Callable):</font>
+<font color="red"> 491.         raise TypeError('The %s object is not callable' % function)</font>
+<font color="red"> 492.     if not isinstance(extra_args, (tuple, list)):</font>
+<font color="red"> 493.         raise TypeError('extra_args needs to be a sequence')</font>
+<font color="red"> 494.     for element in extra_args:</font>
+<font color="red"> 495.         if not isinstance(element, (tuple, list)) or len(element) !=2 :</font>
+<font color="red"> 496.             raise TypeError('extra_args elements are : (arg_name, value)')</font>
+<font color="black"> 497. </font>
+<font color="red"> 498.     _ARCHIVE_FORMATS[name] = (function, extra_args, description)</font>
+<font color="black"> 499. </font>
+<font color="green"> 500. def unregister_archive_format(name):</font>
+<font color="red"> 501.     del _ARCHIVE_FORMATS[name]</font>
+<font color="black"> 502. </font>
+<font color="green"> 503. def make_archive(base_name, format, root_dir=None, base_dir=None, verbose=0,</font>
+<font color="green"> 504.                  dry_run=0, owner=None, group=None, logger=None):</font>
+<font color="black"> 505.     &quot;&quot;&quot;Create an archive file (eg. zip or tar).</font>
+<font color="black"> 506. </font>
+<font color="black"> 507.     'base_name' is the name of the file to create, minus any format-specific</font>
+<font color="black"> 508.     extension; 'format' is the archive format: one of &quot;zip&quot;, &quot;tar&quot;, &quot;bztar&quot;</font>
+<font color="black"> 509.     or &quot;gztar&quot;.</font>
+<font color="black"> 510. </font>
+<font color="black"> 511.     'root_dir' is a directory that will be the root directory of the</font>
+<font color="black"> 512.     archive; ie. we typically chdir into 'root_dir' before creating the</font>
+<font color="black"> 513.     archive.  'base_dir' is the directory where we start archiving from;</font>
+<font color="black"> 514.     ie. 'base_dir' will be the common prefix of all files and</font>
+<font color="black"> 515.     directories in the archive.  'root_dir' and 'base_dir' both default</font>
+<font color="black"> 516.     to the current directory.  Returns the name of the archive file.</font>
+<font color="black"> 517. </font>
+<font color="black"> 518.     'owner' and 'group' are used when creating a tar archive. By default,</font>
+<font color="black"> 519.     uses the current owner and group.</font>
+<font color="black"> 520.     &quot;&quot;&quot;</font>
+<font color="red"> 521.     save_cwd = os.getcwd()</font>
+<font color="red"> 522.     if root_dir is not None:</font>
+<font color="red"> 523.         if logger is not None:</font>
+<font color="red"> 524.             logger.debug(&quot;changing into '%s'&quot;, root_dir)</font>
+<font color="red"> 525.         base_name = os.path.abspath(base_name)</font>
+<font color="red"> 526.         if not dry_run:</font>
+<font color="red"> 527.             os.chdir(root_dir)</font>
+<font color="black"> 528. </font>
+<font color="red"> 529.     if base_dir is None:</font>
+<font color="red"> 530.         base_dir = os.curdir</font>
+<font color="black"> 531. </font>
+<font color="red"> 532.     kwargs = {'dry_run': dry_run, 'logger': logger}</font>
+<font color="black"> 533. </font>
+<font color="red"> 534.     try:</font>
+<font color="red"> 535.         format_info = _ARCHIVE_FORMATS[format]</font>
+<font color="red"> 536.     except KeyError:</font>
+<font color="red"> 537.         raise ValueError, &quot;unknown archive format '%s'&quot; % format</font>
+<font color="black"> 538. </font>
+<font color="red"> 539.     func = format_info[0]</font>
+<font color="red"> 540.     for arg, val in format_info[1]:</font>
+<font color="red"> 541.         kwargs[arg] = val</font>
+<font color="black"> 542. </font>
+<font color="red"> 543.     if format != 'zip':</font>
+<font color="red"> 544.         kwargs['owner'] = owner</font>
+<font color="red"> 545.         kwargs['group'] = group</font>
+<font color="black"> 546. </font>
+<font color="red"> 547.     try:</font>
+<font color="red"> 548.         filename = func(base_name, base_dir, **kwargs)</font>
+<font color="black"> 549.     finally:</font>
+<font color="red"> 550.         if root_dir is not None:</font>
+<font color="red"> 551.             if logger is not None:</font>
+<font color="red"> 552.                 logger.debug(&quot;changing back to '%s'&quot;, save_cwd)</font>
+<font color="red"> 553.             os.chdir(save_cwd)</font>
+<font color="black"> 554. </font>
+<font color="red"> 555.     return filename</font>
+</pre>
+

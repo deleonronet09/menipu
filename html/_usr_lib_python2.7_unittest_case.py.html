@@ -1,0 +1,1083 @@
+source file: <b>/usr/lib/python2.7/unittest/case.py</b><br>
+
+
+file stats: <b>644 lines, 197 executed: 30.6% covered</b>
+<pre>
+<font color="green">   1. &quot;&quot;&quot;Test case implementation&quot;&quot;&quot;</font>
+<font color="black">   2. </font>
+<font color="green">   3. import collections</font>
+<font color="green">   4. import sys</font>
+<font color="green">   5. import functools</font>
+<font color="green">   6. import difflib</font>
+<font color="green">   7. import pprint</font>
+<font color="green">   8. import re</font>
+<font color="green">   9. import types</font>
+<font color="green">  10. import warnings</font>
+<font color="black">  11. </font>
+<font color="green">  12. from . import result</font>
+<font color="green">  13. from .util import (</font>
+<font color="black">  14.     strclass, safe_repr, unorderable_list_difference,</font>
+<font color="black">  15.     _count_diff_all_purpose, _count_diff_hashable</font>
+<font color="black">  16. )</font>
+<font color="black">  17. </font>
+<font color="black">  18. </font>
+<font color="green">  19. __unittest = True</font>
+<font color="black">  20. </font>
+<font color="black">  21. </font>
+<font color="green">  22. DIFF_OMITTED = ('\nDiff is %s characters long. '</font>
+<font color="black">  23.                  'Set self.maxDiff to None to see it.')</font>
+<font color="black">  24. </font>
+<font color="green">  25. class SkipTest(Exception):</font>
+<font color="black">  26.     &quot;&quot;&quot;</font>
+<font color="black">  27.     Raise this exception in a test to skip it.</font>
+<font color="black">  28. </font>
+<font color="black">  29.     Usually you can use TestCase.skipTest() or one of the skipping decorators</font>
+<font color="black">  30.     instead of raising this directly.</font>
+<font color="green">  31.     &quot;&quot;&quot;</font>
+<font color="green">  32.     pass</font>
+<font color="black">  33. </font>
+<font color="green">  34. class _ExpectedFailure(Exception):</font>
+<font color="black">  35.     &quot;&quot;&quot;</font>
+<font color="black">  36.     Raise this when a test is expected to fail.</font>
+<font color="black">  37. </font>
+<font color="black">  38.     This is an implementation detail.</font>
+<font color="green">  39.     &quot;&quot;&quot;</font>
+<font color="black">  40. </font>
+<font color="green">  41.     def __init__(self, exc_info):</font>
+<font color="red">  42.         super(_ExpectedFailure, self).__init__()</font>
+<font color="red">  43.         self.exc_info = exc_info</font>
+<font color="black">  44. </font>
+<font color="green">  45. class _UnexpectedSuccess(Exception):</font>
+<font color="black">  46.     &quot;&quot;&quot;</font>
+<font color="black">  47.     The test was supposed to fail, but it didn't!</font>
+<font color="green">  48.     &quot;&quot;&quot;</font>
+<font color="green">  49.     pass</font>
+<font color="black">  50. </font>
+<font color="green">  51. def _id(obj):</font>
+<font color="red">  52.     return obj</font>
+<font color="black">  53. </font>
+<font color="green">  54. def skip(reason):</font>
+<font color="black">  55.     &quot;&quot;&quot;</font>
+<font color="black">  56.     Unconditionally skip a test.</font>
+<font color="black">  57.     &quot;&quot;&quot;</font>
+<font color="red">  58.     def decorator(test_item):</font>
+<font color="red">  59.         if not isinstance(test_item, (type, types.ClassType)):</font>
+<font color="red">  60.             @functools.wraps(test_item)</font>
+<font color="black">  61.             def skip_wrapper(*args, **kwargs):</font>
+<font color="red">  62.                 raise SkipTest(reason)</font>
+<font color="red">  63.             test_item = skip_wrapper</font>
+<font color="black">  64. </font>
+<font color="red">  65.         test_item.__unittest_skip__ = True</font>
+<font color="red">  66.         test_item.__unittest_skip_why__ = reason</font>
+<font color="red">  67.         return test_item</font>
+<font color="red">  68.     return decorator</font>
+<font color="black">  69. </font>
+<font color="green">  70. def skipIf(condition, reason):</font>
+<font color="black">  71.     &quot;&quot;&quot;</font>
+<font color="black">  72.     Skip a test if the condition is true.</font>
+<font color="black">  73.     &quot;&quot;&quot;</font>
+<font color="red">  74.     if condition:</font>
+<font color="red">  75.         return skip(reason)</font>
+<font color="red">  76.     return _id</font>
+<font color="black">  77. </font>
+<font color="green">  78. def skipUnless(condition, reason):</font>
+<font color="black">  79.     &quot;&quot;&quot;</font>
+<font color="black">  80.     Skip a test unless the condition is true.</font>
+<font color="black">  81.     &quot;&quot;&quot;</font>
+<font color="green">  82.     if not condition:</font>
+<font color="red">  83.         return skip(reason)</font>
+<font color="green">  84.     return _id</font>
+<font color="black">  85. </font>
+<font color="black">  86. </font>
+<font color="green">  87. def expectedFailure(func):</font>
+<font color="red">  88.     @functools.wraps(func)</font>
+<font color="black">  89.     def wrapper(*args, **kwargs):</font>
+<font color="red">  90.         try:</font>
+<font color="red">  91.             func(*args, **kwargs)</font>
+<font color="red">  92.         except Exception:</font>
+<font color="red">  93.             raise _ExpectedFailure(sys.exc_info())</font>
+<font color="red">  94.         raise _UnexpectedSuccess</font>
+<font color="red">  95.     return wrapper</font>
+<font color="black">  96. </font>
+<font color="black">  97. </font>
+<font color="green">  98. class _AssertRaisesContext(object):</font>
+<font color="green">  99.     &quot;&quot;&quot;A context manager used to implement TestCase.assertRaises* methods.&quot;&quot;&quot;</font>
+<font color="black"> 100. </font>
+<font color="green"> 101.     def __init__(self, expected, test_case, expected_regexp=None):</font>
+<font color="green"> 102.         self.expected = expected</font>
+<font color="green"> 103.         self.failureException = test_case.failureException</font>
+<font color="green"> 104.         self.expected_regexp = expected_regexp</font>
+<font color="black"> 105. </font>
+<font color="green"> 106.     def __enter__(self):</font>
+<font color="green"> 107.         return self</font>
+<font color="black"> 108. </font>
+<font color="green"> 109.     def __exit__(self, exc_type, exc_value, tb):</font>
+<font color="green"> 110.         if exc_type is None:</font>
+<font color="red"> 111.             try:</font>
+<font color="red"> 112.                 exc_name = self.expected.__name__</font>
+<font color="red"> 113.             except AttributeError:</font>
+<font color="red"> 114.                 exc_name = str(self.expected)</font>
+<font color="red"> 115.             raise self.failureException(</font>
+<font color="red"> 116.                 &quot;{0} not raised&quot;.format(exc_name))</font>
+<font color="green"> 117.         if not issubclass(exc_type, self.expected):</font>
+<font color="black"> 118.             # let unexpected exceptions pass through</font>
+<font color="red"> 119.             return False</font>
+<font color="green"> 120.         self.exception = exc_value # store for later retrieval</font>
+<font color="green"> 121.         if self.expected_regexp is None:</font>
+<font color="green"> 122.             return True</font>
+<font color="black"> 123. </font>
+<font color="red"> 124.         expected_regexp = self.expected_regexp</font>
+<font color="red"> 125.         if isinstance(expected_regexp, basestring):</font>
+<font color="red"> 126.             expected_regexp = re.compile(expected_regexp)</font>
+<font color="red"> 127.         if not expected_regexp.search(str(exc_value)):</font>
+<font color="red"> 128.             raise self.failureException('&quot;%s&quot; does not match &quot;%s&quot;' %</font>
+<font color="red"> 129.                      (expected_regexp.pattern, str(exc_value)))</font>
+<font color="red"> 130.         return True</font>
+<font color="black"> 131. </font>
+<font color="black"> 132. </font>
+<font color="green"> 133. class TestCase(object):</font>
+<font color="black"> 134.     &quot;&quot;&quot;A class whose instances are single test cases.</font>
+<font color="black"> 135. </font>
+<font color="black"> 136.     By default, the test code itself should be placed in a method named</font>
+<font color="black"> 137.     'runTest'.</font>
+<font color="black"> 138. </font>
+<font color="black"> 139.     If the fixture may be used for many test cases, create as</font>
+<font color="black"> 140.     many test methods as are needed. When instantiating such a TestCase</font>
+<font color="black"> 141.     subclass, specify in the constructor arguments the name of the test method</font>
+<font color="black"> 142.     that the instance is to execute.</font>
+<font color="black"> 143. </font>
+<font color="black"> 144.     Test authors should subclass TestCase for their own tests. Construction</font>
+<font color="black"> 145.     and deconstruction of the test's environment ('fixture') can be</font>
+<font color="black"> 146.     implemented by overriding the 'setUp' and 'tearDown' methods respectively.</font>
+<font color="black"> 147. </font>
+<font color="black"> 148.     If it is necessary to override the __init__ method, the base class</font>
+<font color="black"> 149.     __init__ method must always be called. It is important that subclasses</font>
+<font color="black"> 150.     should not change the signature of their __init__ method, since instances</font>
+<font color="black"> 151.     of the classes are instantiated automatically by parts of the framework</font>
+<font color="black"> 152.     in order to be run.</font>
+<font color="black"> 153. </font>
+<font color="black"> 154.     When subclassing TestCase, you can set these attributes:</font>
+<font color="black"> 155.     * failureException: determines which exception will be raised when</font>
+<font color="black"> 156.         the instance's assertion methods fail; test methods raising this</font>
+<font color="black"> 157.         exception will be deemed to have 'failed' rather than 'errored'.</font>
+<font color="black"> 158.     * longMessage: determines whether long messages (including repr of</font>
+<font color="black"> 159.         objects used in assert methods) will be printed on failure in *addition*</font>
+<font color="black"> 160.         to any explicit message passed.</font>
+<font color="black"> 161.     * maxDiff: sets the maximum length of a diff in failure messages</font>
+<font color="black"> 162.         by assert methods using difflib. It is looked up as an instance</font>
+<font color="black"> 163.         attribute so can be configured by individual tests if required.</font>
+<font color="green"> 164.     &quot;&quot;&quot;</font>
+<font color="black"> 165. </font>
+<font color="green"> 166.     failureException = AssertionError</font>
+<font color="black"> 167. </font>
+<font color="green"> 168.     longMessage = False</font>
+<font color="black"> 169. </font>
+<font color="green"> 170.     maxDiff = 80*8</font>
+<font color="black"> 171. </font>
+<font color="black"> 172.     # If a string is longer than _diffThreshold, use normal comparison instead</font>
+<font color="black"> 173.     # of difflib.  See #11763.</font>
+<font color="green"> 174.     _diffThreshold = 2**16</font>
+<font color="black"> 175. </font>
+<font color="black"> 176.     # Attribute used by TestSuite for classSetUp</font>
+<font color="black"> 177. </font>
+<font color="green"> 178.     _classSetupFailed = False</font>
+<font color="black"> 179. </font>
+<font color="green"> 180.     def __init__(self, methodName='runTest'):</font>
+<font color="black"> 181.         &quot;&quot;&quot;Create an instance of the class that will use the named test</font>
+<font color="black"> 182.            method when executed. Raises a ValueError if the instance does</font>
+<font color="black"> 183.            not have a method with the specified name.</font>
+<font color="black"> 184.         &quot;&quot;&quot;</font>
+<font color="green"> 185.         self._testMethodName = methodName</font>
+<font color="green"> 186.         self._resultForDoCleanups = None</font>
+<font color="green"> 187.         try:</font>
+<font color="green"> 188.             testMethod = getattr(self, methodName)</font>
+<font color="red"> 189.         except AttributeError:</font>
+<font color="red"> 190.             raise ValueError(&quot;no such test method in %s: %s&quot; %</font>
+<font color="red"> 191.                   (self.__class__, methodName))</font>
+<font color="green"> 192.         self._testMethodDoc = testMethod.__doc__</font>
+<font color="green"> 193.         self._cleanups = []</font>
+<font color="black"> 194. </font>
+<font color="black"> 195.         # Map types to custom assertEqual functions that will compare</font>
+<font color="black"> 196.         # instances of said type in more detail to generate a more useful</font>
+<font color="black"> 197.         # error message.</font>
+<font color="green"> 198.         self._type_equality_funcs = {}</font>
+<font color="green"> 199.         self.addTypeEqualityFunc(dict, 'assertDictEqual')</font>
+<font color="green"> 200.         self.addTypeEqualityFunc(list, 'assertListEqual')</font>
+<font color="green"> 201.         self.addTypeEqualityFunc(tuple, 'assertTupleEqual')</font>
+<font color="green"> 202.         self.addTypeEqualityFunc(set, 'assertSetEqual')</font>
+<font color="green"> 203.         self.addTypeEqualityFunc(frozenset, 'assertSetEqual')</font>
+<font color="green"> 204.         try:</font>
+<font color="green"> 205.             self.addTypeEqualityFunc(unicode, 'assertMultiLineEqual')</font>
+<font color="red"> 206.         except NameError:</font>
+<font color="black"> 207.             # No unicode support in this build</font>
+<font color="red"> 208.             pass</font>
+<font color="black"> 209. </font>
+<font color="green"> 210.     def addTypeEqualityFunc(self, typeobj, function):</font>
+<font color="black"> 211.         &quot;&quot;&quot;Add a type specific assertEqual style function to compare a type.</font>
+<font color="black"> 212. </font>
+<font color="black"> 213.         This method is for use by TestCase subclasses that need to register</font>
+<font color="black"> 214.         their own type equality functions to provide nicer error messages.</font>
+<font color="black"> 215. </font>
+<font color="black"> 216.         Args:</font>
+<font color="black"> 217.             typeobj: The data type to call this function on when both values</font>
+<font color="black"> 218.                     are of the same type in assertEqual().</font>
+<font color="black"> 219.             function: The callable taking two arguments and an optional</font>
+<font color="black"> 220.                     msg= argument that raises self.failureException with a</font>
+<font color="black"> 221.                     useful error message when the two arguments are not equal.</font>
+<font color="black"> 222.         &quot;&quot;&quot;</font>
+<font color="green"> 223.         self._type_equality_funcs[typeobj] = function</font>
+<font color="black"> 224. </font>
+<font color="green"> 225.     def addCleanup(self, function, *args, **kwargs):</font>
+<font color="black"> 226.         &quot;&quot;&quot;Add a function, with arguments, to be called when the test is</font>
+<font color="black"> 227.         completed. Functions added are called on a LIFO basis and are</font>
+<font color="black"> 228.         called after tearDown on test failure or success.</font>
+<font color="black"> 229. </font>
+<font color="black"> 230.         Cleanup items are called even if setUp fails (unlike tearDown).&quot;&quot;&quot;</font>
+<font color="red"> 231.         self._cleanups.append((function, args, kwargs))</font>
+<font color="black"> 232. </font>
+<font color="green"> 233.     def setUp(self):</font>
+<font color="black"> 234.         &quot;Hook method for setting up the test fixture before exercising it.&quot;</font>
+<font color="green"> 235.         pass</font>
+<font color="black"> 236. </font>
+<font color="green"> 237.     def tearDown(self):</font>
+<font color="black"> 238.         &quot;Hook method for deconstructing the test fixture after testing it.&quot;</font>
+<font color="green"> 239.         pass</font>
+<font color="black"> 240. </font>
+<font color="green"> 241.     @classmethod</font>
+<font color="black"> 242.     def setUpClass(cls):</font>
+<font color="black"> 243.         &quot;Hook method for setting up class fixture before running tests in the class.&quot;</font>
+<font color="black"> 244. </font>
+<font color="green"> 245.     @classmethod</font>
+<font color="black"> 246.     def tearDownClass(cls):</font>
+<font color="black"> 247.         &quot;Hook method for deconstructing the class fixture after running all tests in the class.&quot;</font>
+<font color="black"> 248. </font>
+<font color="green"> 249.     def countTestCases(self):</font>
+<font color="red"> 250.         return 1</font>
+<font color="black"> 251. </font>
+<font color="green"> 252.     def defaultTestResult(self):</font>
+<font color="red"> 253.         return result.TestResult()</font>
+<font color="black"> 254. </font>
+<font color="green"> 255.     def shortDescription(self):</font>
+<font color="black"> 256.         &quot;&quot;&quot;Returns a one-line description of the test, or None if no</font>
+<font color="black"> 257.         description has been provided.</font>
+<font color="black"> 258. </font>
+<font color="black"> 259.         The default implementation of this method returns the first line of</font>
+<font color="black"> 260.         the specified test method's docstring.</font>
+<font color="black"> 261.         &quot;&quot;&quot;</font>
+<font color="green"> 262.         doc = self._testMethodDoc</font>
+<font color="green"> 263.         return doc and doc.split(&quot;\n&quot;)[0].strip() or None</font>
+<font color="black"> 264. </font>
+<font color="black"> 265. </font>
+<font color="green"> 266.     def id(self):</font>
+<font color="red"> 267.         return &quot;%s.%s&quot; % (strclass(self.__class__), self._testMethodName)</font>
+<font color="black"> 268. </font>
+<font color="green"> 269.     def __eq__(self, other):</font>
+<font color="red"> 270.         if type(self) is not type(other):</font>
+<font color="red"> 271.             return NotImplemented</font>
+<font color="black"> 272. </font>
+<font color="red"> 273.         return self._testMethodName == other._testMethodName</font>
+<font color="black"> 274. </font>
+<font color="green"> 275.     def __ne__(self, other):</font>
+<font color="red"> 276.         return not self == other</font>
+<font color="black"> 277. </font>
+<font color="green"> 278.     def __hash__(self):</font>
+<font color="green"> 279.         return hash((type(self), self._testMethodName))</font>
+<font color="black"> 280. </font>
+<font color="green"> 281.     def __str__(self):</font>
+<font color="green"> 282.         return &quot;%s (%s)&quot; % (self._testMethodName, strclass(self.__class__))</font>
+<font color="black"> 283. </font>
+<font color="green"> 284.     def __repr__(self):</font>
+<font color="red"> 285.         return &quot;&lt;%s testMethod=%s&gt;&quot; % \</font>
+<font color="red"> 286.                (strclass(self.__class__), self._testMethodName)</font>
+<font color="black"> 287. </font>
+<font color="green"> 288.     def _addSkip(self, result, reason):</font>
+<font color="red"> 289.         addSkip = getattr(result, 'addSkip', None)</font>
+<font color="red"> 290.         if addSkip is not None:</font>
+<font color="red"> 291.             addSkip(self, reason)</font>
+<font color="black"> 292.         else:</font>
+<font color="red"> 293.             warnings.warn(&quot;TestResult has no addSkip method, skips not reported&quot;,</font>
+<font color="red"> 294.                           RuntimeWarning, 2)</font>
+<font color="red"> 295.             result.addSuccess(self)</font>
+<font color="black"> 296. </font>
+<font color="green"> 297.     def run(self, result=None):</font>
+<font color="green"> 298.         orig_result = result</font>
+<font color="green"> 299.         if result is None:</font>
+<font color="red"> 300.             result = self.defaultTestResult()</font>
+<font color="red"> 301.             startTestRun = getattr(result, 'startTestRun', None)</font>
+<font color="red"> 302.             if startTestRun is not None:</font>
+<font color="red"> 303.                 startTestRun()</font>
+<font color="black"> 304. </font>
+<font color="green"> 305.         self._resultForDoCleanups = result</font>
+<font color="green"> 306.         result.startTest(self)</font>
+<font color="black"> 307. </font>
+<font color="green"> 308.         testMethod = getattr(self, self._testMethodName)</font>
+<font color="green"> 309.         if (getattr(self.__class__, &quot;__unittest_skip__&quot;, False) or</font>
+<font color="green"> 310.             getattr(testMethod, &quot;__unittest_skip__&quot;, False)):</font>
+<font color="black"> 311.             # If the class or method was skipped.</font>
+<font color="red"> 312.             try:</font>
+<font color="red"> 313.                 skip_why = (getattr(self.__class__, '__unittest_skip_why__', '')</font>
+<font color="red"> 314.                             or getattr(testMethod, '__unittest_skip_why__', ''))</font>
+<font color="red"> 315.                 self._addSkip(result, skip_why)</font>
+<font color="black"> 316.             finally:</font>
+<font color="red"> 317.                 result.stopTest(self)</font>
+<font color="red"> 318.             return</font>
+<font color="green"> 319.         try:</font>
+<font color="green"> 320.             success = False</font>
+<font color="green"> 321.             try:</font>
+<font color="green"> 322.                 self.setUp()</font>
+<font color="red"> 323.             except SkipTest as e:</font>
+<font color="red"> 324.                 self._addSkip(result, str(e))</font>
+<font color="red"> 325.             except KeyboardInterrupt:</font>
+<font color="red"> 326.                 raise</font>
+<font color="red"> 327.             except:</font>
+<font color="red"> 328.                 result.addError(self, sys.exc_info())</font>
+<font color="black"> 329.             else:</font>
+<font color="green"> 330.                 try:</font>
+<font color="green"> 331.                     testMethod()</font>
+<font color="green"> 332.                 except KeyboardInterrupt:</font>
+<font color="red"> 333.                     raise</font>
+<font color="green"> 334.                 except self.failureException:</font>
+<font color="green"> 335.                     result.addFailure(self, sys.exc_info())</font>
+<font color="red"> 336.                 except _ExpectedFailure as e:</font>
+<font color="red"> 337.                     addExpectedFailure = getattr(result, 'addExpectedFailure', None)</font>
+<font color="red"> 338.                     if addExpectedFailure is not None:</font>
+<font color="red"> 339.                         addExpectedFailure(self, e.exc_info)</font>
+<font color="black"> 340.                     else:</font>
+<font color="red"> 341.                         warnings.warn(&quot;TestResult has no addExpectedFailure method, reporting as passes&quot;,</font>
+<font color="red"> 342.                                       RuntimeWarning)</font>
+<font color="red"> 343.                         result.addSuccess(self)</font>
+<font color="red"> 344.                 except _UnexpectedSuccess:</font>
+<font color="red"> 345.                     addUnexpectedSuccess = getattr(result, 'addUnexpectedSuccess', None)</font>
+<font color="red"> 346.                     if addUnexpectedSuccess is not None:</font>
+<font color="red"> 347.                         addUnexpectedSuccess(self)</font>
+<font color="black"> 348.                     else:</font>
+<font color="red"> 349.                         warnings.warn(&quot;TestResult has no addUnexpectedSuccess method, reporting as failures&quot;,</font>
+<font color="red"> 350.                                       RuntimeWarning)</font>
+<font color="red"> 351.                         result.addFailure(self, sys.exc_info())</font>
+<font color="red"> 352.                 except SkipTest as e:</font>
+<font color="red"> 353.                     self._addSkip(result, str(e))</font>
+<font color="red"> 354.                 except:</font>
+<font color="red"> 355.                     result.addError(self, sys.exc_info())</font>
+<font color="black"> 356.                 else:</font>
+<font color="green"> 357.                     success = True</font>
+<font color="black"> 358. </font>
+<font color="green"> 359.                 try:</font>
+<font color="green"> 360.                     self.tearDown()</font>
+<font color="red"> 361.                 except KeyboardInterrupt:</font>
+<font color="red"> 362.                     raise</font>
+<font color="red"> 363.                 except:</font>
+<font color="red"> 364.                     result.addError(self, sys.exc_info())</font>
+<font color="red"> 365.                     success = False</font>
+<font color="black"> 366. </font>
+<font color="green"> 367.             cleanUpSuccess = self.doCleanups()</font>
+<font color="green"> 368.             success = success and cleanUpSuccess</font>
+<font color="green"> 369.             if success:</font>
+<font color="green"> 370.                 result.addSuccess(self)</font>
+<font color="black"> 371.         finally:</font>
+<font color="green"> 372.             result.stopTest(self)</font>
+<font color="green"> 373.             if orig_result is None:</font>
+<font color="red"> 374.                 stopTestRun = getattr(result, 'stopTestRun', None)</font>
+<font color="red"> 375.                 if stopTestRun is not None:</font>
+<font color="red"> 376.                     stopTestRun()</font>
+<font color="black"> 377. </font>
+<font color="green"> 378.     def doCleanups(self):</font>
+<font color="black"> 379.         &quot;&quot;&quot;Execute all cleanup functions. Normally called for you after</font>
+<font color="black"> 380.         tearDown.&quot;&quot;&quot;</font>
+<font color="green"> 381.         result = self._resultForDoCleanups</font>
+<font color="green"> 382.         ok = True</font>
+<font color="green"> 383.         while self._cleanups:</font>
+<font color="red"> 384.             function, args, kwargs = self._cleanups.pop(-1)</font>
+<font color="red"> 385.             try:</font>
+<font color="red"> 386.                 function(*args, **kwargs)</font>
+<font color="red"> 387.             except KeyboardInterrupt:</font>
+<font color="red"> 388.                 raise</font>
+<font color="red"> 389.             except:</font>
+<font color="red"> 390.                 ok = False</font>
+<font color="red"> 391.                 result.addError(self, sys.exc_info())</font>
+<font color="green"> 392.         return ok</font>
+<font color="black"> 393. </font>
+<font color="green"> 394.     def __call__(self, *args, **kwds):</font>
+<font color="green"> 395.         return self.run(*args, **kwds)</font>
+<font color="black"> 396. </font>
+<font color="green"> 397.     def debug(self):</font>
+<font color="black"> 398.         &quot;&quot;&quot;Run the test without collecting errors in a TestResult&quot;&quot;&quot;</font>
+<font color="red"> 399.         self.setUp()</font>
+<font color="red"> 400.         getattr(self, self._testMethodName)()</font>
+<font color="red"> 401.         self.tearDown()</font>
+<font color="red"> 402.         while self._cleanups:</font>
+<font color="red"> 403.             function, args, kwargs = self._cleanups.pop(-1)</font>
+<font color="red"> 404.             function(*args, **kwargs)</font>
+<font color="black"> 405. </font>
+<font color="green"> 406.     def skipTest(self, reason):</font>
+<font color="black"> 407.         &quot;&quot;&quot;Skip this test.&quot;&quot;&quot;</font>
+<font color="red"> 408.         raise SkipTest(reason)</font>
+<font color="black"> 409. </font>
+<font color="green"> 410.     def fail(self, msg=None):</font>
+<font color="black"> 411.         &quot;&quot;&quot;Fail immediately, with the given message.&quot;&quot;&quot;</font>
+<font color="green"> 412.         raise self.failureException(msg)</font>
+<font color="black"> 413. </font>
+<font color="green"> 414.     def assertFalse(self, expr, msg=None):</font>
+<font color="black"> 415.         &quot;&quot;&quot;Check that the expression is false.&quot;&quot;&quot;</font>
+<font color="red"> 416.         if expr:</font>
+<font color="red"> 417.             msg = self._formatMessage(msg, &quot;%s is not false&quot; % safe_repr(expr))</font>
+<font color="red"> 418.             raise self.failureException(msg)</font>
+<font color="black"> 419. </font>
+<font color="green"> 420.     def assertTrue(self, expr, msg=None):</font>
+<font color="black"> 421.         &quot;&quot;&quot;Check that the expression is true.&quot;&quot;&quot;</font>
+<font color="red"> 422.         if not expr:</font>
+<font color="red"> 423.             msg = self._formatMessage(msg, &quot;%s is not true&quot; % safe_repr(expr))</font>
+<font color="red"> 424.             raise self.failureException(msg)</font>
+<font color="black"> 425. </font>
+<font color="green"> 426.     def _formatMessage(self, msg, standardMsg):</font>
+<font color="black"> 427.         &quot;&quot;&quot;Honour the longMessage attribute when generating failure messages.</font>
+<font color="black"> 428.         If longMessage is False this means:</font>
+<font color="black"> 429.         * Use only an explicit message if it is provided</font>
+<font color="black"> 430.         * Otherwise use the standard message for the assert</font>
+<font color="black"> 431. </font>
+<font color="black"> 432.         If longMessage is True:</font>
+<font color="black"> 433.         * Use the standard message</font>
+<font color="black"> 434.         * If an explicit message is provided, plus ' : ' and the explicit message</font>
+<font color="black"> 435.         &quot;&quot;&quot;</font>
+<font color="red"> 436.         if not self.longMessage:</font>
+<font color="red"> 437.             return msg or standardMsg</font>
+<font color="red"> 438.         if msg is None:</font>
+<font color="red"> 439.             return standardMsg</font>
+<font color="red"> 440.         try:</font>
+<font color="black"> 441.             # don't switch to '{}' formatting in Python 2.X</font>
+<font color="black"> 442.             # it changes the way unicode input is handled</font>
+<font color="red"> 443.             return '%s : %s' % (standardMsg, msg)</font>
+<font color="red"> 444.         except UnicodeDecodeError:</font>
+<font color="red"> 445.             return  '%s : %s' % (safe_repr(standardMsg), safe_repr(msg))</font>
+<font color="black"> 446. </font>
+<font color="black"> 447. </font>
+<font color="green"> 448.     def assertRaises(self, excClass, callableObj=None, *args, **kwargs):</font>
+<font color="black"> 449.         &quot;&quot;&quot;Fail unless an exception of class excClass is raised</font>
+<font color="black"> 450.            by callableObj when invoked with arguments args and keyword</font>
+<font color="black"> 451.            arguments kwargs. If a different type of exception is</font>
+<font color="black"> 452.            raised, it will not be caught, and the test case will be</font>
+<font color="black"> 453.            deemed to have suffered an error, exactly as for an</font>
+<font color="black"> 454.            unexpected exception.</font>
+<font color="black"> 455. </font>
+<font color="black"> 456.            If called with callableObj omitted or None, will return a</font>
+<font color="black"> 457.            context object used like this::</font>
+<font color="black"> 458. </font>
+<font color="black"> 459.                 with self.assertRaises(SomeException):</font>
+<font color="black"> 460.                     do_something()</font>
+<font color="black"> 461. </font>
+<font color="black"> 462.            The context manager keeps a reference to the exception as</font>
+<font color="black"> 463.            the 'exception' attribute. This allows you to inspect the</font>
+<font color="black"> 464.            exception after the assertion::</font>
+<font color="black"> 465. </font>
+<font color="black"> 466.                with self.assertRaises(SomeException) as cm:</font>
+<font color="black"> 467.                    do_something()</font>
+<font color="black"> 468.                the_exception = cm.exception</font>
+<font color="black"> 469.                self.assertEqual(the_exception.error_code, 3)</font>
+<font color="black"> 470.         &quot;&quot;&quot;</font>
+<font color="green"> 471.         context = _AssertRaisesContext(excClass, self)</font>
+<font color="green"> 472.         if callableObj is None:</font>
+<font color="green"> 473.             return context</font>
+<font color="red"> 474.         with context:</font>
+<font color="red"> 475.             callableObj(*args, **kwargs)</font>
+<font color="black"> 476. </font>
+<font color="green"> 477.     def _getAssertEqualityFunc(self, first, second):</font>
+<font color="black"> 478.         &quot;&quot;&quot;Get a detailed comparison function for the types of the two args.</font>
+<font color="black"> 479. </font>
+<font color="black"> 480.         Returns: A callable accepting (first, second, msg=None) that will</font>
+<font color="black"> 481.         raise a failure exception if first != second with a useful human</font>
+<font color="black"> 482.         readable error message for those types.</font>
+<font color="black"> 483.         &quot;&quot;&quot;</font>
+<font color="black"> 484.         #</font>
+<font color="black"> 485.         # NOTE(gregory.p.smith): I considered isinstance(first, type(second))</font>
+<font color="black"> 486.         # and vice versa.  I opted for the conservative approach in case</font>
+<font color="black"> 487.         # subclasses are not intended to be compared in detail to their super</font>
+<font color="black"> 488.         # class instances using a type equality func.  This means testing</font>
+<font color="black"> 489.         # subtypes won't automagically use the detailed comparison.  Callers</font>
+<font color="black"> 490.         # should use their type specific assertSpamEqual method to compare</font>
+<font color="black"> 491.         # subclasses if the detailed comparison is desired and appropriate.</font>
+<font color="black"> 492.         # See the discussion in http://bugs.python.org/issue2578.</font>
+<font color="black"> 493.         #</font>
+<font color="green"> 494.         if type(first) is type(second):</font>
+<font color="green"> 495.             asserter = self._type_equality_funcs.get(type(first))</font>
+<font color="green"> 496.             if asserter is not None:</font>
+<font color="red"> 497.                 if isinstance(asserter, basestring):</font>
+<font color="red"> 498.                     asserter = getattr(self, asserter)</font>
+<font color="red"> 499.                 return asserter</font>
+<font color="black"> 500. </font>
+<font color="green"> 501.         return self._baseAssertEqual</font>
+<font color="black"> 502. </font>
+<font color="green"> 503.     def _baseAssertEqual(self, first, second, msg=None):</font>
+<font color="black"> 504.         &quot;&quot;&quot;The default assertEqual implementation, not type specific.&quot;&quot;&quot;</font>
+<font color="green"> 505.         if not first == second:</font>
+<font color="red"> 506.             standardMsg = '%s != %s' % (safe_repr(first), safe_repr(second))</font>
+<font color="red"> 507.             msg = self._formatMessage(msg, standardMsg)</font>
+<font color="red"> 508.             raise self.failureException(msg)</font>
+<font color="black"> 509. </font>
+<font color="green"> 510.     def assertEqual(self, first, second, msg=None):</font>
+<font color="black"> 511.         &quot;&quot;&quot;Fail if the two objects are unequal as determined by the '=='</font>
+<font color="black"> 512.            operator.</font>
+<font color="black"> 513.         &quot;&quot;&quot;</font>
+<font color="green"> 514.         assertion_func = self._getAssertEqualityFunc(first, second)</font>
+<font color="green"> 515.         assertion_func(first, second, msg=msg)</font>
+<font color="black"> 516. </font>
+<font color="green"> 517.     def assertNotEqual(self, first, second, msg=None):</font>
+<font color="black"> 518.         &quot;&quot;&quot;Fail if the two objects are equal as determined by the '!='</font>
+<font color="black"> 519.            operator.</font>
+<font color="black"> 520.         &quot;&quot;&quot;</font>
+<font color="red"> 521.         if not first != second:</font>
+<font color="red"> 522.             msg = self._formatMessage(msg, '%s == %s' % (safe_repr(first),</font>
+<font color="red"> 523.                                                           safe_repr(second)))</font>
+<font color="red"> 524.             raise self.failureException(msg)</font>
+<font color="black"> 525. </font>
+<font color="black"> 526. </font>
+<font color="green"> 527.     def assertAlmostEqual(self, first, second, places=None, msg=None, delta=None):</font>
+<font color="black"> 528.         &quot;&quot;&quot;Fail if the two objects are unequal as determined by their</font>
+<font color="black"> 529.            difference rounded to the given number of decimal places</font>
+<font color="black"> 530.            (default 7) and comparing to zero, or by comparing that the</font>
+<font color="black"> 531.            between the two objects is more than the given delta.</font>
+<font color="black"> 532. </font>
+<font color="black"> 533.            Note that decimal places (from zero) are usually not the same</font>
+<font color="black"> 534.            as significant digits (measured from the most signficant digit).</font>
+<font color="black"> 535. </font>
+<font color="black"> 536.            If the two objects compare equal then they will automatically</font>
+<font color="black"> 537.            compare almost equal.</font>
+<font color="black"> 538.         &quot;&quot;&quot;</font>
+<font color="red"> 539.         if first == second:</font>
+<font color="black"> 540.             # shortcut</font>
+<font color="red"> 541.             return</font>
+<font color="red"> 542.         if delta is not None and places is not None:</font>
+<font color="red"> 543.             raise TypeError(&quot;specify delta or places not both&quot;)</font>
+<font color="black"> 544. </font>
+<font color="red"> 545.         if delta is not None:</font>
+<font color="red"> 546.             if abs(first - second) &lt;= delta:</font>
+<font color="red"> 547.                 return</font>
+<font color="black"> 548. </font>
+<font color="red"> 549.             standardMsg = '%s != %s within %s delta' % (safe_repr(first),</font>
+<font color="red"> 550.                                                         safe_repr(second),</font>
+<font color="red"> 551.                                                         safe_repr(delta))</font>
+<font color="black"> 552.         else:</font>
+<font color="red"> 553.             if places is None:</font>
+<font color="red"> 554.                 places = 7</font>
+<font color="black"> 555. </font>
+<font color="red"> 556.             if round(abs(second-first), places) == 0:</font>
+<font color="red"> 557.                 return</font>
+<font color="black"> 558. </font>
+<font color="red"> 559.             standardMsg = '%s != %s within %r places' % (safe_repr(first),</font>
+<font color="red"> 560.                                                           safe_repr(second),</font>
+<font color="red"> 561.                                                           places)</font>
+<font color="red"> 562.         msg = self._formatMessage(msg, standardMsg)</font>
+<font color="red"> 563.         raise self.failureException(msg)</font>
+<font color="black"> 564. </font>
+<font color="green"> 565.     def assertNotAlmostEqual(self, first, second, places=None, msg=None, delta=None):</font>
+<font color="black"> 566.         &quot;&quot;&quot;Fail if the two objects are equal as determined by their</font>
+<font color="black"> 567.            difference rounded to the given number of decimal places</font>
+<font color="black"> 568.            (default 7) and comparing to zero, or by comparing that the</font>
+<font color="black"> 569.            between the two objects is less than the given delta.</font>
+<font color="black"> 570. </font>
+<font color="black"> 571.            Note that decimal places (from zero) are usually not the same</font>
+<font color="black"> 572.            as significant digits (measured from the most signficant digit).</font>
+<font color="black"> 573. </font>
+<font color="black"> 574.            Objects that are equal automatically fail.</font>
+<font color="black"> 575.         &quot;&quot;&quot;</font>
+<font color="red"> 576.         if delta is not None and places is not None:</font>
+<font color="red"> 577.             raise TypeError(&quot;specify delta or places not both&quot;)</font>
+<font color="red"> 578.         if delta is not None:</font>
+<font color="red"> 579.             if not (first == second) and abs(first - second) &gt; delta:</font>
+<font color="red"> 580.                 return</font>
+<font color="red"> 581.             standardMsg = '%s == %s within %s delta' % (safe_repr(first),</font>
+<font color="red"> 582.                                                         safe_repr(second),</font>
+<font color="red"> 583.                                                         safe_repr(delta))</font>
+<font color="black"> 584.         else:</font>
+<font color="red"> 585.             if places is None:</font>
+<font color="red"> 586.                 places = 7</font>
+<font color="red"> 587.             if not (first == second) and round(abs(second-first), places) != 0:</font>
+<font color="red"> 588.                 return</font>
+<font color="red"> 589.             standardMsg = '%s == %s within %r places' % (safe_repr(first),</font>
+<font color="red"> 590.                                                          safe_repr(second),</font>
+<font color="red"> 591.                                                          places)</font>
+<font color="black"> 592. </font>
+<font color="red"> 593.         msg = self._formatMessage(msg, standardMsg)</font>
+<font color="red"> 594.         raise self.failureException(msg)</font>
+<font color="black"> 595. </font>
+<font color="black"> 596.     # Synonyms for assertion methods</font>
+<font color="black"> 597. </font>
+<font color="black"> 598.     # The plurals are undocumented.  Keep them that way to discourage use.</font>
+<font color="black"> 599.     # Do not add more.  Do not remove.</font>
+<font color="black"> 600.     # Going through a deprecation cycle on these would annoy many people.</font>
+<font color="green"> 601.     assertEquals = assertEqual</font>
+<font color="green"> 602.     assertNotEquals = assertNotEqual</font>
+<font color="green"> 603.     assertAlmostEquals = assertAlmostEqual</font>
+<font color="green"> 604.     assertNotAlmostEquals = assertNotAlmostEqual</font>
+<font color="green"> 605.     assert_ = assertTrue</font>
+<font color="black"> 606. </font>
+<font color="black"> 607.     # These fail* assertion method names are pending deprecation and will</font>
+<font color="black"> 608.     # be a DeprecationWarning in 3.2; http://bugs.python.org/issue2578</font>
+<font color="green"> 609.     def _deprecate(original_func):</font>
+<font color="green"> 610.         def deprecated_func(*args, **kwargs):</font>
+<font color="red"> 611.             warnings.warn(</font>
+<font color="red"> 612.                 'Please use {0} instead.'.format(original_func.__name__),</font>
+<font color="red"> 613.                 PendingDeprecationWarning, 2)</font>
+<font color="red"> 614.             return original_func(*args, **kwargs)</font>
+<font color="green"> 615.         return deprecated_func</font>
+<font color="black"> 616. </font>
+<font color="green"> 617.     failUnlessEqual = _deprecate(assertEqual)</font>
+<font color="green"> 618.     failIfEqual = _deprecate(assertNotEqual)</font>
+<font color="green"> 619.     failUnlessAlmostEqual = _deprecate(assertAlmostEqual)</font>
+<font color="green"> 620.     failIfAlmostEqual = _deprecate(assertNotAlmostEqual)</font>
+<font color="green"> 621.     failUnless = _deprecate(assertTrue)</font>
+<font color="green"> 622.     failUnlessRaises = _deprecate(assertRaises)</font>
+<font color="green"> 623.     failIf = _deprecate(assertFalse)</font>
+<font color="black"> 624. </font>
+<font color="green"> 625.     def assertSequenceEqual(self, seq1, seq2, msg=None, seq_type=None):</font>
+<font color="black"> 626.         &quot;&quot;&quot;An equality assertion for ordered sequences (like lists and tuples).</font>
+<font color="black"> 627. </font>
+<font color="black"> 628.         For the purposes of this function, a valid ordered sequence type is one</font>
+<font color="black"> 629.         which can be indexed, has a length, and has an equality operator.</font>
+<font color="black"> 630. </font>
+<font color="black"> 631.         Args:</font>
+<font color="black"> 632.             seq1: The first sequence to compare.</font>
+<font color="black"> 633.             seq2: The second sequence to compare.</font>
+<font color="black"> 634.             seq_type: The expected datatype of the sequences, or None if no</font>
+<font color="black"> 635.                     datatype should be enforced.</font>
+<font color="black"> 636.             msg: Optional message to use on failure instead of a list of</font>
+<font color="black"> 637.                     differences.</font>
+<font color="black"> 638.         &quot;&quot;&quot;</font>
+<font color="red"> 639.         if seq_type is not None:</font>
+<font color="red"> 640.             seq_type_name = seq_type.__name__</font>
+<font color="red"> 641.             if not isinstance(seq1, seq_type):</font>
+<font color="red"> 642.                 raise self.failureException('First sequence is not a %s: %s'</font>
+<font color="red"> 643.                                         % (seq_type_name, safe_repr(seq1)))</font>
+<font color="red"> 644.             if not isinstance(seq2, seq_type):</font>
+<font color="red"> 645.                 raise self.failureException('Second sequence is not a %s: %s'</font>
+<font color="red"> 646.                                         % (seq_type_name, safe_repr(seq2)))</font>
+<font color="black"> 647.         else:</font>
+<font color="red"> 648.             seq_type_name = &quot;sequence&quot;</font>
+<font color="black"> 649. </font>
+<font color="red"> 650.         differing = None</font>
+<font color="red"> 651.         try:</font>
+<font color="red"> 652.             len1 = len(seq1)</font>
+<font color="red"> 653.         except (TypeError, NotImplementedError):</font>
+<font color="red"> 654.             differing = 'First %s has no length.    Non-sequence?' % (</font>
+<font color="red"> 655.                     seq_type_name)</font>
+<font color="black"> 656. </font>
+<font color="red"> 657.         if differing is None:</font>
+<font color="red"> 658.             try:</font>
+<font color="red"> 659.                 len2 = len(seq2)</font>
+<font color="red"> 660.             except (TypeError, NotImplementedError):</font>
+<font color="red"> 661.                 differing = 'Second %s has no length.    Non-sequence?' % (</font>
+<font color="red"> 662.                         seq_type_name)</font>
+<font color="black"> 663. </font>
+<font color="red"> 664.         if differing is None:</font>
+<font color="red"> 665.             if seq1 == seq2:</font>
+<font color="red"> 666.                 return</font>
+<font color="black"> 667. </font>
+<font color="red"> 668.             seq1_repr = safe_repr(seq1)</font>
+<font color="red"> 669.             seq2_repr = safe_repr(seq2)</font>
+<font color="red"> 670.             if len(seq1_repr) &gt; 30:</font>
+<font color="red"> 671.                 seq1_repr = seq1_repr[:30] + '...'</font>
+<font color="red"> 672.             if len(seq2_repr) &gt; 30:</font>
+<font color="red"> 673.                 seq2_repr = seq2_repr[:30] + '...'</font>
+<font color="red"> 674.             elements = (seq_type_name.capitalize(), seq1_repr, seq2_repr)</font>
+<font color="red"> 675.             differing = '%ss differ: %s != %s\n' % elements</font>
+<font color="black"> 676. </font>
+<font color="red"> 677.             for i in xrange(min(len1, len2)):</font>
+<font color="red"> 678.                 try:</font>
+<font color="red"> 679.                     item1 = seq1[i]</font>
+<font color="red"> 680.                 except (TypeError, IndexError, NotImplementedError):</font>
+<font color="red"> 681.                     differing += ('\nUnable to index element %d of first %s\n' %</font>
+<font color="red"> 682.                                  (i, seq_type_name))</font>
+<font color="red"> 683.                     break</font>
+<font color="black"> 684. </font>
+<font color="red"> 685.                 try:</font>
+<font color="red"> 686.                     item2 = seq2[i]</font>
+<font color="red"> 687.                 except (TypeError, IndexError, NotImplementedError):</font>
+<font color="red"> 688.                     differing += ('\nUnable to index element %d of second %s\n' %</font>
+<font color="red"> 689.                                  (i, seq_type_name))</font>
+<font color="red"> 690.                     break</font>
+<font color="black"> 691. </font>
+<font color="red"> 692.                 if item1 != item2:</font>
+<font color="red"> 693.                     differing += ('\nFirst differing element %d:\n%s\n%s\n' %</font>
+<font color="red"> 694.                                  (i, item1, item2))</font>
+<font color="red"> 695.                     break</font>
+<font color="black"> 696.             else:</font>
+<font color="red"> 697.                 if (len1 == len2 and seq_type is None and</font>
+<font color="red"> 698.                     type(seq1) != type(seq2)):</font>
+<font color="black"> 699.                     # The sequences are the same, but have differing types.</font>
+<font color="red"> 700.                     return</font>
+<font color="black"> 701. </font>
+<font color="red"> 702.             if len1 &gt; len2:</font>
+<font color="red"> 703.                 differing += ('\nFirst %s contains %d additional '</font>
+<font color="red"> 704.                              'elements.\n' % (seq_type_name, len1 - len2))</font>
+<font color="red"> 705.                 try:</font>
+<font color="red"> 706.                     differing += ('First extra element %d:\n%s\n' %</font>
+<font color="red"> 707.                                   (len2, seq1[len2]))</font>
+<font color="red"> 708.                 except (TypeError, IndexError, NotImplementedError):</font>
+<font color="red"> 709.                     differing += ('Unable to index element %d '</font>
+<font color="red"> 710.                                   'of first %s\n' % (len2, seq_type_name))</font>
+<font color="red"> 711.             elif len1 &lt; len2:</font>
+<font color="red"> 712.                 differing += ('\nSecond %s contains %d additional '</font>
+<font color="red"> 713.                              'elements.\n' % (seq_type_name, len2 - len1))</font>
+<font color="red"> 714.                 try:</font>
+<font color="red"> 715.                     differing += ('First extra element %d:\n%s\n' %</font>
+<font color="red"> 716.                                   (len1, seq2[len1]))</font>
+<font color="red"> 717.                 except (TypeError, IndexError, NotImplementedError):</font>
+<font color="red"> 718.                     differing += ('Unable to index element %d '</font>
+<font color="red"> 719.                                   'of second %s\n' % (len1, seq_type_name))</font>
+<font color="red"> 720.         standardMsg = differing</font>
+<font color="red"> 721.         diffMsg = '\n' + '\n'.join(</font>
+<font color="red"> 722.             difflib.ndiff(pprint.pformat(seq1).splitlines(),</font>
+<font color="red"> 723.                           pprint.pformat(seq2).splitlines()))</font>
+<font color="red"> 724.         standardMsg = self._truncateMessage(standardMsg, diffMsg)</font>
+<font color="red"> 725.         msg = self._formatMessage(msg, standardMsg)</font>
+<font color="red"> 726.         self.fail(msg)</font>
+<font color="black"> 727. </font>
+<font color="green"> 728.     def _truncateMessage(self, message, diff):</font>
+<font color="red"> 729.         max_diff = self.maxDiff</font>
+<font color="red"> 730.         if max_diff is None or len(diff) &lt;= max_diff:</font>
+<font color="red"> 731.             return message + diff</font>
+<font color="red"> 732.         return message + (DIFF_OMITTED % len(diff))</font>
+<font color="black"> 733. </font>
+<font color="green"> 734.     def assertListEqual(self, list1, list2, msg=None):</font>
+<font color="black"> 735.         &quot;&quot;&quot;A list-specific equality assertion.</font>
+<font color="black"> 736. </font>
+<font color="black"> 737.         Args:</font>
+<font color="black"> 738.             list1: The first list to compare.</font>
+<font color="black"> 739.             list2: The second list to compare.</font>
+<font color="black"> 740.             msg: Optional message to use on failure instead of a list of</font>
+<font color="black"> 741.                     differences.</font>
+<font color="black"> 742. </font>
+<font color="black"> 743.         &quot;&quot;&quot;</font>
+<font color="red"> 744.         self.assertSequenceEqual(list1, list2, msg, seq_type=list)</font>
+<font color="black"> 745. </font>
+<font color="green"> 746.     def assertTupleEqual(self, tuple1, tuple2, msg=None):</font>
+<font color="black"> 747.         &quot;&quot;&quot;A tuple-specific equality assertion.</font>
+<font color="black"> 748. </font>
+<font color="black"> 749.         Args:</font>
+<font color="black"> 750.             tuple1: The first tuple to compare.</font>
+<font color="black"> 751.             tuple2: The second tuple to compare.</font>
+<font color="black"> 752.             msg: Optional message to use on failure instead of a list of</font>
+<font color="black"> 753.                     differences.</font>
+<font color="black"> 754.         &quot;&quot;&quot;</font>
+<font color="red"> 755.         self.assertSequenceEqual(tuple1, tuple2, msg, seq_type=tuple)</font>
+<font color="black"> 756. </font>
+<font color="green"> 757.     def assertSetEqual(self, set1, set2, msg=None):</font>
+<font color="black"> 758.         &quot;&quot;&quot;A set-specific equality assertion.</font>
+<font color="black"> 759. </font>
+<font color="black"> 760.         Args:</font>
+<font color="black"> 761.             set1: The first set to compare.</font>
+<font color="black"> 762.             set2: The second set to compare.</font>
+<font color="black"> 763.             msg: Optional message to use on failure instead of a list of</font>
+<font color="black"> 764.                     differences.</font>
+<font color="black"> 765. </font>
+<font color="black"> 766.         assertSetEqual uses ducktyping to support different types of sets, and</font>
+<font color="black"> 767.         is optimized for sets specifically (parameters must support a</font>
+<font color="black"> 768.         difference method).</font>
+<font color="black"> 769.         &quot;&quot;&quot;</font>
+<font color="red"> 770.         try:</font>
+<font color="red"> 771.             difference1 = set1.difference(set2)</font>
+<font color="red"> 772.         except TypeError, e:</font>
+<font color="red"> 773.             self.fail('invalid type when attempting set difference: %s' % e)</font>
+<font color="red"> 774.         except AttributeError, e:</font>
+<font color="red"> 775.             self.fail('first argument does not support set difference: %s' % e)</font>
+<font color="black"> 776. </font>
+<font color="red"> 777.         try:</font>
+<font color="red"> 778.             difference2 = set2.difference(set1)</font>
+<font color="red"> 779.         except TypeError, e:</font>
+<font color="red"> 780.             self.fail('invalid type when attempting set difference: %s' % e)</font>
+<font color="red"> 781.         except AttributeError, e:</font>
+<font color="red"> 782.             self.fail('second argument does not support set difference: %s' % e)</font>
+<font color="black"> 783. </font>
+<font color="red"> 784.         if not (difference1 or difference2):</font>
+<font color="red"> 785.             return</font>
+<font color="black"> 786. </font>
+<font color="red"> 787.         lines = []</font>
+<font color="red"> 788.         if difference1:</font>
+<font color="red"> 789.             lines.append('Items in the first set but not the second:')</font>
+<font color="red"> 790.             for item in difference1:</font>
+<font color="red"> 791.                 lines.append(repr(item))</font>
+<font color="red"> 792.         if difference2:</font>
+<font color="red"> 793.             lines.append('Items in the second set but not the first:')</font>
+<font color="red"> 794.             for item in difference2:</font>
+<font color="red"> 795.                 lines.append(repr(item))</font>
+<font color="black"> 796. </font>
+<font color="red"> 797.         standardMsg = '\n'.join(lines)</font>
+<font color="red"> 798.         self.fail(self._formatMessage(msg, standardMsg))</font>
+<font color="black"> 799. </font>
+<font color="green"> 800.     def assertIn(self, member, container, msg=None):</font>
+<font color="black"> 801.         &quot;&quot;&quot;Just like self.assertTrue(a in b), but with a nicer default message.&quot;&quot;&quot;</font>
+<font color="red"> 802.         if member not in container:</font>
+<font color="red"> 803.             standardMsg = '%s not found in %s' % (safe_repr(member),</font>
+<font color="red"> 804.                                                   safe_repr(container))</font>
+<font color="red"> 805.             self.fail(self._formatMessage(msg, standardMsg))</font>
+<font color="black"> 806. </font>
+<font color="green"> 807.     def assertNotIn(self, member, container, msg=None):</font>
+<font color="black"> 808.         &quot;&quot;&quot;Just like self.assertTrue(a not in b), but with a nicer default message.&quot;&quot;&quot;</font>
+<font color="red"> 809.         if member in container:</font>
+<font color="red"> 810.             standardMsg = '%s unexpectedly found in %s' % (safe_repr(member),</font>
+<font color="red"> 811.                                                         safe_repr(container))</font>
+<font color="red"> 812.             self.fail(self._formatMessage(msg, standardMsg))</font>
+<font color="black"> 813. </font>
+<font color="green"> 814.     def assertIs(self, expr1, expr2, msg=None):</font>
+<font color="black"> 815.         &quot;&quot;&quot;Just like self.assertTrue(a is b), but with a nicer default message.&quot;&quot;&quot;</font>
+<font color="red"> 816.         if expr1 is not expr2:</font>
+<font color="red"> 817.             standardMsg = '%s is not %s' % (safe_repr(expr1),</font>
+<font color="red"> 818.                                              safe_repr(expr2))</font>
+<font color="red"> 819.             self.fail(self._formatMessage(msg, standardMsg))</font>
+<font color="black"> 820. </font>
+<font color="green"> 821.     def assertIsNot(self, expr1, expr2, msg=None):</font>
+<font color="black"> 822.         &quot;&quot;&quot;Just like self.assertTrue(a is not b), but with a nicer default message.&quot;&quot;&quot;</font>
+<font color="red"> 823.         if expr1 is expr2:</font>
+<font color="red"> 824.             standardMsg = 'unexpectedly identical: %s' % (safe_repr(expr1),)</font>
+<font color="red"> 825.             self.fail(self._formatMessage(msg, standardMsg))</font>
+<font color="black"> 826. </font>
+<font color="green"> 827.     def assertDictEqual(self, d1, d2, msg=None):</font>
+<font color="red"> 828.         self.assertIsInstance(d1, dict, 'First argument is not a dictionary')</font>
+<font color="red"> 829.         self.assertIsInstance(d2, dict, 'Second argument is not a dictionary')</font>
+<font color="black"> 830. </font>
+<font color="red"> 831.         if d1 != d2:</font>
+<font color="red"> 832.             standardMsg = '%s != %s' % (safe_repr(d1, True), safe_repr(d2, True))</font>
+<font color="red"> 833.             diff = ('\n' + '\n'.join(difflib.ndiff(</font>
+<font color="red"> 834.                            pprint.pformat(d1).splitlines(),</font>
+<font color="red"> 835.                            pprint.pformat(d2).splitlines())))</font>
+<font color="red"> 836.             standardMsg = self._truncateMessage(standardMsg, diff)</font>
+<font color="red"> 837.             self.fail(self._formatMessage(msg, standardMsg))</font>
+<font color="black"> 838. </font>
+<font color="green"> 839.     def assertDictContainsSubset(self, expected, actual, msg=None):</font>
+<font color="black"> 840.         &quot;&quot;&quot;Checks whether actual is a superset of expected.&quot;&quot;&quot;</font>
+<font color="red"> 841.         missing = []</font>
+<font color="red"> 842.         mismatched = []</font>
+<font color="red"> 843.         for key, value in expected.iteritems():</font>
+<font color="red"> 844.             if key not in actual:</font>
+<font color="red"> 845.                 missing.append(key)</font>
+<font color="red"> 846.             elif value != actual[key]:</font>
+<font color="red"> 847.                 mismatched.append('%s, expected: %s, actual: %s' %</font>
+<font color="red"> 848.                                   (safe_repr(key), safe_repr(value),</font>
+<font color="red"> 849.                                    safe_repr(actual[key])))</font>
+<font color="black"> 850. </font>
+<font color="red"> 851.         if not (missing or mismatched):</font>
+<font color="red"> 852.             return</font>
+<font color="black"> 853. </font>
+<font color="red"> 854.         standardMsg = ''</font>
+<font color="red"> 855.         if missing:</font>
+<font color="red"> 856.             standardMsg = 'Missing: %s' % ','.join(safe_repr(m) for m in</font>
+<font color="red"> 857.                                                     missing)</font>
+<font color="red"> 858.         if mismatched:</font>
+<font color="red"> 859.             if standardMsg:</font>
+<font color="red"> 860.                 standardMsg += '; '</font>
+<font color="red"> 861.             standardMsg += 'Mismatched values: %s' % ','.join(mismatched)</font>
+<font color="black"> 862. </font>
+<font color="red"> 863.         self.fail(self._formatMessage(msg, standardMsg))</font>
+<font color="black"> 864. </font>
+<font color="green"> 865.     def assertItemsEqual(self, expected_seq, actual_seq, msg=None):</font>
+<font color="black"> 866.         &quot;&quot;&quot;An unordered sequence specific comparison. It asserts that</font>
+<font color="black"> 867.         actual_seq and expected_seq have the same element counts.</font>
+<font color="black"> 868.         Equivalent to::</font>
+<font color="black"> 869. </font>
+<font color="black"> 870.             self.assertEqual(Counter(iter(actual_seq)),</font>
+<font color="black"> 871.                              Counter(iter(expected_seq)))</font>
+<font color="black"> 872. </font>
+<font color="black"> 873.         Asserts that each element has the same count in both sequences.</font>
+<font color="black"> 874.         Example:</font>
+<font color="black"> 875.             - [0, 1, 1] and [1, 0, 1] compare equal.</font>
+<font color="black"> 876.             - [0, 0, 1] and [0, 1] compare unequal.</font>
+<font color="black"> 877.         &quot;&quot;&quot;</font>
+<font color="red"> 878.         first_seq, second_seq = list(expected_seq), list(actual_seq)</font>
+<font color="red"> 879.         with warnings.catch_warnings():</font>
+<font color="red"> 880.             if sys.py3kwarning:</font>
+<font color="black"> 881.                 # Silence Py3k warning raised during the sorting</font>
+<font color="red"> 882.                 for _msg in [&quot;(code|dict|type) inequality comparisons&quot;,</font>
+<font color="red"> 883.                              &quot;builtin_function_or_method order comparisons&quot;,</font>
+<font color="red"> 884.                              &quot;comparing unequal types&quot;]:</font>
+<font color="red"> 885.                     warnings.filterwarnings(&quot;ignore&quot;, _msg, DeprecationWarning)</font>
+<font color="red"> 886.             try:</font>
+<font color="red"> 887.                 first = collections.Counter(first_seq)</font>
+<font color="red"> 888.                 second = collections.Counter(second_seq)</font>
+<font color="red"> 889.             except TypeError:</font>
+<font color="black"> 890.                 # Handle case with unhashable elements</font>
+<font color="red"> 891.                 differences = _count_diff_all_purpose(first_seq, second_seq)</font>
+<font color="black"> 892.             else:</font>
+<font color="red"> 893.                 if first == second:</font>
+<font color="red"> 894.                     return</font>
+<font color="red"> 895.                 differences = _count_diff_hashable(first_seq, second_seq)</font>
+<font color="black"> 896. </font>
+<font color="red"> 897.         if differences:</font>
+<font color="red"> 898.             standardMsg = 'Element counts were not equal:\n'</font>
+<font color="red"> 899.             lines = ['First has %d, Second has %d:  %r' % diff for diff in differences]</font>
+<font color="red"> 900.             diffMsg = '\n'.join(lines)</font>
+<font color="red"> 901.             standardMsg = self._truncateMessage(standardMsg, diffMsg)</font>
+<font color="red"> 902.             msg = self._formatMessage(msg, standardMsg)</font>
+<font color="red"> 903.             self.fail(msg)</font>
+<font color="black"> 904. </font>
+<font color="green"> 905.     def assertMultiLineEqual(self, first, second, msg=None):</font>
+<font color="black"> 906.         &quot;&quot;&quot;Assert that two multi-line strings are equal.&quot;&quot;&quot;</font>
+<font color="red"> 907.         self.assertIsInstance(first, basestring,</font>
+<font color="red"> 908.                 'First argument is not a string')</font>
+<font color="red"> 909.         self.assertIsInstance(second, basestring,</font>
+<font color="red"> 910.                 'Second argument is not a string')</font>
+<font color="black"> 911. </font>
+<font color="red"> 912.         if first != second:</font>
+<font color="black"> 913.             # don't use difflib if the strings are too long</font>
+<font color="red"> 914.             if (len(first) &gt; self._diffThreshold or</font>
+<font color="red"> 915.                 len(second) &gt; self._diffThreshold):</font>
+<font color="red"> 916.                 self._baseAssertEqual(first, second, msg)</font>
+<font color="red"> 917.             firstlines = first.splitlines(True)</font>
+<font color="red"> 918.             secondlines = second.splitlines(True)</font>
+<font color="red"> 919.             if len(firstlines) == 1 and first.strip('\r\n') == first:</font>
+<font color="red"> 920.                 firstlines = [first + '\n']</font>
+<font color="red"> 921.                 secondlines = [second + '\n']</font>
+<font color="red"> 922.             standardMsg = '%s != %s' % (safe_repr(first, True),</font>
+<font color="red"> 923.                                         safe_repr(second, True))</font>
+<font color="red"> 924.             diff = '\n' + ''.join(difflib.ndiff(firstlines, secondlines))</font>
+<font color="red"> 925.             standardMsg = self._truncateMessage(standardMsg, diff)</font>
+<font color="red"> 926.             self.fail(self._formatMessage(msg, standardMsg))</font>
+<font color="black"> 927. </font>
+<font color="green"> 928.     def assertLess(self, a, b, msg=None):</font>
+<font color="black"> 929.         &quot;&quot;&quot;Just like self.assertTrue(a &lt; b), but with a nicer default message.&quot;&quot;&quot;</font>
+<font color="red"> 930.         if not a &lt; b:</font>
+<font color="red"> 931.             standardMsg = '%s not less than %s' % (safe_repr(a), safe_repr(b))</font>
+<font color="red"> 932.             self.fail(self._formatMessage(msg, standardMsg))</font>
+<font color="black"> 933. </font>
+<font color="green"> 934.     def assertLessEqual(self, a, b, msg=None):</font>
+<font color="black"> 935.         &quot;&quot;&quot;Just like self.assertTrue(a &lt;= b), but with a nicer default message.&quot;&quot;&quot;</font>
+<font color="red"> 936.         if not a &lt;= b:</font>
+<font color="red"> 937.             standardMsg = '%s not less than or equal to %s' % (safe_repr(a), safe_repr(b))</font>
+<font color="red"> 938.             self.fail(self._formatMessage(msg, standardMsg))</font>
+<font color="black"> 939. </font>
+<font color="green"> 940.     def assertGreater(self, a, b, msg=None):</font>
+<font color="black"> 941.         &quot;&quot;&quot;Just like self.assertTrue(a &gt; b), but with a nicer default message.&quot;&quot;&quot;</font>
+<font color="red"> 942.         if not a &gt; b:</font>
+<font color="red"> 943.             standardMsg = '%s not greater than %s' % (safe_repr(a), safe_repr(b))</font>
+<font color="red"> 944.             self.fail(self._formatMessage(msg, standardMsg))</font>
+<font color="black"> 945. </font>
+<font color="green"> 946.     def assertGreaterEqual(self, a, b, msg=None):</font>
+<font color="black"> 947.         &quot;&quot;&quot;Just like self.assertTrue(a &gt;= b), but with a nicer default message.&quot;&quot;&quot;</font>
+<font color="red"> 948.         if not a &gt;= b:</font>
+<font color="red"> 949.             standardMsg = '%s not greater than or equal to %s' % (safe_repr(a), safe_repr(b))</font>
+<font color="red"> 950.             self.fail(self._formatMessage(msg, standardMsg))</font>
+<font color="black"> 951. </font>
+<font color="green"> 952.     def assertIsNone(self, obj, msg=None):</font>
+<font color="black"> 953.         &quot;&quot;&quot;Same as self.assertTrue(obj is None), with a nicer default message.&quot;&quot;&quot;</font>
+<font color="red"> 954.         if obj is not None:</font>
+<font color="red"> 955.             standardMsg = '%s is not None' % (safe_repr(obj),)</font>
+<font color="red"> 956.             self.fail(self._formatMessage(msg, standardMsg))</font>
+<font color="black"> 957. </font>
+<font color="green"> 958.     def assertIsNotNone(self, obj, msg=None):</font>
+<font color="black"> 959.         &quot;&quot;&quot;Included for symmetry with assertIsNone.&quot;&quot;&quot;</font>
+<font color="red"> 960.         if obj is None:</font>
+<font color="red"> 961.             standardMsg = 'unexpectedly None'</font>
+<font color="red"> 962.             self.fail(self._formatMessage(msg, standardMsg))</font>
+<font color="black"> 963. </font>
+<font color="green"> 964.     def assertIsInstance(self, obj, cls, msg=None):</font>
+<font color="black"> 965.         &quot;&quot;&quot;Same as self.assertTrue(isinstance(obj, cls)), with a nicer</font>
+<font color="black"> 966.         default message.&quot;&quot;&quot;</font>
+<font color="red"> 967.         if not isinstance(obj, cls):</font>
+<font color="red"> 968.             standardMsg = '%s is not an instance of %r' % (safe_repr(obj), cls)</font>
+<font color="red"> 969.             self.fail(self._formatMessage(msg, standardMsg))</font>
+<font color="black"> 970. </font>
+<font color="green"> 971.     def assertNotIsInstance(self, obj, cls, msg=None):</font>
+<font color="black"> 972.         &quot;&quot;&quot;Included for symmetry with assertIsInstance.&quot;&quot;&quot;</font>
+<font color="red"> 973.         if isinstance(obj, cls):</font>
+<font color="red"> 974.             standardMsg = '%s is an instance of %r' % (safe_repr(obj), cls)</font>
+<font color="red"> 975.             self.fail(self._formatMessage(msg, standardMsg))</font>
+<font color="black"> 976. </font>
+<font color="black"> 977.     def assertRaisesRegexp(self, expected_exception, expected_regexp,</font>
+<font color="green"> 978.                            callable_obj=None, *args, **kwargs):</font>
+<font color="black"> 979.         &quot;&quot;&quot;Asserts that the message in a raised exception matches a regexp.</font>
+<font color="black"> 980. </font>
+<font color="black"> 981.         Args:</font>
+<font color="black"> 982.             expected_exception: Exception class expected to be raised.</font>
+<font color="black"> 983.             expected_regexp: Regexp (re pattern object or string) expected</font>
+<font color="black"> 984.                     to be found in error message.</font>
+<font color="black"> 985.             callable_obj: Function to be called.</font>
+<font color="black"> 986.             args: Extra args.</font>
+<font color="black"> 987.             kwargs: Extra kwargs.</font>
+<font color="black"> 988.         &quot;&quot;&quot;</font>
+<font color="red"> 989.         context = _AssertRaisesContext(expected_exception, self, expected_regexp)</font>
+<font color="red"> 990.         if callable_obj is None:</font>
+<font color="red"> 991.             return context</font>
+<font color="red"> 992.         with context:</font>
+<font color="red"> 993.             callable_obj(*args, **kwargs)</font>
+<font color="black"> 994. </font>
+<font color="green"> 995.     def assertRegexpMatches(self, text, expected_regexp, msg=None):</font>
+<font color="black"> 996.         &quot;&quot;&quot;Fail the test unless the text matches the regular expression.&quot;&quot;&quot;</font>
+<font color="red"> 997.         if isinstance(expected_regexp, basestring):</font>
+<font color="red"> 998.             expected_regexp = re.compile(expected_regexp)</font>
+<font color="red"> 999.         if not expected_regexp.search(text):</font>
+<font color="red">1000.             msg = msg or &quot;Regexp didn't match&quot;</font>
+<font color="red">1001.             msg = '%s: %r not found in %r' % (msg, expected_regexp.pattern, text)</font>
+<font color="red">1002.             raise self.failureException(msg)</font>
+<font color="black">1003. </font>
+<font color="green">1004.     def assertNotRegexpMatches(self, text, unexpected_regexp, msg=None):</font>
+<font color="black">1005.         &quot;&quot;&quot;Fail the test if the text matches the regular expression.&quot;&quot;&quot;</font>
+<font color="red">1006.         if isinstance(unexpected_regexp, basestring):</font>
+<font color="red">1007.             unexpected_regexp = re.compile(unexpected_regexp)</font>
+<font color="red">1008.         match = unexpected_regexp.search(text)</font>
+<font color="red">1009.         if match:</font>
+<font color="red">1010.             msg = msg or &quot;Regexp matched&quot;</font>
+<font color="red">1011.             msg = '%s: %r matches %r in %r' % (msg,</font>
+<font color="red">1012.                                                text[match.start():match.end()],</font>
+<font color="red">1013.                                                unexpected_regexp.pattern,</font>
+<font color="red">1014.                                                text)</font>
+<font color="red">1015.             raise self.failureException(msg)</font>
+<font color="black">1016. </font>
+<font color="black">1017. </font>
+<font color="green">1018. class FunctionTestCase(TestCase):</font>
+<font color="black">1019.     &quot;&quot;&quot;A test case that wraps a test function.</font>
+<font color="black">1020. </font>
+<font color="black">1021.     This is useful for slipping pre-existing test functions into the</font>
+<font color="black">1022.     unittest framework. Optionally, set-up and tidy-up functions can be</font>
+<font color="black">1023.     supplied. As with TestCase, the tidy-up ('tearDown') function will</font>
+<font color="black">1024.     always be called if the set-up ('setUp') function ran successfully.</font>
+<font color="green">1025.     &quot;&quot;&quot;</font>
+<font color="black">1026. </font>
+<font color="green">1027.     def __init__(self, testFunc, setUp=None, tearDown=None, description=None):</font>
+<font color="red">1028.         super(FunctionTestCase, self).__init__()</font>
+<font color="red">1029.         self._setUpFunc = setUp</font>
+<font color="red">1030.         self._tearDownFunc = tearDown</font>
+<font color="red">1031.         self._testFunc = testFunc</font>
+<font color="red">1032.         self._description = description</font>
+<font color="black">1033. </font>
+<font color="green">1034.     def setUp(self):</font>
+<font color="red">1035.         if self._setUpFunc is not None:</font>
+<font color="red">1036.             self._setUpFunc()</font>
+<font color="black">1037. </font>
+<font color="green">1038.     def tearDown(self):</font>
+<font color="red">1039.         if self._tearDownFunc is not None:</font>
+<font color="red">1040.             self._tearDownFunc()</font>
+<font color="black">1041. </font>
+<font color="green">1042.     def runTest(self):</font>
+<font color="red">1043.         self._testFunc()</font>
+<font color="black">1044. </font>
+<font color="green">1045.     def id(self):</font>
+<font color="red">1046.         return self._testFunc.__name__</font>
+<font color="black">1047. </font>
+<font color="green">1048.     def __eq__(self, other):</font>
+<font color="red">1049.         if not isinstance(other, self.__class__):</font>
+<font color="red">1050.             return NotImplemented</font>
+<font color="black">1051. </font>
+<font color="red">1052.         return self._setUpFunc == other._setUpFunc and \</font>
+<font color="red">1053.                self._tearDownFunc == other._tearDownFunc and \</font>
+<font color="red">1054.                self._testFunc == other._testFunc and \</font>
+<font color="red">1055.                self._description == other._description</font>
+<font color="black">1056. </font>
+<font color="green">1057.     def __ne__(self, other):</font>
+<font color="red">1058.         return not self == other</font>
+<font color="black">1059. </font>
+<font color="green">1060.     def __hash__(self):</font>
+<font color="red">1061.         return hash((type(self), self._setUpFunc, self._tearDownFunc,</font>
+<font color="red">1062.                      self._testFunc, self._description))</font>
+<font color="black">1063. </font>
+<font color="green">1064.     def __str__(self):</font>
+<font color="red">1065.         return &quot;%s (%s)&quot; % (strclass(self.__class__),</font>
+<font color="red">1066.                             self._testFunc.__name__)</font>
+<font color="black">1067. </font>
+<font color="green">1068.     def __repr__(self):</font>
+<font color="red">1069.         return &quot;&lt;%s tec=%s&gt;&quot; % (strclass(self.__class__),</font>
+<font color="red">1070.                                      self._testFunc)</font>
+<font color="black">1071. </font>
+<font color="green">1072.     def shortDescription(self):</font>
+<font color="red">1073.         if self._description is not None:</font>
+<font color="red">1074.             return self._description</font>
+<font color="red">1075.         doc = self._testFunc.__doc__</font>
+<font color="red">1076.         return doc and doc.split(&quot;\n&quot;)[0].strip() or None</font>
+</pre>
+

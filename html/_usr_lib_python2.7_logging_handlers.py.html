@@ -1,0 +1,1228 @@
+source file: <b>/usr/lib/python2.7/logging/handlers.py</b><br>
+
+
+file stats: <b>639 lines, 162 executed: 25.4% covered</b>
+<pre>
+<font color="black">   1. # Copyright 2001-2013 by Vinay Sajip. All Rights Reserved.</font>
+<font color="black">   2. #</font>
+<font color="black">   3. # Permission to use, copy, modify, and distribute this software and its</font>
+<font color="black">   4. # documentation for any purpose and without fee is hereby granted,</font>
+<font color="black">   5. # provided that the above copyright notice appear in all copies and that</font>
+<font color="black">   6. # both that copyright notice and this permission notice appear in</font>
+<font color="black">   7. # supporting documentation, and that the name of Vinay Sajip</font>
+<font color="black">   8. # not be used in advertising or publicity pertaining to distribution</font>
+<font color="black">   9. # of the software without specific, written prior permission.</font>
+<font color="black">  10. # VINAY SAJIP DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING</font>
+<font color="black">  11. # ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL</font>
+<font color="black">  12. # VINAY SAJIP BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR</font>
+<font color="black">  13. # ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER</font>
+<font color="black">  14. # IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT</font>
+<font color="black">  15. # OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.</font>
+<font color="black">  16. </font>
+<font color="black">  17. &quot;&quot;&quot;</font>
+<font color="black">  18. Additional handlers for the logging package for Python. The core package is</font>
+<font color="black">  19. based on PEP 282 and comments thereto in comp.lang.python.</font>
+<font color="black">  20. </font>
+<font color="black">  21. Copyright (C) 2001-2013 Vinay Sajip. All Rights Reserved.</font>
+<font color="black">  22. </font>
+<font color="black">  23. To use, simply 'import logging.handlers' and log away!</font>
+<font color="green">  24. &quot;&quot;&quot;</font>
+<font color="black">  25. </font>
+<font color="green">  26. import errno, logging, socket, os, cPickle, struct, time, re</font>
+<font color="green">  27. from stat import ST_DEV, ST_INO, ST_MTIME</font>
+<font color="black">  28. </font>
+<font color="green">  29. try:</font>
+<font color="green">  30.     import codecs</font>
+<font color="red">  31. except ImportError:</font>
+<font color="red">  32.     codecs = None</font>
+<font color="green">  33. try:</font>
+<font color="green">  34.     unicode</font>
+<font color="green">  35.     _unicode = True</font>
+<font color="red">  36. except NameError:</font>
+<font color="red">  37.     _unicode = False</font>
+<font color="black">  38. </font>
+<font color="black">  39. #</font>
+<font color="black">  40. # Some constants...</font>
+<font color="black">  41. #</font>
+<font color="black">  42. </font>
+<font color="green">  43. DEFAULT_TCP_LOGGING_PORT    = 9020</font>
+<font color="green">  44. DEFAULT_UDP_LOGGING_PORT    = 9021</font>
+<font color="green">  45. DEFAULT_HTTP_LOGGING_PORT   = 9022</font>
+<font color="green">  46. DEFAULT_SOAP_LOGGING_PORT   = 9023</font>
+<font color="green">  47. SYSLOG_UDP_PORT             = 514</font>
+<font color="green">  48. SYSLOG_TCP_PORT             = 514</font>
+<font color="black">  49. </font>
+<font color="green">  50. _MIDNIGHT = 24 * 60 * 60  # number of seconds in a day</font>
+<font color="black">  51. </font>
+<font color="green">  52. class BaseRotatingHandler(logging.FileHandler):</font>
+<font color="black">  53.     &quot;&quot;&quot;</font>
+<font color="black">  54.     Base class for handlers that rotate log files at a certain point.</font>
+<font color="black">  55.     Not meant to be instantiated directly.  Instead, use RotatingFileHandler</font>
+<font color="black">  56.     or TimedRotatingFileHandler.</font>
+<font color="green">  57.     &quot;&quot;&quot;</font>
+<font color="green">  58.     def __init__(self, filename, mode, encoding=None, delay=0):</font>
+<font color="black">  59.         &quot;&quot;&quot;</font>
+<font color="black">  60.         Use the specified filename for streamed logging</font>
+<font color="black">  61.         &quot;&quot;&quot;</font>
+<font color="red">  62.         if codecs is None:</font>
+<font color="red">  63.             encoding = None</font>
+<font color="red">  64.         logging.FileHandler.__init__(self, filename, mode, encoding, delay)</font>
+<font color="red">  65.         self.mode = mode</font>
+<font color="red">  66.         self.encoding = encoding</font>
+<font color="black">  67. </font>
+<font color="green">  68.     def emit(self, record):</font>
+<font color="black">  69.         &quot;&quot;&quot;</font>
+<font color="black">  70.         Emit a record.</font>
+<font color="black">  71. </font>
+<font color="black">  72.         Output the record to the file, catering for rollover as described</font>
+<font color="black">  73.         in doRollover().</font>
+<font color="black">  74.         &quot;&quot;&quot;</font>
+<font color="red">  75.         try:</font>
+<font color="red">  76.             if self.shouldRollover(record):</font>
+<font color="red">  77.                 self.doRollover()</font>
+<font color="red">  78.             logging.FileHandler.emit(self, record)</font>
+<font color="red">  79.         except (KeyboardInterrupt, SystemExit):</font>
+<font color="red">  80.             raise</font>
+<font color="red">  81.         except:</font>
+<font color="red">  82.             self.handleError(record)</font>
+<font color="black">  83. </font>
+<font color="green">  84. class RotatingFileHandler(BaseRotatingHandler):</font>
+<font color="black">  85.     &quot;&quot;&quot;</font>
+<font color="black">  86.     Handler for logging to a set of files, which switches from one file</font>
+<font color="black">  87.     to the next when the current file reaches a certain size.</font>
+<font color="green">  88.     &quot;&quot;&quot;</font>
+<font color="green">  89.     def __init__(self, filename, mode='a', maxBytes=0, backupCount=0, encoding=None, delay=0):</font>
+<font color="black">  90.         &quot;&quot;&quot;</font>
+<font color="black">  91.         Open the specified file and use it as the stream for logging.</font>
+<font color="black">  92. </font>
+<font color="black">  93.         By default, the file grows indefinitely. You can specify particular</font>
+<font color="black">  94.         values of maxBytes and backupCount to allow the file to rollover at</font>
+<font color="black">  95.         a predetermined size.</font>
+<font color="black">  96. </font>
+<font color="black">  97.         Rollover occurs whenever the current log file is nearly maxBytes in</font>
+<font color="black">  98.         length. If backupCount is &gt;= 1, the system will successively create</font>
+<font color="black">  99.         new files with the same pathname as the base file, but with extensions</font>
+<font color="black"> 100.         &quot;.1&quot;, &quot;.2&quot; etc. appended to it. For example, with a backupCount of 5</font>
+<font color="black"> 101.         and a base file name of &quot;app.log&quot;, you would get &quot;app.log&quot;,</font>
+<font color="black"> 102.         &quot;app.log.1&quot;, &quot;app.log.2&quot;, ... through to &quot;app.log.5&quot;. The file being</font>
+<font color="black"> 103.         written to is always &quot;app.log&quot; - when it gets filled up, it is closed</font>
+<font color="black"> 104.         and renamed to &quot;app.log.1&quot;, and if files &quot;app.log.1&quot;, &quot;app.log.2&quot; etc.</font>
+<font color="black"> 105.         exist, then they are renamed to &quot;app.log.2&quot;, &quot;app.log.3&quot; etc.</font>
+<font color="black"> 106.         respectively.</font>
+<font color="black"> 107. </font>
+<font color="black"> 108.         If maxBytes is zero, rollover never occurs.</font>
+<font color="black"> 109.         &quot;&quot;&quot;</font>
+<font color="black"> 110.         # If rotation/rollover is wanted, it doesn't make sense to use another</font>
+<font color="black"> 111.         # mode. If for example 'w' were specified, then if there were multiple</font>
+<font color="black"> 112.         # runs of the calling application, the logs from previous runs would be</font>
+<font color="black"> 113.         # lost if the 'w' is respected, because the log file would be truncated</font>
+<font color="black"> 114.         # on each run.</font>
+<font color="red"> 115.         if maxBytes &gt; 0:</font>
+<font color="red"> 116.             mode = 'a'</font>
+<font color="red"> 117.         BaseRotatingHandler.__init__(self, filename, mode, encoding, delay)</font>
+<font color="red"> 118.         self.maxBytes = maxBytes</font>
+<font color="red"> 119.         self.backupCount = backupCount</font>
+<font color="black"> 120. </font>
+<font color="green"> 121.     def doRollover(self):</font>
+<font color="black"> 122.         &quot;&quot;&quot;</font>
+<font color="black"> 123.         Do a rollover, as described in __init__().</font>
+<font color="black"> 124.         &quot;&quot;&quot;</font>
+<font color="red"> 125.         if self.stream:</font>
+<font color="red"> 126.             self.stream.close()</font>
+<font color="red"> 127.             self.stream = None</font>
+<font color="red"> 128.         if self.backupCount &gt; 0:</font>
+<font color="red"> 129.             for i in range(self.backupCount - 1, 0, -1):</font>
+<font color="red"> 130.                 sfn = &quot;%s.%d&quot; % (self.baseFilename, i)</font>
+<font color="red"> 131.                 dfn = &quot;%s.%d&quot; % (self.baseFilename, i + 1)</font>
+<font color="red"> 132.                 if os.path.exists(sfn):</font>
+<font color="black"> 133.                     #print &quot;%s -&gt; %s&quot; % (sfn, dfn)</font>
+<font color="red"> 134.                     if os.path.exists(dfn):</font>
+<font color="red"> 135.                         os.remove(dfn)</font>
+<font color="red"> 136.                     os.rename(sfn, dfn)</font>
+<font color="red"> 137.             dfn = self.baseFilename + &quot;.1&quot;</font>
+<font color="red"> 138.             if os.path.exists(dfn):</font>
+<font color="red"> 139.                 os.remove(dfn)</font>
+<font color="black"> 140.             # Issue 18940: A file may not have been created if delay is True.</font>
+<font color="red"> 141.             if os.path.exists(self.baseFilename):</font>
+<font color="red"> 142.                 os.rename(self.baseFilename, dfn)</font>
+<font color="red"> 143.         if not self.delay:</font>
+<font color="red"> 144.             self.stream = self._open()</font>
+<font color="black"> 145. </font>
+<font color="green"> 146.     def shouldRollover(self, record):</font>
+<font color="black"> 147.         &quot;&quot;&quot;</font>
+<font color="black"> 148.         Determine if rollover should occur.</font>
+<font color="black"> 149. </font>
+<font color="black"> 150.         Basically, see if the supplied record would cause the file to exceed</font>
+<font color="black"> 151.         the size limit we have.</font>
+<font color="black"> 152.         &quot;&quot;&quot;</font>
+<font color="red"> 153.         if self.stream is None:                 # delay was set...</font>
+<font color="red"> 154.             self.stream = self._open()</font>
+<font color="red"> 155.         if self.maxBytes &gt; 0:                   # are we rolling over?</font>
+<font color="red"> 156.             msg = &quot;%s\n&quot; % self.format(record)</font>
+<font color="red"> 157.             self.stream.seek(0, 2)  #due to non-posix-compliant Windows feature</font>
+<font color="red"> 158.             if self.stream.tell() + len(msg) &gt;= self.maxBytes:</font>
+<font color="red"> 159.                 return 1</font>
+<font color="red"> 160.         return 0</font>
+<font color="black"> 161. </font>
+<font color="green"> 162. class TimedRotatingFileHandler(BaseRotatingHandler):</font>
+<font color="black"> 163.     &quot;&quot;&quot;</font>
+<font color="black"> 164.     Handler for logging to a file, rotating the log file at certain timed</font>
+<font color="black"> 165.     intervals.</font>
+<font color="black"> 166. </font>
+<font color="black"> 167.     If backupCount is &gt; 0, when rollover is done, no more than backupCount</font>
+<font color="black"> 168.     files are kept - the oldest ones are deleted.</font>
+<font color="green"> 169.     &quot;&quot;&quot;</font>
+<font color="green"> 170.     def __init__(self, filename, when='h', interval=1, backupCount=0, encoding=None, delay=False, utc=False):</font>
+<font color="red"> 171.         BaseRotatingHandler.__init__(self, filename, 'a', encoding, delay)</font>
+<font color="red"> 172.         self.when = when.upper()</font>
+<font color="red"> 173.         self.backupCount = backupCount</font>
+<font color="red"> 174.         self.utc = utc</font>
+<font color="black"> 175.         # Calculate the real rollover interval, which is just the number of</font>
+<font color="black"> 176.         # seconds between rollovers.  Also set the filename suffix used when</font>
+<font color="black"> 177.         # a rollover occurs.  Current 'when' events supported:</font>
+<font color="black"> 178.         # S - Seconds</font>
+<font color="black"> 179.         # M - Minutes</font>
+<font color="black"> 180.         # H - Hours</font>
+<font color="black"> 181.         # D - Days</font>
+<font color="black"> 182.         # midnight - roll over at midnight</font>
+<font color="black"> 183.         # W{0-6} - roll over on a certain day; 0 - Monday</font>
+<font color="black"> 184.         #</font>
+<font color="black"> 185.         # Case of the 'when' specifier is not important; lower or upper case</font>
+<font color="black"> 186.         # will work.</font>
+<font color="red"> 187.         if self.when == 'S':</font>
+<font color="red"> 188.             self.interval = 1 # one second</font>
+<font color="red"> 189.             self.suffix = &quot;%Y-%m-%d_%H-%M-%S&quot;</font>
+<font color="red"> 190.             self.extMatch = r&quot;^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$&quot;</font>
+<font color="red"> 191.         elif self.when == 'M':</font>
+<font color="red"> 192.             self.interval = 60 # one minute</font>
+<font color="red"> 193.             self.suffix = &quot;%Y-%m-%d_%H-%M&quot;</font>
+<font color="red"> 194.             self.extMatch = r&quot;^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}$&quot;</font>
+<font color="red"> 195.         elif self.when == 'H':</font>
+<font color="red"> 196.             self.interval = 60 * 60 # one hour</font>
+<font color="red"> 197.             self.suffix = &quot;%Y-%m-%d_%H&quot;</font>
+<font color="red"> 198.             self.extMatch = r&quot;^\d{4}-\d{2}-\d{2}_\d{2}$&quot;</font>
+<font color="red"> 199.         elif self.when == 'D' or self.when == 'MIDNIGHT':</font>
+<font color="red"> 200.             self.interval = 60 * 60 * 24 # one day</font>
+<font color="red"> 201.             self.suffix = &quot;%Y-%m-%d&quot;</font>
+<font color="red"> 202.             self.extMatch = r&quot;^\d{4}-\d{2}-\d{2}$&quot;</font>
+<font color="red"> 203.         elif self.when.startswith('W'):</font>
+<font color="red"> 204.             self.interval = 60 * 60 * 24 * 7 # one week</font>
+<font color="red"> 205.             if len(self.when) != 2:</font>
+<font color="red"> 206.                 raise ValueError(&quot;You must specify a day for weekly rollover from 0 to 6 (0 is Monday): %s&quot; % self.when)</font>
+<font color="red"> 207.             if self.when[1] &lt; '0' or self.when[1] &gt; '6':</font>
+<font color="red"> 208.                 raise ValueError(&quot;Invalid day specified for weekly rollover: %s&quot; % self.when)</font>
+<font color="red"> 209.             self.dayOfWeek = int(self.when[1])</font>
+<font color="red"> 210.             self.suffix = &quot;%Y-%m-%d&quot;</font>
+<font color="red"> 211.             self.extMatch = r&quot;^\d{4}-\d{2}-\d{2}$&quot;</font>
+<font color="black"> 212.         else:</font>
+<font color="red"> 213.             raise ValueError(&quot;Invalid rollover interval specified: %s&quot; % self.when)</font>
+<font color="black"> 214. </font>
+<font color="red"> 215.         self.extMatch = re.compile(self.extMatch)</font>
+<font color="red"> 216.         self.interval = self.interval * interval # multiply by units requested</font>
+<font color="red"> 217.         if os.path.exists(filename):</font>
+<font color="red"> 218.             t = os.stat(filename)[ST_MTIME]</font>
+<font color="black"> 219.         else:</font>
+<font color="red"> 220.             t = int(time.time())</font>
+<font color="red"> 221.         self.rolloverAt = self.computeRollover(t)</font>
+<font color="black"> 222. </font>
+<font color="green"> 223.     def computeRollover(self, currentTime):</font>
+<font color="black"> 224.         &quot;&quot;&quot;</font>
+<font color="black"> 225.         Work out the rollover time based on the specified time.</font>
+<font color="black"> 226.         &quot;&quot;&quot;</font>
+<font color="red"> 227.         result = currentTime + self.interval</font>
+<font color="black"> 228.         # If we are rolling over at midnight or weekly, then the interval is already known.</font>
+<font color="black"> 229.         # What we need to figure out is WHEN the next interval is.  In other words,</font>
+<font color="black"> 230.         # if you are rolling over at midnight, then your base interval is 1 day,</font>
+<font color="black"> 231.         # but you want to start that one day clock at midnight, not now.  So, we</font>
+<font color="black"> 232.         # have to fudge the rolloverAt value in order to trigger the first rollover</font>
+<font color="black"> 233.         # at the right time.  After that, the regular interval will take care of</font>
+<font color="black"> 234.         # the rest.  Note that this code doesn't care about leap seconds. :)</font>
+<font color="red"> 235.         if self.when == 'MIDNIGHT' or self.when.startswith('W'):</font>
+<font color="black"> 236.             # This could be done with less code, but I wanted it to be clear</font>
+<font color="red"> 237.             if self.utc:</font>
+<font color="red"> 238.                 t = time.gmtime(currentTime)</font>
+<font color="black"> 239.             else:</font>
+<font color="red"> 240.                 t = time.localtime(currentTime)</font>
+<font color="red"> 241.             currentHour = t[3]</font>
+<font color="red"> 242.             currentMinute = t[4]</font>
+<font color="red"> 243.             currentSecond = t[5]</font>
+<font color="black"> 244.             # r is the number of seconds left between now and midnight</font>
+<font color="red"> 245.             r = _MIDNIGHT - ((currentHour * 60 + currentMinute) * 60 +</font>
+<font color="red"> 246.                     currentSecond)</font>
+<font color="red"> 247.             result = currentTime + r</font>
+<font color="black"> 248.             # If we are rolling over on a certain day, add in the number of days until</font>
+<font color="black"> 249.             # the next rollover, but offset by 1 since we just calculated the time</font>
+<font color="black"> 250.             # until the next day starts.  There are three cases:</font>
+<font color="black"> 251.             # Case 1) The day to rollover is today; in this case, do nothing</font>
+<font color="black"> 252.             # Case 2) The day to rollover is further in the interval (i.e., today is</font>
+<font color="black"> 253.             #         day 2 (Wednesday) and rollover is on day 6 (Sunday).  Days to</font>
+<font color="black"> 254.             #         next rollover is simply 6 - 2 - 1, or 3.</font>
+<font color="black"> 255.             # Case 3) The day to rollover is behind us in the interval (i.e., today</font>
+<font color="black"> 256.             #         is day 5 (Saturday) and rollover is on day 3 (Thursday).</font>
+<font color="black"> 257.             #         Days to rollover is 6 - 5 + 3, or 4.  In this case, it's the</font>
+<font color="black"> 258.             #         number of days left in the current week (1) plus the number</font>
+<font color="black"> 259.             #         of days in the next week until the rollover day (3).</font>
+<font color="black"> 260.             # The calculations described in 2) and 3) above need to have a day added.</font>
+<font color="black"> 261.             # This is because the above time calculation takes us to midnight on this</font>
+<font color="black"> 262.             # day, i.e. the start of the next day.</font>
+<font color="red"> 263.             if self.when.startswith('W'):</font>
+<font color="red"> 264.                 day = t[6] # 0 is Monday</font>
+<font color="red"> 265.                 if day != self.dayOfWeek:</font>
+<font color="red"> 266.                     if day &lt; self.dayOfWeek:</font>
+<font color="red"> 267.                         daysToWait = self.dayOfWeek - day</font>
+<font color="black"> 268.                     else:</font>
+<font color="red"> 269.                         daysToWait = 6 - day + self.dayOfWeek + 1</font>
+<font color="red"> 270.                     newRolloverAt = result + (daysToWait * (60 * 60 * 24))</font>
+<font color="red"> 271.                     if not self.utc:</font>
+<font color="red"> 272.                         dstNow = t[-1]</font>
+<font color="red"> 273.                         dstAtRollover = time.localtime(newRolloverAt)[-1]</font>
+<font color="red"> 274.                         if dstNow != dstAtRollover:</font>
+<font color="red"> 275.                             if not dstNow:  # DST kicks in before next rollover, so we need to deduct an hour</font>
+<font color="red"> 276.                                 addend = -3600</font>
+<font color="black"> 277.                             else:           # DST bows out before next rollover, so we need to add an hour</font>
+<font color="red"> 278.                                 addend = 3600</font>
+<font color="red"> 279.                             newRolloverAt += addend</font>
+<font color="red"> 280.                     result = newRolloverAt</font>
+<font color="red"> 281.         return result</font>
+<font color="black"> 282. </font>
+<font color="green"> 283.     def shouldRollover(self, record):</font>
+<font color="black"> 284.         &quot;&quot;&quot;</font>
+<font color="black"> 285.         Determine if rollover should occur.</font>
+<font color="black"> 286. </font>
+<font color="black"> 287.         record is not used, as we are just comparing times, but it is needed so</font>
+<font color="black"> 288.         the method signatures are the same</font>
+<font color="black"> 289.         &quot;&quot;&quot;</font>
+<font color="red"> 290.         t = int(time.time())</font>
+<font color="red"> 291.         if t &gt;= self.rolloverAt:</font>
+<font color="red"> 292.             return 1</font>
+<font color="black"> 293.         #print &quot;No need to rollover: %d, %d&quot; % (t, self.rolloverAt)</font>
+<font color="red"> 294.         return 0</font>
+<font color="black"> 295. </font>
+<font color="green"> 296.     def getFilesToDelete(self):</font>
+<font color="black"> 297.         &quot;&quot;&quot;</font>
+<font color="black"> 298.         Determine the files to delete when rolling over.</font>
+<font color="black"> 299. </font>
+<font color="black"> 300.         More specific than the earlier method, which just used glob.glob().</font>
+<font color="black"> 301.         &quot;&quot;&quot;</font>
+<font color="red"> 302.         dirName, baseName = os.path.split(self.baseFilename)</font>
+<font color="red"> 303.         fileNames = os.listdir(dirName)</font>
+<font color="red"> 304.         result = []</font>
+<font color="red"> 305.         prefix = baseName + &quot;.&quot;</font>
+<font color="red"> 306.         plen = len(prefix)</font>
+<font color="red"> 307.         for fileName in fileNames:</font>
+<font color="red"> 308.             if fileName[:plen] == prefix:</font>
+<font color="red"> 309.                 suffix = fileName[plen:]</font>
+<font color="red"> 310.                 if self.extMatch.match(suffix):</font>
+<font color="red"> 311.                     result.append(os.path.join(dirName, fileName))</font>
+<font color="red"> 312.         result.sort()</font>
+<font color="red"> 313.         if len(result) &lt; self.backupCount:</font>
+<font color="red"> 314.             result = []</font>
+<font color="black"> 315.         else:</font>
+<font color="red"> 316.             result = result[:len(result) - self.backupCount]</font>
+<font color="red"> 317.         return result</font>
+<font color="black"> 318. </font>
+<font color="green"> 319.     def doRollover(self):</font>
+<font color="black"> 320.         &quot;&quot;&quot;</font>
+<font color="black"> 321.         do a rollover; in this case, a date/time stamp is appended to the filename</font>
+<font color="black"> 322.         when the rollover happens.  However, you want the file to be named for the</font>
+<font color="black"> 323.         start of the interval, not the current time.  If there is a backup count,</font>
+<font color="black"> 324.         then we have to get a list of matching filenames, sort them and remove</font>
+<font color="black"> 325.         the one with the oldest suffix.</font>
+<font color="black"> 326.         &quot;&quot;&quot;</font>
+<font color="red"> 327.         if self.stream:</font>
+<font color="red"> 328.             self.stream.close()</font>
+<font color="red"> 329.             self.stream = None</font>
+<font color="black"> 330.         # get the time that this sequence started at and make it a TimeTuple</font>
+<font color="red"> 331.         currentTime = int(time.time())</font>
+<font color="red"> 332.         dstNow = time.localtime(currentTime)[-1]</font>
+<font color="red"> 333.         t = self.rolloverAt - self.interval</font>
+<font color="red"> 334.         if self.utc:</font>
+<font color="red"> 335.             timeTuple = time.gmtime(t)</font>
+<font color="black"> 336.         else:</font>
+<font color="red"> 337.             timeTuple = time.localtime(t)</font>
+<font color="red"> 338.             dstThen = timeTuple[-1]</font>
+<font color="red"> 339.             if dstNow != dstThen:</font>
+<font color="red"> 340.                 if dstNow:</font>
+<font color="red"> 341.                     addend = 3600</font>
+<font color="black"> 342.                 else:</font>
+<font color="red"> 343.                     addend = -3600</font>
+<font color="red"> 344.                 timeTuple = time.localtime(t + addend)</font>
+<font color="red"> 345.         dfn = self.baseFilename + &quot;.&quot; + time.strftime(self.suffix, timeTuple)</font>
+<font color="red"> 346.         if os.path.exists(dfn):</font>
+<font color="red"> 347.             os.remove(dfn)</font>
+<font color="black"> 348.         # Issue 18940: A file may not have been created if delay is True.</font>
+<font color="red"> 349.         if os.path.exists(self.baseFilename):</font>
+<font color="red"> 350.             os.rename(self.baseFilename, dfn)</font>
+<font color="red"> 351.         if self.backupCount &gt; 0:</font>
+<font color="red"> 352.             for s in self.getFilesToDelete():</font>
+<font color="red"> 353.                 os.remove(s)</font>
+<font color="red"> 354.         if not self.delay:</font>
+<font color="red"> 355.             self.stream = self._open()</font>
+<font color="red"> 356.         newRolloverAt = self.computeRollover(currentTime)</font>
+<font color="red"> 357.         while newRolloverAt &lt;= currentTime:</font>
+<font color="red"> 358.             newRolloverAt = newRolloverAt + self.interval</font>
+<font color="black"> 359.         #If DST changes and midnight or weekly rollover, adjust for this.</font>
+<font color="red"> 360.         if (self.when == 'MIDNIGHT' or self.when.startswith('W')) and not self.utc:</font>
+<font color="red"> 361.             dstAtRollover = time.localtime(newRolloverAt)[-1]</font>
+<font color="red"> 362.             if dstNow != dstAtRollover:</font>
+<font color="red"> 363.                 if not dstNow:  # DST kicks in before next rollover, so we need to deduct an hour</font>
+<font color="red"> 364.                     addend = -3600</font>
+<font color="black"> 365.                 else:           # DST bows out before next rollover, so we need to add an hour</font>
+<font color="red"> 366.                     addend = 3600</font>
+<font color="red"> 367.                 newRolloverAt += addend</font>
+<font color="red"> 368.         self.rolloverAt = newRolloverAt</font>
+<font color="black"> 369. </font>
+<font color="green"> 370. class WatchedFileHandler(logging.FileHandler):</font>
+<font color="black"> 371.     &quot;&quot;&quot;</font>
+<font color="black"> 372.     A handler for logging to a file, which watches the file</font>
+<font color="black"> 373.     to see if it has changed while in use. This can happen because of</font>
+<font color="black"> 374.     usage of programs such as newsyslog and logrotate which perform</font>
+<font color="black"> 375.     log file rotation. This handler, intended for use under Unix,</font>
+<font color="black"> 376.     watches the file to see if it has changed since the last emit.</font>
+<font color="black"> 377.     (A file has changed if its device or inode have changed.)</font>
+<font color="black"> 378.     If it has changed, the old file stream is closed, and the file</font>
+<font color="black"> 379.     opened to get a new stream.</font>
+<font color="black"> 380. </font>
+<font color="black"> 381.     This handler is not appropriate for use under Windows, because</font>
+<font color="black"> 382.     under Windows open files cannot be moved or renamed - logging</font>
+<font color="black"> 383.     opens the files with exclusive locks - and so there is no need</font>
+<font color="black"> 384.     for such a handler. Furthermore, ST_INO is not supported under</font>
+<font color="black"> 385.     Windows; stat always returns zero for this value.</font>
+<font color="black"> 386. </font>
+<font color="black"> 387.     This handler is based on a suggestion and patch by Chad J.</font>
+<font color="black"> 388.     Schroeder.</font>
+<font color="green"> 389.     &quot;&quot;&quot;</font>
+<font color="green"> 390.     def __init__(self, filename, mode='a', encoding=None, delay=0):</font>
+<font color="red"> 391.         logging.FileHandler.__init__(self, filename, mode, encoding, delay)</font>
+<font color="red"> 392.         self.dev, self.ino = -1, -1</font>
+<font color="red"> 393.         self._statstream()</font>
+<font color="black"> 394. </font>
+<font color="green"> 395.     def _statstream(self):</font>
+<font color="red"> 396.         if self.stream:</font>
+<font color="red"> 397.             sres = os.fstat(self.stream.fileno())</font>
+<font color="red"> 398.             self.dev, self.ino = sres[ST_DEV], sres[ST_INO]</font>
+<font color="black"> 399. </font>
+<font color="green"> 400.     def emit(self, record):</font>
+<font color="black"> 401.         &quot;&quot;&quot;</font>
+<font color="black"> 402.         Emit a record.</font>
+<font color="black"> 403. </font>
+<font color="black"> 404.         First check if the underlying file has changed, and if it</font>
+<font color="black"> 405.         has, close the old stream and reopen the file to get the</font>
+<font color="black"> 406.         current stream.</font>
+<font color="black"> 407.         &quot;&quot;&quot;</font>
+<font color="black"> 408.         # Reduce the chance of race conditions by stat'ing by path only</font>
+<font color="black"> 409.         # once and then fstat'ing our new fd if we opened a new log stream.</font>
+<font color="black"> 410.         # See issue #14632: Thanks to John Mulligan for the problem report</font>
+<font color="black"> 411.         # and patch.</font>
+<font color="red"> 412.         try:</font>
+<font color="black"> 413.             # stat the file by path, checking for existence</font>
+<font color="red"> 414.             sres = os.stat(self.baseFilename)</font>
+<font color="red"> 415.         except OSError as err:</font>
+<font color="red"> 416.             if err.errno == errno.ENOENT:</font>
+<font color="red"> 417.                 sres = None</font>
+<font color="black"> 418.             else:</font>
+<font color="red"> 419.                 raise</font>
+<font color="black"> 420.         # compare file system stat with that of our stream file handle</font>
+<font color="red"> 421.         if not sres or sres[ST_DEV] != self.dev or sres[ST_INO] != self.ino:</font>
+<font color="red"> 422.             if self.stream is not None:</font>
+<font color="black"> 423.                 # we have an open file handle, clean it up</font>
+<font color="red"> 424.                 self.stream.flush()</font>
+<font color="red"> 425.                 self.stream.close()</font>
+<font color="black"> 426.                 # open a new file handle and get new stat info from that fd</font>
+<font color="red"> 427.                 self.stream = self._open()</font>
+<font color="red"> 428.                 self._statstream()</font>
+<font color="red"> 429.         logging.FileHandler.emit(self, record)</font>
+<font color="black"> 430. </font>
+<font color="green"> 431. class SocketHandler(logging.Handler):</font>
+<font color="black"> 432.     &quot;&quot;&quot;</font>
+<font color="black"> 433.     A handler class which writes logging records, in pickle format, to</font>
+<font color="black"> 434.     a streaming socket. The socket is kept open across logging calls.</font>
+<font color="black"> 435.     If the peer resets it, an attempt is made to reconnect on the next call.</font>
+<font color="black"> 436.     The pickle which is sent is that of the LogRecord's attribute dictionary</font>
+<font color="black"> 437.     (__dict__), so that the receiver does not need to have the logging module</font>
+<font color="black"> 438.     installed in order to process the logging event.</font>
+<font color="black"> 439. </font>
+<font color="black"> 440.     To unpickle the record at the receiving end into a LogRecord, use the</font>
+<font color="black"> 441.     makeLogRecord function.</font>
+<font color="green"> 442.     &quot;&quot;&quot;</font>
+<font color="black"> 443. </font>
+<font color="green"> 444.     def __init__(self, host, port):</font>
+<font color="black"> 445.         &quot;&quot;&quot;</font>
+<font color="black"> 446.         Initializes the handler with a specific host address and port.</font>
+<font color="black"> 447. </font>
+<font color="black"> 448.         The attribute 'closeOnError' is set to 1 - which means that if</font>
+<font color="black"> 449.         a socket error occurs, the socket is silently closed and then</font>
+<font color="black"> 450.         reopened on the next logging call.</font>
+<font color="black"> 451.         &quot;&quot;&quot;</font>
+<font color="red"> 452.         logging.Handler.__init__(self)</font>
+<font color="red"> 453.         self.host = host</font>
+<font color="red"> 454.         self.port = port</font>
+<font color="red"> 455.         self.sock = None</font>
+<font color="red"> 456.         self.closeOnError = 0</font>
+<font color="red"> 457.         self.retryTime = None</font>
+<font color="black"> 458.         #</font>
+<font color="black"> 459.         # Exponential backoff parameters.</font>
+<font color="black"> 460.         #</font>
+<font color="red"> 461.         self.retryStart = 1.0</font>
+<font color="red"> 462.         self.retryMax = 30.0</font>
+<font color="red"> 463.         self.retryFactor = 2.0</font>
+<font color="black"> 464. </font>
+<font color="green"> 465.     def makeSocket(self, timeout=1):</font>
+<font color="black"> 466.         &quot;&quot;&quot;</font>
+<font color="black"> 467.         A factory method which allows subclasses to define the precise</font>
+<font color="black"> 468.         type of socket they want.</font>
+<font color="black"> 469.         &quot;&quot;&quot;</font>
+<font color="red"> 470.         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)</font>
+<font color="red"> 471.         if hasattr(s, 'settimeout'):</font>
+<font color="red"> 472.             s.settimeout(timeout)</font>
+<font color="red"> 473.         s.connect((self.host, self.port))</font>
+<font color="red"> 474.         return s</font>
+<font color="black"> 475. </font>
+<font color="green"> 476.     def createSocket(self):</font>
+<font color="black"> 477.         &quot;&quot;&quot;</font>
+<font color="black"> 478.         Try to create a socket, using an exponential backoff with</font>
+<font color="black"> 479.         a max retry time. Thanks to Robert Olson for the original patch</font>
+<font color="black"> 480.         (SF #815911) which has been slightly refactored.</font>
+<font color="black"> 481.         &quot;&quot;&quot;</font>
+<font color="red"> 482.         now = time.time()</font>
+<font color="black"> 483.         # Either retryTime is None, in which case this</font>
+<font color="black"> 484.         # is the first time back after a disconnect, or</font>
+<font color="black"> 485.         # we've waited long enough.</font>
+<font color="red"> 486.         if self.retryTime is None:</font>
+<font color="red"> 487.             attempt = 1</font>
+<font color="black"> 488.         else:</font>
+<font color="red"> 489.             attempt = (now &gt;= self.retryTime)</font>
+<font color="red"> 490.         if attempt:</font>
+<font color="red"> 491.             try:</font>
+<font color="red"> 492.                 self.sock = self.makeSocket()</font>
+<font color="red"> 493.                 self.retryTime = None # next time, no delay before trying</font>
+<font color="red"> 494.             except socket.error:</font>
+<font color="black"> 495.                 #Creation failed, so set the retry time and return.</font>
+<font color="red"> 496.                 if self.retryTime is None:</font>
+<font color="red"> 497.                     self.retryPeriod = self.retryStart</font>
+<font color="black"> 498.                 else:</font>
+<font color="red"> 499.                     self.retryPeriod = self.retryPeriod * self.retryFactor</font>
+<font color="red"> 500.                     if self.retryPeriod &gt; self.retryMax:</font>
+<font color="red"> 501.                         self.retryPeriod = self.retryMax</font>
+<font color="red"> 502.                 self.retryTime = now + self.retryPeriod</font>
+<font color="black"> 503. </font>
+<font color="green"> 504.     def send(self, s):</font>
+<font color="black"> 505.         &quot;&quot;&quot;</font>
+<font color="black"> 506.         Send a pickled string to the socket.</font>
+<font color="black"> 507. </font>
+<font color="black"> 508.         This function allows for partial sends which can happen when the</font>
+<font color="black"> 509.         network is busy.</font>
+<font color="black"> 510.         &quot;&quot;&quot;</font>
+<font color="red"> 511.         if self.sock is None:</font>
+<font color="red"> 512.             self.createSocket()</font>
+<font color="black"> 513.         #self.sock can be None either because we haven't reached the retry</font>
+<font color="black"> 514.         #time yet, or because we have reached the retry time and retried,</font>
+<font color="black"> 515.         #but are still unable to connect.</font>
+<font color="red"> 516.         if self.sock:</font>
+<font color="red"> 517.             try:</font>
+<font color="red"> 518.                 if hasattr(self.sock, &quot;sendall&quot;):</font>
+<font color="red"> 519.                     self.sock.sendall(s)</font>
+<font color="black"> 520.                 else:</font>
+<font color="red"> 521.                     sentsofar = 0</font>
+<font color="red"> 522.                     left = len(s)</font>
+<font color="red"> 523.                     while left &gt; 0:</font>
+<font color="red"> 524.                         sent = self.sock.send(s[sentsofar:])</font>
+<font color="red"> 525.                         sentsofar = sentsofar + sent</font>
+<font color="red"> 526.                         left = left - sent</font>
+<font color="red"> 527.             except socket.error:</font>
+<font color="red"> 528.                 self.sock.close()</font>
+<font color="red"> 529.                 self.sock = None  # so we can call createSocket next time</font>
+<font color="black"> 530. </font>
+<font color="green"> 531.     def makePickle(self, record):</font>
+<font color="black"> 532.         &quot;&quot;&quot;</font>
+<font color="black"> 533.         Pickles the record in binary format with a length prefix, and</font>
+<font color="black"> 534.         returns it ready for transmission across the socket.</font>
+<font color="black"> 535.         &quot;&quot;&quot;</font>
+<font color="red"> 536.         ei = record.exc_info</font>
+<font color="red"> 537.         if ei:</font>
+<font color="black"> 538.             # just to get traceback text into record.exc_text ...</font>
+<font color="red"> 539.             dummy = self.format(record)</font>
+<font color="red"> 540.             record.exc_info = None  # to avoid Unpickleable error</font>
+<font color="black"> 541.         # See issue #14436: If msg or args are objects, they may not be</font>
+<font color="black"> 542.         # available on the receiving end. So we convert the msg % args</font>
+<font color="black"> 543.         # to a string, save it as msg and zap the args.</font>
+<font color="red"> 544.         d = dict(record.__dict__)</font>
+<font color="red"> 545.         d['msg'] = record.getMessage()</font>
+<font color="red"> 546.         d['args'] = None</font>
+<font color="red"> 547.         s = cPickle.dumps(d, 1)</font>
+<font color="red"> 548.         if ei:</font>
+<font color="red"> 549.             record.exc_info = ei  # for next handler</font>
+<font color="red"> 550.         slen = struct.pack(&quot;&gt;L&quot;, len(s))</font>
+<font color="red"> 551.         return slen + s</font>
+<font color="black"> 552. </font>
+<font color="green"> 553.     def handleError(self, record):</font>
+<font color="black"> 554.         &quot;&quot;&quot;</font>
+<font color="black"> 555.         Handle an error during logging.</font>
+<font color="black"> 556. </font>
+<font color="black"> 557.         An error has occurred during logging. Most likely cause -</font>
+<font color="black"> 558.         connection lost. Close the socket so that we can retry on the</font>
+<font color="black"> 559.         next event.</font>
+<font color="black"> 560.         &quot;&quot;&quot;</font>
+<font color="red"> 561.         if self.closeOnError and self.sock:</font>
+<font color="red"> 562.             self.sock.close()</font>
+<font color="red"> 563.             self.sock = None        #try to reconnect next time</font>
+<font color="black"> 564.         else:</font>
+<font color="red"> 565.             logging.Handler.handleError(self, record)</font>
+<font color="black"> 566. </font>
+<font color="green"> 567.     def emit(self, record):</font>
+<font color="black"> 568.         &quot;&quot;&quot;</font>
+<font color="black"> 569.         Emit a record.</font>
+<font color="black"> 570. </font>
+<font color="black"> 571.         Pickles the record and writes it to the socket in binary format.</font>
+<font color="black"> 572.         If there is an error with the socket, silently drop the packet.</font>
+<font color="black"> 573.         If there was a problem with the socket, re-establishes the</font>
+<font color="black"> 574.         socket.</font>
+<font color="black"> 575.         &quot;&quot;&quot;</font>
+<font color="red"> 576.         try:</font>
+<font color="red"> 577.             s = self.makePickle(record)</font>
+<font color="red"> 578.             self.send(s)</font>
+<font color="red"> 579.         except (KeyboardInterrupt, SystemExit):</font>
+<font color="red"> 580.             raise</font>
+<font color="red"> 581.         except:</font>
+<font color="red"> 582.             self.handleError(record)</font>
+<font color="black"> 583. </font>
+<font color="green"> 584.     def close(self):</font>
+<font color="black"> 585.         &quot;&quot;&quot;</font>
+<font color="black"> 586.         Closes the socket.</font>
+<font color="black"> 587.         &quot;&quot;&quot;</font>
+<font color="red"> 588.         self.acquire()</font>
+<font color="red"> 589.         try:</font>
+<font color="red"> 590.             if self.sock:</font>
+<font color="red"> 591.                 self.sock.close()</font>
+<font color="red"> 592.                 self.sock = None</font>
+<font color="black"> 593.         finally:</font>
+<font color="red"> 594.             self.release()</font>
+<font color="red"> 595.         logging.Handler.close(self)</font>
+<font color="black"> 596. </font>
+<font color="green"> 597. class DatagramHandler(SocketHandler):</font>
+<font color="black"> 598.     &quot;&quot;&quot;</font>
+<font color="black"> 599.     A handler class which writes logging records, in pickle format, to</font>
+<font color="black"> 600.     a datagram socket.  The pickle which is sent is that of the LogRecord's</font>
+<font color="black"> 601.     attribute dictionary (__dict__), so that the receiver does not need to</font>
+<font color="black"> 602.     have the logging module installed in order to process the logging event.</font>
+<font color="black"> 603. </font>
+<font color="black"> 604.     To unpickle the record at the receiving end into a LogRecord, use the</font>
+<font color="black"> 605.     makeLogRecord function.</font>
+<font color="black"> 606. </font>
+<font color="green"> 607.     &quot;&quot;&quot;</font>
+<font color="green"> 608.     def __init__(self, host, port):</font>
+<font color="black"> 609.         &quot;&quot;&quot;</font>
+<font color="black"> 610.         Initializes the handler with a specific host address and port.</font>
+<font color="black"> 611.         &quot;&quot;&quot;</font>
+<font color="red"> 612.         SocketHandler.__init__(self, host, port)</font>
+<font color="red"> 613.         self.closeOnError = 0</font>
+<font color="black"> 614. </font>
+<font color="green"> 615.     def makeSocket(self):</font>
+<font color="black"> 616.         &quot;&quot;&quot;</font>
+<font color="black"> 617.         The factory method of SocketHandler is here overridden to create</font>
+<font color="black"> 618.         a UDP socket (SOCK_DGRAM).</font>
+<font color="black"> 619.         &quot;&quot;&quot;</font>
+<font color="red"> 620.         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)</font>
+<font color="red"> 621.         return s</font>
+<font color="black"> 622. </font>
+<font color="green"> 623.     def send(self, s):</font>
+<font color="black"> 624.         &quot;&quot;&quot;</font>
+<font color="black"> 625.         Send a pickled string to a socket.</font>
+<font color="black"> 626. </font>
+<font color="black"> 627.         This function no longer allows for partial sends which can happen</font>
+<font color="black"> 628.         when the network is busy - UDP does not guarantee delivery and</font>
+<font color="black"> 629.         can deliver packets out of sequence.</font>
+<font color="black"> 630.         &quot;&quot;&quot;</font>
+<font color="red"> 631.         if self.sock is None:</font>
+<font color="red"> 632.             self.createSocket()</font>
+<font color="red"> 633.         self.sock.sendto(s, (self.host, self.port))</font>
+<font color="black"> 634. </font>
+<font color="green"> 635. class SysLogHandler(logging.Handler):</font>
+<font color="black"> 636.     &quot;&quot;&quot;</font>
+<font color="black"> 637.     A handler class which sends formatted logging records to a syslog</font>
+<font color="black"> 638.     server. Based on Sam Rushing's syslog module:</font>
+<font color="black"> 639.     http://www.nightmare.com/squirl/python-ext/misc/syslog.py</font>
+<font color="black"> 640.     Contributed by Nicolas Untz (after which minor refactoring changes</font>
+<font color="black"> 641.     have been made).</font>
+<font color="green"> 642.     &quot;&quot;&quot;</font>
+<font color="black"> 643. </font>
+<font color="black"> 644.     # from &lt;linux/sys/syslog.h&gt;:</font>
+<font color="black"> 645.     # ======================================================================</font>
+<font color="black"> 646.     # priorities/facilities are encoded into a single 32-bit quantity, where</font>
+<font color="black"> 647.     # the bottom 3 bits are the priority (0-7) and the top 28 bits are the</font>
+<font color="black"> 648.     # facility (0-big number). Both the priorities and the facilities map</font>
+<font color="black"> 649.     # roughly one-to-one to strings in the syslogd(8) source code.  This</font>
+<font color="black"> 650.     # mapping is included in this file.</font>
+<font color="black"> 651.     #</font>
+<font color="black"> 652.     # priorities (these are ordered)</font>
+<font color="black"> 653. </font>
+<font color="green"> 654.     LOG_EMERG     = 0       #  system is unusable</font>
+<font color="green"> 655.     LOG_ALERT     = 1       #  action must be taken immediately</font>
+<font color="green"> 656.     LOG_CRIT      = 2       #  critical conditions</font>
+<font color="green"> 657.     LOG_ERR       = 3       #  error conditions</font>
+<font color="green"> 658.     LOG_WARNING   = 4       #  warning conditions</font>
+<font color="green"> 659.     LOG_NOTICE    = 5       #  normal but significant condition</font>
+<font color="green"> 660.     LOG_INFO      = 6       #  informational</font>
+<font color="green"> 661.     LOG_DEBUG     = 7       #  debug-level messages</font>
+<font color="black"> 662. </font>
+<font color="black"> 663.     #  facility codes</font>
+<font color="green"> 664.     LOG_KERN      = 0       #  kernel messages</font>
+<font color="green"> 665.     LOG_USER      = 1       #  random user-level messages</font>
+<font color="green"> 666.     LOG_MAIL      = 2       #  mail system</font>
+<font color="green"> 667.     LOG_DAEMON    = 3       #  system daemons</font>
+<font color="green"> 668.     LOG_AUTH      = 4       #  security/authorization messages</font>
+<font color="green"> 669.     LOG_SYSLOG    = 5       #  messages generated internally by syslogd</font>
+<font color="green"> 670.     LOG_LPR       = 6       #  line printer subsystem</font>
+<font color="green"> 671.     LOG_NEWS      = 7       #  network news subsystem</font>
+<font color="green"> 672.     LOG_UUCP      = 8       #  UUCP subsystem</font>
+<font color="green"> 673.     LOG_CRON      = 9       #  clock daemon</font>
+<font color="green"> 674.     LOG_AUTHPRIV  = 10      #  security/authorization messages (private)</font>
+<font color="green"> 675.     LOG_FTP       = 11      #  FTP daemon</font>
+<font color="black"> 676. </font>
+<font color="black"> 677.     #  other codes through 15 reserved for system use</font>
+<font color="green"> 678.     LOG_LOCAL0    = 16      #  reserved for local use</font>
+<font color="green"> 679.     LOG_LOCAL1    = 17      #  reserved for local use</font>
+<font color="green"> 680.     LOG_LOCAL2    = 18      #  reserved for local use</font>
+<font color="green"> 681.     LOG_LOCAL3    = 19      #  reserved for local use</font>
+<font color="green"> 682.     LOG_LOCAL4    = 20      #  reserved for local use</font>
+<font color="green"> 683.     LOG_LOCAL5    = 21      #  reserved for local use</font>
+<font color="green"> 684.     LOG_LOCAL6    = 22      #  reserved for local use</font>
+<font color="green"> 685.     LOG_LOCAL7    = 23      #  reserved for local use</font>
+<font color="black"> 686. </font>
+<font color="green"> 687.     priority_names = {</font>
+<font color="green"> 688.         &quot;alert&quot;:    LOG_ALERT,</font>
+<font color="green"> 689.         &quot;crit&quot;:     LOG_CRIT,</font>
+<font color="green"> 690.         &quot;critical&quot;: LOG_CRIT,</font>
+<font color="green"> 691.         &quot;debug&quot;:    LOG_DEBUG,</font>
+<font color="green"> 692.         &quot;emerg&quot;:    LOG_EMERG,</font>
+<font color="green"> 693.         &quot;err&quot;:      LOG_ERR,</font>
+<font color="green"> 694.         &quot;error&quot;:    LOG_ERR,        #  DEPRECATED</font>
+<font color="green"> 695.         &quot;info&quot;:     LOG_INFO,</font>
+<font color="green"> 696.         &quot;notice&quot;:   LOG_NOTICE,</font>
+<font color="green"> 697.         &quot;panic&quot;:    LOG_EMERG,      #  DEPRECATED</font>
+<font color="green"> 698.         &quot;warn&quot;:     LOG_WARNING,    #  DEPRECATED</font>
+<font color="green"> 699.         &quot;warning&quot;:  LOG_WARNING,</font>
+<font color="black"> 700.         }</font>
+<font color="black"> 701. </font>
+<font color="green"> 702.     facility_names = {</font>
+<font color="green"> 703.         &quot;auth&quot;:     LOG_AUTH,</font>
+<font color="green"> 704.         &quot;authpriv&quot;: LOG_AUTHPRIV,</font>
+<font color="green"> 705.         &quot;cron&quot;:     LOG_CRON,</font>
+<font color="green"> 706.         &quot;daemon&quot;:   LOG_DAEMON,</font>
+<font color="green"> 707.         &quot;ftp&quot;:      LOG_FTP,</font>
+<font color="green"> 708.         &quot;kern&quot;:     LOG_KERN,</font>
+<font color="green"> 709.         &quot;lpr&quot;:      LOG_LPR,</font>
+<font color="green"> 710.         &quot;mail&quot;:     LOG_MAIL,</font>
+<font color="green"> 711.         &quot;news&quot;:     LOG_NEWS,</font>
+<font color="green"> 712.         &quot;security&quot;: LOG_AUTH,       #  DEPRECATED</font>
+<font color="green"> 713.         &quot;syslog&quot;:   LOG_SYSLOG,</font>
+<font color="green"> 714.         &quot;user&quot;:     LOG_USER,</font>
+<font color="green"> 715.         &quot;uucp&quot;:     LOG_UUCP,</font>
+<font color="green"> 716.         &quot;local0&quot;:   LOG_LOCAL0,</font>
+<font color="green"> 717.         &quot;local1&quot;:   LOG_LOCAL1,</font>
+<font color="green"> 718.         &quot;local2&quot;:   LOG_LOCAL2,</font>
+<font color="green"> 719.         &quot;local3&quot;:   LOG_LOCAL3,</font>
+<font color="green"> 720.         &quot;local4&quot;:   LOG_LOCAL4,</font>
+<font color="green"> 721.         &quot;local5&quot;:   LOG_LOCAL5,</font>
+<font color="green"> 722.         &quot;local6&quot;:   LOG_LOCAL6,</font>
+<font color="green"> 723.         &quot;local7&quot;:   LOG_LOCAL7,</font>
+<font color="black"> 724.         }</font>
+<font color="black"> 725. </font>
+<font color="black"> 726.     #The map below appears to be trivially lowercasing the key. However,</font>
+<font color="black"> 727.     #there's more to it than meets the eye - in some locales, lowercasing</font>
+<font color="black"> 728.     #gives unexpected results. See SF #1524081: in the Turkish locale,</font>
+<font color="black"> 729.     #&quot;INFO&quot;.lower() != &quot;info&quot;</font>
+<font color="green"> 730.     priority_map = {</font>
+<font color="green"> 731.         &quot;DEBUG&quot; : &quot;debug&quot;,</font>
+<font color="green"> 732.         &quot;INFO&quot; : &quot;info&quot;,</font>
+<font color="green"> 733.         &quot;WARNING&quot; : &quot;warning&quot;,</font>
+<font color="green"> 734.         &quot;ERROR&quot; : &quot;error&quot;,</font>
+<font color="green"> 735.         &quot;CRITICAL&quot; : &quot;critical&quot;</font>
+<font color="black"> 736.     }</font>
+<font color="black"> 737. </font>
+<font color="green"> 738.     def __init__(self, address=('localhost', SYSLOG_UDP_PORT),</font>
+<font color="green"> 739.                  facility=LOG_USER, socktype=None):</font>
+<font color="black"> 740.         &quot;&quot;&quot;</font>
+<font color="black"> 741.         Initialize a handler.</font>
+<font color="black"> 742. </font>
+<font color="black"> 743.         If address is specified as a string, a UNIX socket is used. To log to a</font>
+<font color="black"> 744.         local syslogd, &quot;SysLogHandler(address=&quot;/dev/log&quot;)&quot; can be used.</font>
+<font color="black"> 745.         If facility is not specified, LOG_USER is used. If socktype is</font>
+<font color="black"> 746.         specified as socket.SOCK_DGRAM or socket.SOCK_STREAM, that specific</font>
+<font color="black"> 747.         socket type will be used. For Unix sockets, you can also specify a</font>
+<font color="black"> 748.         socktype of None, in which case socket.SOCK_DGRAM will be used, falling</font>
+<font color="black"> 749.         back to socket.SOCK_STREAM.</font>
+<font color="black"> 750.         &quot;&quot;&quot;</font>
+<font color="red"> 751.         logging.Handler.__init__(self)</font>
+<font color="black"> 752. </font>
+<font color="red"> 753.         self.address = address</font>
+<font color="red"> 754.         self.facility = facility</font>
+<font color="red"> 755.         self.socktype = socktype</font>
+<font color="black"> 756. </font>
+<font color="red"> 757.         if isinstance(address, basestring):</font>
+<font color="red"> 758.             self.unixsocket = 1</font>
+<font color="red"> 759.             self._connect_unixsocket(address)</font>
+<font color="black"> 760.         else:</font>
+<font color="red"> 761.             self.unixsocket = 0</font>
+<font color="red"> 762.             if socktype is None:</font>
+<font color="red"> 763.                 socktype = socket.SOCK_DGRAM</font>
+<font color="red"> 764.             self.socket = socket.socket(socket.AF_INET, socktype)</font>
+<font color="red"> 765.             if socktype == socket.SOCK_STREAM:</font>
+<font color="red"> 766.                 self.socket.connect(address)</font>
+<font color="red"> 767.             self.socktype = socktype</font>
+<font color="red"> 768.         self.formatter = None</font>
+<font color="black"> 769. </font>
+<font color="green"> 770.     def _connect_unixsocket(self, address):</font>
+<font color="red"> 771.         use_socktype = self.socktype</font>
+<font color="red"> 772.         if use_socktype is None:</font>
+<font color="red"> 773.             use_socktype = socket.SOCK_DGRAM</font>
+<font color="red"> 774.         self.socket = socket.socket(socket.AF_UNIX, use_socktype)</font>
+<font color="red"> 775.         try:</font>
+<font color="red"> 776.             self.socket.connect(address)</font>
+<font color="black"> 777.             # it worked, so set self.socktype to the used type</font>
+<font color="red"> 778.             self.socktype = use_socktype</font>
+<font color="red"> 779.         except socket.error:</font>
+<font color="red"> 780.             self.socket.close()</font>
+<font color="red"> 781.             if self.socktype is not None:</font>
+<font color="black"> 782.                 # user didn't specify falling back, so fail</font>
+<font color="red"> 783.                 raise</font>
+<font color="red"> 784.             use_socktype = socket.SOCK_STREAM</font>
+<font color="red"> 785.             self.socket = socket.socket(socket.AF_UNIX, use_socktype)</font>
+<font color="red"> 786.             try:</font>
+<font color="red"> 787.                 self.socket.connect(address)</font>
+<font color="black"> 788.                 # it worked, so set self.socktype to the used type</font>
+<font color="red"> 789.                 self.socktype = use_socktype</font>
+<font color="red"> 790.             except socket.error:</font>
+<font color="red"> 791.                 self.socket.close()</font>
+<font color="red"> 792.                 raise</font>
+<font color="black"> 793. </font>
+<font color="black"> 794.     # curious: when talking to the unix-domain '/dev/log' socket, a</font>
+<font color="black"> 795.     #   zero-terminator seems to be required.  this string is placed</font>
+<font color="black"> 796.     #   into a class variable so that it can be overridden if</font>
+<font color="black"> 797.     #   necessary.</font>
+<font color="green"> 798.     log_format_string = '&lt;%d&gt;%s\000'</font>
+<font color="black"> 799. </font>
+<font color="green"> 800.     def encodePriority(self, facility, priority):</font>
+<font color="black"> 801.         &quot;&quot;&quot;</font>
+<font color="black"> 802.         Encode the facility and priority. You can pass in strings or</font>
+<font color="black"> 803.         integers - if strings are passed, the facility_names and</font>
+<font color="black"> 804.         priority_names mapping dictionaries are used to convert them to</font>
+<font color="black"> 805.         integers.</font>
+<font color="black"> 806.         &quot;&quot;&quot;</font>
+<font color="red"> 807.         if isinstance(facility, basestring):</font>
+<font color="red"> 808.             facility = self.facility_names[facility]</font>
+<font color="red"> 809.         if isinstance(priority, basestring):</font>
+<font color="red"> 810.             priority = self.priority_names[priority]</font>
+<font color="red"> 811.         return (facility &lt;&lt; 3) | priority</font>
+<font color="black"> 812. </font>
+<font color="green"> 813.     def close (self):</font>
+<font color="black"> 814.         &quot;&quot;&quot;</font>
+<font color="black"> 815.         Closes the socket.</font>
+<font color="black"> 816.         &quot;&quot;&quot;</font>
+<font color="red"> 817.         self.acquire()</font>
+<font color="red"> 818.         try:</font>
+<font color="red"> 819.             if self.unixsocket:</font>
+<font color="red"> 820.                 self.socket.close()</font>
+<font color="black"> 821.         finally:</font>
+<font color="red"> 822.             self.release()</font>
+<font color="red"> 823.         logging.Handler.close(self)</font>
+<font color="black"> 824. </font>
+<font color="green"> 825.     def mapPriority(self, levelName):</font>
+<font color="black"> 826.         &quot;&quot;&quot;</font>
+<font color="black"> 827.         Map a logging level name to a key in the priority_names map.</font>
+<font color="black"> 828.         This is useful in two scenarios: when custom levels are being</font>
+<font color="black"> 829.         used, and in the case where you can't do a straightforward</font>
+<font color="black"> 830.         mapping by lowercasing the logging level name because of locale-</font>
+<font color="black"> 831.         specific issues (see SF #1524081).</font>
+<font color="black"> 832.         &quot;&quot;&quot;</font>
+<font color="red"> 833.         return self.priority_map.get(levelName, &quot;warning&quot;)</font>
+<font color="black"> 834. </font>
+<font color="green"> 835.     def emit(self, record):</font>
+<font color="black"> 836.         &quot;&quot;&quot;</font>
+<font color="black"> 837.         Emit a record.</font>
+<font color="black"> 838. </font>
+<font color="black"> 839.         The record is formatted, and then sent to the syslog server. If</font>
+<font color="black"> 840.         exception information is present, it is NOT sent to the server.</font>
+<font color="black"> 841.         &quot;&quot;&quot;</font>
+<font color="red"> 842.         msg = self.format(record) + '\000'</font>
+<font color="black"> 843.         &quot;&quot;&quot;</font>
+<font color="black"> 844.         We need to convert record level to lowercase, maybe this will</font>
+<font color="black"> 845.         change in the future.</font>
+<font color="black"> 846.         &quot;&quot;&quot;</font>
+<font color="red"> 847.         prio = '&lt;%d&gt;' % self.encodePriority(self.facility,</font>
+<font color="red"> 848.                                             self.mapPriority(record.levelname))</font>
+<font color="black"> 849.         # Message is a string. Convert to bytes as required by RFC 5424</font>
+<font color="red"> 850.         if type(msg) is unicode:</font>
+<font color="red"> 851.             msg = msg.encode('utf-8')</font>
+<font color="red"> 852.         msg = prio + msg</font>
+<font color="red"> 853.         try:</font>
+<font color="red"> 854.             if self.unixsocket:</font>
+<font color="red"> 855.                 try:</font>
+<font color="red"> 856.                     self.socket.send(msg)</font>
+<font color="red"> 857.                 except socket.error:</font>
+<font color="red"> 858.                     self.socket.close() # See issue 17981</font>
+<font color="red"> 859.                     self._connect_unixsocket(self.address)</font>
+<font color="red"> 860.                     self.socket.send(msg)</font>
+<font color="red"> 861.             elif self.socktype == socket.SOCK_DGRAM:</font>
+<font color="red"> 862.                 self.socket.sendto(msg, self.address)</font>
+<font color="black"> 863.             else:</font>
+<font color="red"> 864.                 self.socket.sendall(msg)</font>
+<font color="red"> 865.         except (KeyboardInterrupt, SystemExit):</font>
+<font color="red"> 866.             raise</font>
+<font color="red"> 867.         except:</font>
+<font color="red"> 868.             self.handleError(record)</font>
+<font color="black"> 869. </font>
+<font color="green"> 870. class SMTPHandler(logging.Handler):</font>
+<font color="black"> 871.     &quot;&quot;&quot;</font>
+<font color="black"> 872.     A handler class which sends an SMTP email for each logging event.</font>
+<font color="green"> 873.     &quot;&quot;&quot;</font>
+<font color="black"> 874.     def __init__(self, mailhost, fromaddr, toaddrs, subject,</font>
+<font color="green"> 875.                  credentials=None, secure=None):</font>
+<font color="black"> 876.         &quot;&quot;&quot;</font>
+<font color="black"> 877.         Initialize the handler.</font>
+<font color="black"> 878. </font>
+<font color="black"> 879.         Initialize the instance with the from and to addresses and subject</font>
+<font color="black"> 880.         line of the email. To specify a non-standard SMTP port, use the</font>
+<font color="black"> 881.         (host, port) tuple format for the mailhost argument. To specify</font>
+<font color="black"> 882.         authentication credentials, supply a (username, password) tuple</font>
+<font color="black"> 883.         for the credentials argument. To specify the use of a secure</font>
+<font color="black"> 884.         protocol (TLS), pass in a tuple for the secure argument. This will</font>
+<font color="black"> 885.         only be used when authentication credentials are supplied. The tuple</font>
+<font color="black"> 886.         will be either an empty tuple, or a single-value tuple with the name</font>
+<font color="black"> 887.         of a keyfile, or a 2-value tuple with the names of the keyfile and</font>
+<font color="black"> 888.         certificate file. (This tuple is passed to the `starttls` method).</font>
+<font color="black"> 889.         &quot;&quot;&quot;</font>
+<font color="red"> 890.         logging.Handler.__init__(self)</font>
+<font color="red"> 891.         if isinstance(mailhost, tuple):</font>
+<font color="red"> 892.             self.mailhost, self.mailport = mailhost</font>
+<font color="black"> 893.         else:</font>
+<font color="red"> 894.             self.mailhost, self.mailport = mailhost, None</font>
+<font color="red"> 895.         if isinstance(credentials, tuple):</font>
+<font color="red"> 896.             self.username, self.password = credentials</font>
+<font color="black"> 897.         else:</font>
+<font color="red"> 898.             self.username = None</font>
+<font color="red"> 899.         self.fromaddr = fromaddr</font>
+<font color="red"> 900.         if isinstance(toaddrs, basestring):</font>
+<font color="red"> 901.             toaddrs = [toaddrs]</font>
+<font color="red"> 902.         self.toaddrs = toaddrs</font>
+<font color="red"> 903.         self.subject = subject</font>
+<font color="red"> 904.         self.secure = secure</font>
+<font color="red"> 905.         self._timeout = 5.0</font>
+<font color="black"> 906. </font>
+<font color="green"> 907.     def getSubject(self, record):</font>
+<font color="black"> 908.         &quot;&quot;&quot;</font>
+<font color="black"> 909.         Determine the subject for the email.</font>
+<font color="black"> 910. </font>
+<font color="black"> 911.         If you want to specify a subject line which is record-dependent,</font>
+<font color="black"> 912.         override this method.</font>
+<font color="black"> 913.         &quot;&quot;&quot;</font>
+<font color="red"> 914.         return self.subject</font>
+<font color="black"> 915. </font>
+<font color="green"> 916.     def emit(self, record):</font>
+<font color="black"> 917.         &quot;&quot;&quot;</font>
+<font color="black"> 918.         Emit a record.</font>
+<font color="black"> 919. </font>
+<font color="black"> 920.         Format the record and send it to the specified addressees.</font>
+<font color="black"> 921.         &quot;&quot;&quot;</font>
+<font color="red"> 922.         try:</font>
+<font color="red"> 923.             import smtplib</font>
+<font color="red"> 924.             from email.utils import formatdate</font>
+<font color="red"> 925.             port = self.mailport</font>
+<font color="red"> 926.             if not port:</font>
+<font color="red"> 927.                 port = smtplib.SMTP_PORT</font>
+<font color="red"> 928.             smtp = smtplib.SMTP(self.mailhost, port, timeout=self._timeout)</font>
+<font color="red"> 929.             msg = self.format(record)</font>
+<font color="red"> 930.             msg = &quot;From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\n\r\n%s&quot; % (</font>
+<font color="red"> 931.                             self.fromaddr,</font>
+<font color="red"> 932.                             &quot;,&quot;.join(self.toaddrs),</font>
+<font color="red"> 933.                             self.getSubject(record),</font>
+<font color="red"> 934.                             formatdate(), msg)</font>
+<font color="red"> 935.             if self.username:</font>
+<font color="red"> 936.                 if self.secure is not None:</font>
+<font color="red"> 937.                     smtp.ehlo()</font>
+<font color="red"> 938.                     smtp.starttls(*self.secure)</font>
+<font color="red"> 939.                     smtp.ehlo()</font>
+<font color="red"> 940.                 smtp.login(self.username, self.password)</font>
+<font color="red"> 941.             smtp.sendmail(self.fromaddr, self.toaddrs, msg)</font>
+<font color="red"> 942.             smtp.quit()</font>
+<font color="red"> 943.         except (KeyboardInterrupt, SystemExit):</font>
+<font color="red"> 944.             raise</font>
+<font color="red"> 945.         except:</font>
+<font color="red"> 946.             self.handleError(record)</font>
+<font color="black"> 947. </font>
+<font color="green"> 948. class NTEventLogHandler(logging.Handler):</font>
+<font color="black"> 949.     &quot;&quot;&quot;</font>
+<font color="black"> 950.     A handler class which sends events to the NT Event Log. Adds a</font>
+<font color="black"> 951.     registry entry for the specified application name. If no dllname is</font>
+<font color="black"> 952.     provided, win32service.pyd (which contains some basic message</font>
+<font color="black"> 953.     placeholders) is used. Note that use of these placeholders will make</font>
+<font color="black"> 954.     your event logs big, as the entire message source is held in the log.</font>
+<font color="black"> 955.     If you want slimmer logs, you have to pass in the name of your own DLL</font>
+<font color="black"> 956.     which contains the message definitions you want to use in the event log.</font>
+<font color="green"> 957.     &quot;&quot;&quot;</font>
+<font color="green"> 958.     def __init__(self, appname, dllname=None, logtype=&quot;Application&quot;):</font>
+<font color="red"> 959.         logging.Handler.__init__(self)</font>
+<font color="red"> 960.         try:</font>
+<font color="red"> 961.             import win32evtlogutil, win32evtlog</font>
+<font color="red"> 962.             self.appname = appname</font>
+<font color="red"> 963.             self._welu = win32evtlogutil</font>
+<font color="red"> 964.             if not dllname:</font>
+<font color="red"> 965.                 dllname = os.path.split(self._welu.__file__)</font>
+<font color="red"> 966.                 dllname = os.path.split(dllname[0])</font>
+<font color="red"> 967.                 dllname = os.path.join(dllname[0], r'win32service.pyd')</font>
+<font color="red"> 968.             self.dllname = dllname</font>
+<font color="red"> 969.             self.logtype = logtype</font>
+<font color="red"> 970.             self._welu.AddSourceToRegistry(appname, dllname, logtype)</font>
+<font color="red"> 971.             self.deftype = win32evtlog.EVENTLOG_ERROR_TYPE</font>
+<font color="red"> 972.             self.typemap = {</font>
+<font color="red"> 973.                 logging.DEBUG   : win32evtlog.EVENTLOG_INFORMATION_TYPE,</font>
+<font color="red"> 974.                 logging.INFO    : win32evtlog.EVENTLOG_INFORMATION_TYPE,</font>
+<font color="red"> 975.                 logging.WARNING : win32evtlog.EVENTLOG_WARNING_TYPE,</font>
+<font color="red"> 976.                 logging.ERROR   : win32evtlog.EVENTLOG_ERROR_TYPE,</font>
+<font color="red"> 977.                 logging.CRITICAL: win32evtlog.EVENTLOG_ERROR_TYPE,</font>
+<font color="black"> 978.          }</font>
+<font color="red"> 979.         except ImportError:</font>
+<font color="red"> 980.             print(&quot;The Python Win32 extensions for NT (service, event &quot;\</font>
+<font color="black"> 981.                         &quot;logging) appear not to be available.&quot;)</font>
+<font color="red"> 982.             self._welu = None</font>
+<font color="black"> 983. </font>
+<font color="green"> 984.     def getMessageID(self, record):</font>
+<font color="black"> 985.         &quot;&quot;&quot;</font>
+<font color="black"> 986.         Return the message ID for the event record. If you are using your</font>
+<font color="black"> 987.         own messages, you could do this by having the msg passed to the</font>
+<font color="black"> 988.         logger being an ID rather than a formatting string. Then, in here,</font>
+<font color="black"> 989.         you could use a dictionary lookup to get the message ID. This</font>
+<font color="black"> 990.         version returns 1, which is the base message ID in win32service.pyd.</font>
+<font color="black"> 991.         &quot;&quot;&quot;</font>
+<font color="red"> 992.         return 1</font>
+<font color="black"> 993. </font>
+<font color="green"> 994.     def getEventCategory(self, record):</font>
+<font color="black"> 995.         &quot;&quot;&quot;</font>
+<font color="black"> 996.         Return the event category for the record.</font>
+<font color="black"> 997. </font>
+<font color="black"> 998.         Override this if you want to specify your own categories. This version</font>
+<font color="black"> 999.         returns 0.</font>
+<font color="black">1000.         &quot;&quot;&quot;</font>
+<font color="red">1001.         return 0</font>
+<font color="black">1002. </font>
+<font color="green">1003.     def getEventType(self, record):</font>
+<font color="black">1004.         &quot;&quot;&quot;</font>
+<font color="black">1005.         Return the event type for the record.</font>
+<font color="black">1006. </font>
+<font color="black">1007.         Override this if you want to specify your own types. This version does</font>
+<font color="black">1008.         a mapping using the handler's typemap attribute, which is set up in</font>
+<font color="black">1009.         __init__() to a dictionary which contains mappings for DEBUG, INFO,</font>
+<font color="black">1010.         WARNING, ERROR and CRITICAL. If you are using your own levels you will</font>
+<font color="black">1011.         either need to override this method or place a suitable dictionary in</font>
+<font color="black">1012.         the handler's typemap attribute.</font>
+<font color="black">1013.         &quot;&quot;&quot;</font>
+<font color="red">1014.         return self.typemap.get(record.levelno, self.deftype)</font>
+<font color="black">1015. </font>
+<font color="green">1016.     def emit(self, record):</font>
+<font color="black">1017.         &quot;&quot;&quot;</font>
+<font color="black">1018.         Emit a record.</font>
+<font color="black">1019. </font>
+<font color="black">1020.         Determine the message ID, event category and event type. Then</font>
+<font color="black">1021.         log the message in the NT event log.</font>
+<font color="black">1022.         &quot;&quot;&quot;</font>
+<font color="red">1023.         if self._welu:</font>
+<font color="red">1024.             try:</font>
+<font color="red">1025.                 id = self.getMessageID(record)</font>
+<font color="red">1026.                 cat = self.getEventCategory(record)</font>
+<font color="red">1027.                 type = self.getEventType(record)</font>
+<font color="red">1028.                 msg = self.format(record)</font>
+<font color="red">1029.                 self._welu.ReportEvent(self.appname, id, cat, type, [msg])</font>
+<font color="red">1030.             except (KeyboardInterrupt, SystemExit):</font>
+<font color="red">1031.                 raise</font>
+<font color="red">1032.             except:</font>
+<font color="red">1033.                 self.handleError(record)</font>
+<font color="black">1034. </font>
+<font color="green">1035.     def close(self):</font>
+<font color="black">1036.         &quot;&quot;&quot;</font>
+<font color="black">1037.         Clean up this handler.</font>
+<font color="black">1038. </font>
+<font color="black">1039.         You can remove the application name from the registry as a</font>
+<font color="black">1040.         source of event log entries. However, if you do this, you will</font>
+<font color="black">1041.         not be able to see the events as you intended in the Event Log</font>
+<font color="black">1042.         Viewer - it needs to be able to access the registry to get the</font>
+<font color="black">1043.         DLL name.</font>
+<font color="black">1044.         &quot;&quot;&quot;</font>
+<font color="black">1045.         #self._welu.RemoveSourceFromRegistry(self.appname, self.logtype)</font>
+<font color="red">1046.         logging.Handler.close(self)</font>
+<font color="black">1047. </font>
+<font color="green">1048. class HTTPHandler(logging.Handler):</font>
+<font color="black">1049.     &quot;&quot;&quot;</font>
+<font color="black">1050.     A class which sends records to a Web server, using either GET or</font>
+<font color="black">1051.     POST semantics.</font>
+<font color="green">1052.     &quot;&quot;&quot;</font>
+<font color="green">1053.     def __init__(self, host, url, method=&quot;GET&quot;):</font>
+<font color="black">1054.         &quot;&quot;&quot;</font>
+<font color="black">1055.         Initialize the instance with the host, the request URL, and the method</font>
+<font color="black">1056.         (&quot;GET&quot; or &quot;POST&quot;)</font>
+<font color="black">1057.         &quot;&quot;&quot;</font>
+<font color="red">1058.         logging.Handler.__init__(self)</font>
+<font color="red">1059.         method = method.upper()</font>
+<font color="red">1060.         if method not in [&quot;GET&quot;, &quot;POST&quot;]:</font>
+<font color="red">1061.             raise ValueError(&quot;method must be GET or POST&quot;)</font>
+<font color="red">1062.         self.host = host</font>
+<font color="red">1063.         self.url = url</font>
+<font color="red">1064.         self.method = method</font>
+<font color="black">1065. </font>
+<font color="green">1066.     def mapLogRecord(self, record):</font>
+<font color="black">1067.         &quot;&quot;&quot;</font>
+<font color="black">1068.         Default implementation of mapping the log record into a dict</font>
+<font color="black">1069.         that is sent as the CGI data. Overwrite in your class.</font>
+<font color="black">1070.         Contributed by Franz  Glasner.</font>
+<font color="black">1071.         &quot;&quot;&quot;</font>
+<font color="red">1072.         return record.__dict__</font>
+<font color="black">1073. </font>
+<font color="green">1074.     def emit(self, record):</font>
+<font color="black">1075.         &quot;&quot;&quot;</font>
+<font color="black">1076.         Emit a record.</font>
+<font color="black">1077. </font>
+<font color="black">1078.         Send the record to the Web server as a percent-encoded dictionary</font>
+<font color="black">1079.         &quot;&quot;&quot;</font>
+<font color="red">1080.         try:</font>
+<font color="red">1081.             import httplib, urllib</font>
+<font color="red">1082.             host = self.host</font>
+<font color="red">1083.             h = httplib.HTTP(host)</font>
+<font color="red">1084.             url = self.url</font>
+<font color="red">1085.             data = urllib.urlencode(self.mapLogRecord(record))</font>
+<font color="red">1086.             if self.method == &quot;GET&quot;:</font>
+<font color="red">1087.                 if (url.find('?') &gt;= 0):</font>
+<font color="red">1088.                     sep = '&amp;'</font>
+<font color="black">1089.                 else:</font>
+<font color="red">1090.                     sep = '?'</font>
+<font color="red">1091.                 url = url + &quot;%c%s&quot; % (sep, data)</font>
+<font color="red">1092.             h.putrequest(self.method, url)</font>
+<font color="black">1093.             # support multiple hosts on one IP address...</font>
+<font color="black">1094.             # need to strip optional :port from host, if present</font>
+<font color="red">1095.             i = host.find(&quot;:&quot;)</font>
+<font color="red">1096.             if i &gt;= 0:</font>
+<font color="red">1097.                 host = host[:i]</font>
+<font color="red">1098.             h.putheader(&quot;Host&quot;, host)</font>
+<font color="red">1099.             if self.method == &quot;POST&quot;:</font>
+<font color="red">1100.                 h.putheader(&quot;Content-type&quot;,</font>
+<font color="red">1101.                             &quot;application/x-www-form-urlencoded&quot;)</font>
+<font color="red">1102.                 h.putheader(&quot;Content-length&quot;, str(len(data)))</font>
+<font color="red">1103.             h.endheaders(data if self.method == &quot;POST&quot; else None)</font>
+<font color="red">1104.             h.getreply()    #can't do anything with the result</font>
+<font color="red">1105.         except (KeyboardInterrupt, SystemExit):</font>
+<font color="red">1106.             raise</font>
+<font color="red">1107.         except:</font>
+<font color="red">1108.             self.handleError(record)</font>
+<font color="black">1109. </font>
+<font color="green">1110. class BufferingHandler(logging.Handler):</font>
+<font color="black">1111.     &quot;&quot;&quot;</font>
+<font color="black">1112.   A handler class which buffers logging records in memory. Whenever each</font>
+<font color="black">1113.   record is added to the buffer, a check is made to see if the buffer should</font>
+<font color="black">1114.   be flushed. If it should, then flush() is expected to do what's needed.</font>
+<font color="green">1115.     &quot;&quot;&quot;</font>
+<font color="green">1116.     def __init__(self, capacity):</font>
+<font color="black">1117.         &quot;&quot;&quot;</font>
+<font color="black">1118.         Initialize the handler with the buffer size.</font>
+<font color="black">1119.         &quot;&quot;&quot;</font>
+<font color="red">1120.         logging.Handler.__init__(self)</font>
+<font color="red">1121.         self.capacity = capacity</font>
+<font color="red">1122.         self.buffer = []</font>
+<font color="black">1123. </font>
+<font color="green">1124.     def shouldFlush(self, record):</font>
+<font color="black">1125.         &quot;&quot;&quot;</font>
+<font color="black">1126.         Should the handler flush its buffer?</font>
+<font color="black">1127. </font>
+<font color="black">1128.         Returns true if the buffer is up to capacity. This method can be</font>
+<font color="black">1129.         overridden to implement custom flushing strategies.</font>
+<font color="black">1130.         &quot;&quot;&quot;</font>
+<font color="red">1131.         return (len(self.buffer) &gt;= self.capacity)</font>
+<font color="black">1132. </font>
+<font color="green">1133.     def emit(self, record):</font>
+<font color="black">1134.         &quot;&quot;&quot;</font>
+<font color="black">1135.         Emit a record.</font>
+<font color="black">1136. </font>
+<font color="black">1137.         Append the record. If shouldFlush() tells us to, call flush() to process</font>
+<font color="black">1138.         the buffer.</font>
+<font color="black">1139.         &quot;&quot;&quot;</font>
+<font color="red">1140.         self.buffer.append(record)</font>
+<font color="red">1141.         if self.shouldFlush(record):</font>
+<font color="red">1142.             self.flush()</font>
+<font color="black">1143. </font>
+<font color="green">1144.     def flush(self):</font>
+<font color="black">1145.         &quot;&quot;&quot;</font>
+<font color="black">1146.         Override to implement custom flushing behaviour.</font>
+<font color="black">1147. </font>
+<font color="black">1148.         This version just zaps the buffer to empty.</font>
+<font color="black">1149.         &quot;&quot;&quot;</font>
+<font color="red">1150.         self.acquire()</font>
+<font color="red">1151.         try:</font>
+<font color="red">1152.             self.buffer = []</font>
+<font color="black">1153.         finally:</font>
+<font color="red">1154.             self.release()</font>
+<font color="black">1155. </font>
+<font color="green">1156.     def close(self):</font>
+<font color="black">1157.         &quot;&quot;&quot;</font>
+<font color="black">1158.         Close the handler.</font>
+<font color="black">1159. </font>
+<font color="black">1160.         This version just flushes and chains to the parent class' close().</font>
+<font color="black">1161.         &quot;&quot;&quot;</font>
+<font color="red">1162.         self.flush()</font>
+<font color="red">1163.         logging.Handler.close(self)</font>
+<font color="black">1164. </font>
+<font color="green">1165. class MemoryHandler(BufferingHandler):</font>
+<font color="black">1166.     &quot;&quot;&quot;</font>
+<font color="black">1167.     A handler class which buffers logging records in memory, periodically</font>
+<font color="black">1168.     flushing them to a target handler. Flushing occurs whenever the buffer</font>
+<font color="black">1169.     is full, or when an event of a certain severity or greater is seen.</font>
+<font color="green">1170.     &quot;&quot;&quot;</font>
+<font color="green">1171.     def __init__(self, capacity, flushLevel=logging.ERROR, target=None):</font>
+<font color="black">1172.         &quot;&quot;&quot;</font>
+<font color="black">1173.         Initialize the handler with the buffer size, the level at which</font>
+<font color="black">1174.         flushing should occur and an optional target.</font>
+<font color="black">1175. </font>
+<font color="black">1176.         Note that without a target being set either here or via setTarget(),</font>
+<font color="black">1177.         a MemoryHandler is no use to anyone!</font>
+<font color="black">1178.         &quot;&quot;&quot;</font>
+<font color="red">1179.         BufferingHandler.__init__(self, capacity)</font>
+<font color="red">1180.         self.flushLevel = flushLevel</font>
+<font color="red">1181.         self.target = target</font>
+<font color="black">1182. </font>
+<font color="green">1183.     def shouldFlush(self, record):</font>
+<font color="black">1184.         &quot;&quot;&quot;</font>
+<font color="black">1185.         Check for buffer full or a record at the flushLevel or higher.</font>
+<font color="black">1186.         &quot;&quot;&quot;</font>
+<font color="red">1187.         return (len(self.buffer) &gt;= self.capacity) or \</font>
+<font color="red">1188.                 (record.levelno &gt;= self.flushLevel)</font>
+<font color="black">1189. </font>
+<font color="green">1190.     def setTarget(self, target):</font>
+<font color="black">1191.         &quot;&quot;&quot;</font>
+<font color="black">1192.         Set the target handler for this handler.</font>
+<font color="black">1193.         &quot;&quot;&quot;</font>
+<font color="red">1194.         self.target = target</font>
+<font color="black">1195. </font>
+<font color="green">1196.     def flush(self):</font>
+<font color="black">1197.         &quot;&quot;&quot;</font>
+<font color="black">1198.         For a MemoryHandler, flushing means just sending the buffered</font>
+<font color="black">1199.         records to the target, if there is one. Override if you want</font>
+<font color="black">1200.         different behaviour.</font>
+<font color="black">1201.         &quot;&quot;&quot;</font>
+<font color="red">1202.         self.acquire()</font>
+<font color="red">1203.         try:</font>
+<font color="red">1204.             if self.target:</font>
+<font color="red">1205.                 for record in self.buffer:</font>
+<font color="red">1206.                     self.target.handle(record)</font>
+<font color="red">1207.                 self.buffer = []</font>
+<font color="black">1208.         finally:</font>
+<font color="red">1209.             self.release()</font>
+<font color="black">1210. </font>
+<font color="green">1211.     def close(self):</font>
+<font color="black">1212.         &quot;&quot;&quot;</font>
+<font color="black">1213.         Flush, set the target to None and lose the buffer.</font>
+<font color="black">1214.         &quot;&quot;&quot;</font>
+<font color="red">1215.         self.flush()</font>
+<font color="red">1216.         self.acquire()</font>
+<font color="red">1217.         try:</font>
+<font color="red">1218.             self.target = None</font>
+<font color="red">1219.             BufferingHandler.close(self)</font>
+<font color="black">1220.         finally:</font>
+<font color="red">1221.             self.release()</font>
+</pre>
+

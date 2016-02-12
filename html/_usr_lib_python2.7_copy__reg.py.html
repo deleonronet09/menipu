@@ -1,0 +1,208 @@
+source file: <b>/usr/lib/python2.7/copy_reg.py</b><br>
+
+
+file stats: <b>112 lines, 9 executed: 8.0% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Helper to provide extensibility for pickle/cPickle.</font>
+<font color="black">   2. </font>
+<font color="black">   3. This is only useful to add pickle support for extension types defined in</font>
+<font color="black">   4. C, not for instances of user-defined classes.</font>
+<font color="red">   5. &quot;&quot;&quot;</font>
+<font color="black">   6. </font>
+<font color="red">   7. from types import ClassType as _ClassType</font>
+<font color="black">   8. </font>
+<font color="red">   9. __all__ = [&quot;pickle&quot;, &quot;constructor&quot;,</font>
+<font color="red">  10.            &quot;add_extension&quot;, &quot;remove_extension&quot;, &quot;clear_extension_cache&quot;]</font>
+<font color="black">  11. </font>
+<font color="red">  12. dispatch_table = {}</font>
+<font color="black">  13. </font>
+<font color="red">  14. def pickle(ob_type, pickle_function, constructor_ob=None):</font>
+<font color="red">  15.     if type(ob_type) is _ClassType:</font>
+<font color="red">  16.         raise TypeError(&quot;copy_reg is not intended for use with classes&quot;)</font>
+<font color="black">  17. </font>
+<font color="red">  18.     if not hasattr(pickle_function, '__call__'):</font>
+<font color="red">  19.         raise TypeError(&quot;reduction functions must be callable&quot;)</font>
+<font color="red">  20.     dispatch_table[ob_type] = pickle_function</font>
+<font color="black">  21. </font>
+<font color="black">  22.     # The constructor_ob function is a vestige of safe for unpickling.</font>
+<font color="black">  23.     # There is no reason for the caller to pass it anymore.</font>
+<font color="red">  24.     if constructor_ob is not None:</font>
+<font color="red">  25.         constructor(constructor_ob)</font>
+<font color="black">  26. </font>
+<font color="red">  27. def constructor(object):</font>
+<font color="red">  28.     if not hasattr(object, '__call__'):</font>
+<font color="red">  29.         raise TypeError(&quot;constructors must be callable&quot;)</font>
+<font color="black">  30. </font>
+<font color="black">  31. # Example: provide pickling support for complex numbers.</font>
+<font color="black">  32. </font>
+<font color="red">  33. try:</font>
+<font color="red">  34.     complex</font>
+<font color="red">  35. except NameError:</font>
+<font color="red">  36.     pass</font>
+<font color="black">  37. else:</font>
+<font color="black">  38. </font>
+<font color="red">  39.     def pickle_complex(c):</font>
+<font color="red">  40.         return complex, (c.real, c.imag)</font>
+<font color="black">  41. </font>
+<font color="red">  42.     pickle(complex, pickle_complex, complex)</font>
+<font color="black">  43. </font>
+<font color="black">  44. # Support for pickling new-style objects</font>
+<font color="black">  45. </font>
+<font color="red">  46. def _reconstructor(cls, base, state):</font>
+<font color="red">  47.     if base is object:</font>
+<font color="red">  48.         obj = object.__new__(cls)</font>
+<font color="black">  49.     else:</font>
+<font color="red">  50.         obj = base.__new__(cls, state)</font>
+<font color="red">  51.         if base.__init__ != object.__init__:</font>
+<font color="red">  52.             base.__init__(obj, state)</font>
+<font color="red">  53.     return obj</font>
+<font color="black">  54. </font>
+<font color="red">  55. _HEAPTYPE = 1&lt;&lt;9</font>
+<font color="black">  56. </font>
+<font color="black">  57. # Python code for object.__reduce_ex__ for protocols 0 and 1</font>
+<font color="black">  58. </font>
+<font color="red">  59. def _reduce_ex(self, proto):</font>
+<font color="red">  60.     assert proto &lt; 2</font>
+<font color="red">  61.     for base in self.__class__.__mro__:</font>
+<font color="red">  62.         if hasattr(base, '__flags__') and not base.__flags__ &amp; _HEAPTYPE:</font>
+<font color="red">  63.             break</font>
+<font color="black">  64.     else:</font>
+<font color="red">  65.         base = object # not really reachable</font>
+<font color="red">  66.     if base is object:</font>
+<font color="red">  67.         state = None</font>
+<font color="black">  68.     else:</font>
+<font color="red">  69.         if base is self.__class__:</font>
+<font color="red">  70.             raise TypeError, &quot;can't pickle %s objects&quot; % base.__name__</font>
+<font color="red">  71.         state = base(self)</font>
+<font color="red">  72.     args = (self.__class__, base, state)</font>
+<font color="red">  73.     try:</font>
+<font color="red">  74.         getstate = self.__getstate__</font>
+<font color="red">  75.     except AttributeError:</font>
+<font color="red">  76.         if getattr(self, &quot;__slots__&quot;, None):</font>
+<font color="red">  77.             raise TypeError(&quot;a class that defines __slots__ without &quot;</font>
+<font color="black">  78.                             &quot;defining __getstate__ cannot be pickled&quot;)</font>
+<font color="red">  79.         try:</font>
+<font color="red">  80.             dict = self.__dict__</font>
+<font color="red">  81.         except AttributeError:</font>
+<font color="red">  82.             dict = None</font>
+<font color="black">  83.     else:</font>
+<font color="red">  84.         dict = getstate()</font>
+<font color="red">  85.     if dict:</font>
+<font color="red">  86.         return _reconstructor, args, dict</font>
+<font color="black">  87.     else:</font>
+<font color="red">  88.         return _reconstructor, args</font>
+<font color="black">  89. </font>
+<font color="black">  90. # Helper for __reduce_ex__ protocol 2</font>
+<font color="black">  91. </font>
+<font color="red">  92. def __newobj__(cls, *args):</font>
+<font color="green">  93.     return cls.__new__(cls, *args)</font>
+<font color="black">  94. </font>
+<font color="red">  95. def _slotnames(cls):</font>
+<font color="black">  96.     &quot;&quot;&quot;Return a list of slot names for a given class.</font>
+<font color="black">  97. </font>
+<font color="black">  98.     This needs to find slots defined by the class and its bases, so we</font>
+<font color="black">  99.     can't simply return the __slots__ attribute.  We must walk down</font>
+<font color="black"> 100.     the Method Resolution Order and concatenate the __slots__ of each</font>
+<font color="black"> 101.     class found there.  (This assumes classes don't modify their</font>
+<font color="black"> 102.     __slots__ attribute to misrepresent their slots after the class is</font>
+<font color="black"> 103.     defined.)</font>
+<font color="black"> 104.     &quot;&quot;&quot;</font>
+<font color="black"> 105. </font>
+<font color="black"> 106.     # Get the value from a cache in the class if possible</font>
+<font color="green"> 107.     names = cls.__dict__.get(&quot;__slotnames__&quot;)</font>
+<font color="green"> 108.     if names is not None:</font>
+<font color="red"> 109.         return names</font>
+<font color="black"> 110. </font>
+<font color="black"> 111.     # Not cached -- calculate the value</font>
+<font color="green"> 112.     names = []</font>
+<font color="green"> 113.     if not hasattr(cls, &quot;__slots__&quot;):</font>
+<font color="black"> 114.         # This class has no slots</font>
+<font color="green"> 115.         pass</font>
+<font color="black"> 116.     else:</font>
+<font color="black"> 117.         # Slots found -- gather slot names from all base classes</font>
+<font color="red"> 118.         for c in cls.__mro__:</font>
+<font color="red"> 119.             if &quot;__slots__&quot; in c.__dict__:</font>
+<font color="red"> 120.                 slots = c.__dict__['__slots__']</font>
+<font color="black"> 121.                 # if class has a single slot, it can be given as a string</font>
+<font color="red"> 122.                 if isinstance(slots, basestring):</font>
+<font color="red"> 123.                     slots = (slots,)</font>
+<font color="red"> 124.                 for name in slots:</font>
+<font color="black"> 125.                     # special descriptors</font>
+<font color="red"> 126.                     if name in (&quot;__dict__&quot;, &quot;__weakref__&quot;):</font>
+<font color="red"> 127.                         continue</font>
+<font color="black"> 128.                     # mangled names</font>
+<font color="red"> 129.                     elif name.startswith('__') and not name.endswith('__'):</font>
+<font color="red"> 130.                         names.append('_%s%s' % (c.__name__, name))</font>
+<font color="black"> 131.                     else:</font>
+<font color="red"> 132.                         names.append(name)</font>
+<font color="black"> 133. </font>
+<font color="black"> 134.     # Cache the outcome in the class if at all possible</font>
+<font color="green"> 135.     try:</font>
+<font color="green"> 136.         cls.__slotnames__ = names</font>
+<font color="red"> 137.     except:</font>
+<font color="red"> 138.         pass # But don't die if we can't</font>
+<font color="black"> 139. </font>
+<font color="green"> 140.     return names</font>
+<font color="black"> 141. </font>
+<font color="black"> 142. # A registry of extension codes.  This is an ad-hoc compression</font>
+<font color="black"> 143. # mechanism.  Whenever a global reference to &lt;module&gt;, &lt;name&gt; is about</font>
+<font color="black"> 144. # to be pickled, the (&lt;module&gt;, &lt;name&gt;) tuple is looked up here to see</font>
+<font color="black"> 145. # if it is a registered extension code for it.  Extension codes are</font>
+<font color="black"> 146. # universal, so that the meaning of a pickle does not depend on</font>
+<font color="black"> 147. # context.  (There are also some codes reserved for local use that</font>
+<font color="black"> 148. # don't have this restriction.)  Codes are positive ints; 0 is</font>
+<font color="black"> 149. # reserved.</font>
+<font color="black"> 150. </font>
+<font color="red"> 151. _extension_registry = {}                # key -&gt; code</font>
+<font color="red"> 152. _inverted_registry = {}                 # code -&gt; key</font>
+<font color="red"> 153. _extension_cache = {}                   # code -&gt; object</font>
+<font color="black"> 154. # Don't ever rebind those names:  cPickle grabs a reference to them when</font>
+<font color="black"> 155. # it's initialized, and won't see a rebinding.</font>
+<font color="black"> 156. </font>
+<font color="red"> 157. def add_extension(module, name, code):</font>
+<font color="black"> 158.     &quot;&quot;&quot;Register an extension code.&quot;&quot;&quot;</font>
+<font color="red"> 159.     code = int(code)</font>
+<font color="red"> 160.     if not 1 &lt;= code &lt;= 0x7fffffff:</font>
+<font color="red"> 161.         raise ValueError, &quot;code out of range&quot;</font>
+<font color="red"> 162.     key = (module, name)</font>
+<font color="red"> 163.     if (_extension_registry.get(key) == code and</font>
+<font color="red"> 164.         _inverted_registry.get(code) == key):</font>
+<font color="red"> 165.         return # Redundant registrations are benign</font>
+<font color="red"> 166.     if key in _extension_registry:</font>
+<font color="red"> 167.         raise ValueError(&quot;key %s is already registered with code %s&quot; %</font>
+<font color="red"> 168.                          (key, _extension_registry[key]))</font>
+<font color="red"> 169.     if code in _inverted_registry:</font>
+<font color="red"> 170.         raise ValueError(&quot;code %s is already in use for key %s&quot; %</font>
+<font color="red"> 171.                          (code, _inverted_registry[code]))</font>
+<font color="red"> 172.     _extension_registry[key] = code</font>
+<font color="red"> 173.     _inverted_registry[code] = key</font>
+<font color="black"> 174. </font>
+<font color="red"> 175. def remove_extension(module, name, code):</font>
+<font color="black"> 176.     &quot;&quot;&quot;Unregister an extension code.  For testing only.&quot;&quot;&quot;</font>
+<font color="red"> 177.     key = (module, name)</font>
+<font color="red"> 178.     if (_extension_registry.get(key) != code or</font>
+<font color="red"> 179.         _inverted_registry.get(code) != key):</font>
+<font color="red"> 180.         raise ValueError(&quot;key %s is not registered with code %s&quot; %</font>
+<font color="red"> 181.                          (key, code))</font>
+<font color="red"> 182.     del _extension_registry[key]</font>
+<font color="red"> 183.     del _inverted_registry[code]</font>
+<font color="red"> 184.     if code in _extension_cache:</font>
+<font color="red"> 185.         del _extension_cache[code]</font>
+<font color="black"> 186. </font>
+<font color="red"> 187. def clear_extension_cache():</font>
+<font color="red"> 188.     _extension_cache.clear()</font>
+<font color="black"> 189. </font>
+<font color="black"> 190. # Standard extension code assignments</font>
+<font color="black"> 191. </font>
+<font color="black"> 192. # Reserved ranges</font>
+<font color="black"> 193. </font>
+<font color="black"> 194. # First  Last Count  Purpose</font>
+<font color="black"> 195. #     1   127   127  Reserved for Python standard library</font>
+<font color="black"> 196. #   128   191    64  Reserved for Zope</font>
+<font color="black"> 197. #   192   239    48  Reserved for 3rd parties</font>
+<font color="black"> 198. #   240   255    16  Reserved for private use (will never be assigned)</font>
+<font color="black"> 199. #   256   Inf   Inf  Reserved for future assignment</font>
+<font color="black"> 200. </font>
+<font color="black"> 201. # Extension codes are assigned by the Python Software Foundation.</font>
+</pre>
+

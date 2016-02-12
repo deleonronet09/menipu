@@ -1,0 +1,48 @@
+source file: <b>/usr/lib/python2.7/xml/__init__.py</b><br>
+
+
+file stats: <b>16 lines, 7 executed: 43.8% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;Core XML support for Python.</font>
+<font color="black">   2. </font>
+<font color="black">   3. This package contains four sub-packages:</font>
+<font color="black">   4. </font>
+<font color="black">   5. dom -- The W3C Document Object Model.  This supports DOM Level 1 +</font>
+<font color="black">   6.        Namespaces.</font>
+<font color="black">   7. </font>
+<font color="black">   8. parsers -- Python wrappers for XML parsers (currently only supports Expat).</font>
+<font color="black">   9. </font>
+<font color="black">  10. sax -- The Simple API for XML, developed by XML-Dev, led by David</font>
+<font color="black">  11.        Megginson and ported to Python by Lars Marius Garshol.  This</font>
+<font color="black">  12.        supports the SAX 2 API.</font>
+<font color="black">  13. </font>
+<font color="black">  14. etree -- The ElementTree XML library.  This is a subset of the full</font>
+<font color="black">  15.        ElementTree XML release.</font>
+<font color="black">  16. </font>
+<font color="green">  17. &quot;&quot;&quot;</font>
+<font color="black">  18. </font>
+<font color="black">  19. </font>
+<font color="green">  20. __all__ = [&quot;dom&quot;, &quot;parsers&quot;, &quot;sax&quot;, &quot;etree&quot;]</font>
+<font color="black">  21. </font>
+<font color="green">  22. _MINIMUM_XMLPLUS_VERSION = (0, 8, 4)</font>
+<font color="black">  23. </font>
+<font color="black">  24. </font>
+<font color="green">  25. try:</font>
+<font color="green">  26.     import _xmlplus</font>
+<font color="green">  27. except ImportError:</font>
+<font color="green">  28.     pass</font>
+<font color="black">  29. else:</font>
+<font color="red">  30.     try:</font>
+<font color="red">  31.         v = _xmlplus.version_info</font>
+<font color="red">  32.     except AttributeError:</font>
+<font color="black">  33.         # _xmlplus is too old; ignore it</font>
+<font color="red">  34.         pass</font>
+<font color="black">  35.     else:</font>
+<font color="red">  36.         if v &gt;= _MINIMUM_XMLPLUS_VERSION:</font>
+<font color="red">  37.             import sys</font>
+<font color="red">  38.             _xmlplus.__path__.extend(__path__)</font>
+<font color="red">  39.             sys.modules[__name__] = _xmlplus</font>
+<font color="black">  40.         else:</font>
+<font color="red">  41.             del v</font>
+</pre>
+

@@ -1,0 +1,146 @@
+source file: <b>/usr/lib/python2.7/xml/dom/__init__.py</b><br>
+
+
+file stats: <b>84 lines, 79 executed: 94.0% covered</b>
+<pre>
+<font color="black">   1. &quot;&quot;&quot;W3C Document Object Model implementation for Python.</font>
+<font color="black">   2. </font>
+<font color="black">   3. The Python mapping of the Document Object Model is documented in the</font>
+<font color="black">   4. Python Library Reference in the section on the xml.dom package.</font>
+<font color="black">   5. </font>
+<font color="black">   6. This package contains the following modules:</font>
+<font color="black">   7. </font>
+<font color="black">   8. minidom -- A simple implementation of the Level 1 DOM with namespace</font>
+<font color="black">   9.            support added (based on the Level 2 specification) and other</font>
+<font color="black">  10.            minor Level 2 functionality.</font>
+<font color="black">  11. </font>
+<font color="black">  12. pulldom -- DOM builder supporting on-demand tree-building for selected</font>
+<font color="black">  13.            subtrees of the document.</font>
+<font color="black">  14. </font>
+<font color="green">  15. &quot;&quot;&quot;</font>
+<font color="black">  16. </font>
+<font color="black">  17. </font>
+<font color="green">  18. class Node:</font>
+<font color="green">  19.     &quot;&quot;&quot;Class giving the NodeType constants.&quot;&quot;&quot;</font>
+<font color="black">  20. </font>
+<font color="black">  21.     # DOM implementations may use this as a base class for their own</font>
+<font color="black">  22.     # Node implementations.  If they don't, the constants defined here</font>
+<font color="black">  23.     # should still be used as the canonical definitions as they match</font>
+<font color="black">  24.     # the values given in the W3C recommendation.  Client code can</font>
+<font color="black">  25.     # safely refer to these values in all tests of Node.nodeType</font>
+<font color="black">  26.     # values.</font>
+<font color="black">  27. </font>
+<font color="green">  28.     ELEMENT_NODE                = 1</font>
+<font color="green">  29.     ATTRIBUTE_NODE              = 2</font>
+<font color="green">  30.     TEXT_NODE                   = 3</font>
+<font color="green">  31.     CDATA_SECTION_NODE          = 4</font>
+<font color="green">  32.     ENTITY_REFERENCE_NODE       = 5</font>
+<font color="green">  33.     ENTITY_NODE                 = 6</font>
+<font color="green">  34.     PROCESSING_INSTRUCTION_NODE = 7</font>
+<font color="green">  35.     COMMENT_NODE                = 8</font>
+<font color="green">  36.     DOCUMENT_NODE               = 9</font>
+<font color="green">  37.     DOCUMENT_TYPE_NODE          = 10</font>
+<font color="green">  38.     DOCUMENT_FRAGMENT_NODE      = 11</font>
+<font color="green">  39.     NOTATION_NODE               = 12</font>
+<font color="black">  40. </font>
+<font color="black">  41. </font>
+<font color="black">  42. #ExceptionCode</font>
+<font color="green">  43. INDEX_SIZE_ERR                 = 1</font>
+<font color="green">  44. DOMSTRING_SIZE_ERR             = 2</font>
+<font color="green">  45. HIERARCHY_REQUEST_ERR          = 3</font>
+<font color="green">  46. WRONG_DOCUMENT_ERR             = 4</font>
+<font color="green">  47. INVALID_CHARACTER_ERR          = 5</font>
+<font color="green">  48. NO_DATA_ALLOWED_ERR            = 6</font>
+<font color="green">  49. NO_MODIFICATION_ALLOWED_ERR    = 7</font>
+<font color="green">  50. NOT_FOUND_ERR                  = 8</font>
+<font color="green">  51. NOT_SUPPORTED_ERR              = 9</font>
+<font color="green">  52. INUSE_ATTRIBUTE_ERR            = 10</font>
+<font color="green">  53. INVALID_STATE_ERR              = 11</font>
+<font color="green">  54. SYNTAX_ERR                     = 12</font>
+<font color="green">  55. INVALID_MODIFICATION_ERR       = 13</font>
+<font color="green">  56. NAMESPACE_ERR                  = 14</font>
+<font color="green">  57. INVALID_ACCESS_ERR             = 15</font>
+<font color="green">  58. VALIDATION_ERR                 = 16</font>
+<font color="black">  59. </font>
+<font color="black">  60. </font>
+<font color="green">  61. class DOMException(Exception):</font>
+<font color="black">  62.     &quot;&quot;&quot;Abstract base class for DOM exceptions.</font>
+<font color="green">  63.     Exceptions with specific codes are specializations of this class.&quot;&quot;&quot;</font>
+<font color="black">  64. </font>
+<font color="green">  65.     def __init__(self, *args, **kw):</font>
+<font color="red">  66.         if self.__class__ is DOMException:</font>
+<font color="red">  67.             raise RuntimeError(</font>
+<font color="red">  68.                 &quot;DOMException should not be instantiated directly&quot;)</font>
+<font color="red">  69.         Exception.__init__(self, *args, **kw)</font>
+<font color="black">  70. </font>
+<font color="green">  71.     def _get_code(self):</font>
+<font color="red">  72.         return self.code</font>
+<font color="black">  73. </font>
+<font color="black">  74. </font>
+<font color="green">  75. class IndexSizeErr(DOMException):</font>
+<font color="green">  76.     code = INDEX_SIZE_ERR</font>
+<font color="black">  77. </font>
+<font color="green">  78. class DomstringSizeErr(DOMException):</font>
+<font color="green">  79.     code = DOMSTRING_SIZE_ERR</font>
+<font color="black">  80. </font>
+<font color="green">  81. class HierarchyRequestErr(DOMException):</font>
+<font color="green">  82.     code = HIERARCHY_REQUEST_ERR</font>
+<font color="black">  83. </font>
+<font color="green">  84. class WrongDocumentErr(DOMException):</font>
+<font color="green">  85.     code = WRONG_DOCUMENT_ERR</font>
+<font color="black">  86. </font>
+<font color="green">  87. class InvalidCharacterErr(DOMException):</font>
+<font color="green">  88.     code = INVALID_CHARACTER_ERR</font>
+<font color="black">  89. </font>
+<font color="green">  90. class NoDataAllowedErr(DOMException):</font>
+<font color="green">  91.     code = NO_DATA_ALLOWED_ERR</font>
+<font color="black">  92. </font>
+<font color="green">  93. class NoModificationAllowedErr(DOMException):</font>
+<font color="green">  94.     code = NO_MODIFICATION_ALLOWED_ERR</font>
+<font color="black">  95. </font>
+<font color="green">  96. class NotFoundErr(DOMException):</font>
+<font color="green">  97.     code = NOT_FOUND_ERR</font>
+<font color="black">  98. </font>
+<font color="green">  99. class NotSupportedErr(DOMException):</font>
+<font color="green"> 100.     code = NOT_SUPPORTED_ERR</font>
+<font color="black"> 101. </font>
+<font color="green"> 102. class InuseAttributeErr(DOMException):</font>
+<font color="green"> 103.     code = INUSE_ATTRIBUTE_ERR</font>
+<font color="black"> 104. </font>
+<font color="green"> 105. class InvalidStateErr(DOMException):</font>
+<font color="green"> 106.     code = INVALID_STATE_ERR</font>
+<font color="black"> 107. </font>
+<font color="green"> 108. class SyntaxErr(DOMException):</font>
+<font color="green"> 109.     code = SYNTAX_ERR</font>
+<font color="black"> 110. </font>
+<font color="green"> 111. class InvalidModificationErr(DOMException):</font>
+<font color="green"> 112.     code = INVALID_MODIFICATION_ERR</font>
+<font color="black"> 113. </font>
+<font color="green"> 114. class NamespaceErr(DOMException):</font>
+<font color="green"> 115.     code = NAMESPACE_ERR</font>
+<font color="black"> 116. </font>
+<font color="green"> 117. class InvalidAccessErr(DOMException):</font>
+<font color="green"> 118.     code = INVALID_ACCESS_ERR</font>
+<font color="black"> 119. </font>
+<font color="green"> 120. class ValidationErr(DOMException):</font>
+<font color="green"> 121.     code = VALIDATION_ERR</font>
+<font color="black"> 122. </font>
+<font color="green"> 123. class UserDataHandler:</font>
+<font color="green"> 124.     &quot;&quot;&quot;Class giving the operation constants for UserDataHandler.handle().&quot;&quot;&quot;</font>
+<font color="black"> 125. </font>
+<font color="black"> 126.     # Based on DOM Level 3 (WD 9 April 2002)</font>
+<font color="black"> 127. </font>
+<font color="green"> 128.     NODE_CLONED   = 1</font>
+<font color="green"> 129.     NODE_IMPORTED = 2</font>
+<font color="green"> 130.     NODE_DELETED  = 3</font>
+<font color="green"> 131.     NODE_RENAMED  = 4</font>
+<font color="black"> 132. </font>
+<font color="green"> 133. XML_NAMESPACE = &quot;http://www.w3.org/XML/1998/namespace&quot;</font>
+<font color="green"> 134. XMLNS_NAMESPACE = &quot;http://www.w3.org/2000/xmlns/&quot;</font>
+<font color="green"> 135. XHTML_NAMESPACE = &quot;http://www.w3.org/1999/xhtml&quot;</font>
+<font color="green"> 136. EMPTY_NAMESPACE = None</font>
+<font color="green"> 137. EMPTY_PREFIX = None</font>
+<font color="black"> 138. </font>
+<font color="green"> 139. from domreg import getDOMImplementation,registerDOMImplementation</font>
+</pre>
+
