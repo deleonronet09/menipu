@@ -2,6 +2,7 @@ import calculator
 from django.test import TestCase
 
 class TestCalculator(TestCase):
+
   def test_fail(self):
     self.fail()
     pass
