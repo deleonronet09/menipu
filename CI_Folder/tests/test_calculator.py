@@ -1,6 +1,4 @@
 import calculator
-
-imprt pdb
 from django.test import TestCase
 
 class TestCalculator(TestCase):
